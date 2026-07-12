@@ -36,15 +36,23 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, tempDeals] = await Promise.all([
+  const [groupPrices, customerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('tempDeals', { type: 'json' }),
+    s.get('customerFlags', { type: 'json' }),
+    s.get('customerGlassPricing', { type: 'json' }),
+    s.get('customerPickFees', { type: 'json' }),
+    s.get('customerOffPremisePricing', { type: 'json' }),
   ]);
   return {
     groupPrices: groupPrices || {},
     customerDeals: customerDeals || {},
     tempDeals: tempDeals || [],
+    customerFlags: customerFlags || {},
+    customerGlassPricing: customerGlassPricing || {},
+    customerPickFees: customerPickFees || {},
+    customerOffPremisePricing: customerOffPremisePricing || {},
   };
 }
 
@@ -135,6 +143,73 @@ export default async (req) => {
       const next = current.filter((t) => t.id !== id);
       await s.setJSON('tempDeals', next);
       return json({ ok: true, tempDeals: next });
+    }
+
+    if (action === 'saveCustomerFlag') {
+      // field is 'pricingUpdated', 'metWithCustomer' (booleans), or 'notes' (string)
+      const { outletId, field, value, updatedBy } = payload;
+      const current = (await s.get('customerFlags', { type: 'json' })) || {};
+      const existing = current[outletId] || { pricingUpdated: false, metWithCustomer: false };
+      current[outletId] = { ...existing, [field]: value, updatedBy, updatedAt: now };
+      await s.setJSON('customerFlags', current);
+      return json({ ok: true, customerFlags: current });
+    }
+
+    if (action === 'saveGlassSize') {
+      // Glass sizes are shared across every beer for a customer.
+      const { outletId, glassKey, sizeMl, updatedBy } = payload;
+      const current = (await s.get('customerGlassPricing', { type: 'json' })) || {};
+      const existingOutlet = current[outletId] || {};
+      const sizes = { ...(existingOutlet.sizes || {}), [glassKey]: Number(sizeMl) };
+      current[outletId] = { ...existingOutlet, sizes, updatedBy, updatedAt: now };
+      await s.setJSON('customerGlassPricing', current);
+      return json({ ok: true, customerGlassPricing: current });
+    }
+
+    if (action === 'saveGlassPrice') {
+      // Glass retail prices (inc GST) are set per SKU (groupId).
+      const { outletId, groupId, glassKey, price, updatedBy } = payload;
+      const current = (await s.get('customerGlassPricing', { type: 'json' })) || {};
+      const existingOutlet = current[outletId] || {};
+      const prices = { ...(existingOutlet.prices || {}) };
+      prices[groupId] = { ...(prices[groupId] || {}), [glassKey]: Number(price) };
+      current[outletId] = { ...existingOutlet, prices, updatedBy, updatedAt: now };
+      await s.setJSON('customerGlassPricing', current);
+      return json({ ok: true, customerGlassPricing: current });
+    }
+
+    if (action === 'savePickFee') {
+      // Optional, shared between the Venues and Off Premise calculators. unitType is 'keg' or
+      // 'carton'; fee may be null to clear it back to "not set" (blank).
+      const { outletId, unitType, fee, updatedBy } = payload;
+      const current = (await s.get('customerPickFees', { type: 'json' })) || {};
+      const existing = current[outletId] || {};
+      current[outletId] = { ...existing, [unitType]: (fee === null || fee === undefined) ? null : Number(fee), updatedBy, updatedAt: now };
+      await s.setJSON('customerPickFees', current);
+      return json({ ok: true, customerPickFees: current });
+    }
+
+    if (action === 'saveOffPremiseMultipackQty') {
+      // Cans per multipack, shared across all beers for a customer (like glass sizes).
+      const { outletId, qty, updatedBy } = payload;
+      const current = (await s.get('customerOffPremisePricing', { type: 'json' })) || {};
+      const existing = current[outletId] || {};
+      current[outletId] = { ...existing, multipackQty: Number(qty), updatedBy, updatedAt: now };
+      await s.setJSON('customerOffPremisePricing', current);
+      return json({ ok: true, customerOffPremisePricing: current });
+    }
+
+    if (action === 'saveOffPremisePrice') {
+      // Carton/multipack/single retail prices (inc GST) are set per SKU (groupId). The
+      // 'single' price is also shown on the Venues calculator for the same customer/SKU.
+      const { outletId, groupId, priceType, price, updatedBy } = payload;
+      const current = (await s.get('customerOffPremisePricing', { type: 'json' })) || {};
+      const existingOutlet = current[outletId] || {};
+      const prices = { ...(existingOutlet.prices || {}) };
+      prices[groupId] = { ...(prices[groupId] || {}), [priceType]: Number(price) };
+      current[outletId] = { ...existingOutlet, prices, updatedBy, updatedAt: now };
+      await s.setJSON('customerOffPremisePricing', current);
+      return json({ ok: true, customerOffPremisePricing: current });
     }
 
     return json({ error: 'Unknown action: ' + action }, 400);
