@@ -189,14 +189,36 @@ export default async (req) => {
       return json({ ok: true, customerPickFees: current });
     }
 
-    if (action === 'saveOffPremiseMultipackQty') {
-      // Cans per multipack, shared across all beers for a customer (like glass sizes).
-      const { outletId, qty, updatedBy } = payload;
-      const current = (await s.get('customerOffPremisePricing', { type: 'json' })) || {};
-      const existing = current[outletId] || {};
-      current[outletId] = { ...existing, multipackQty: Number(qty), updatedBy, updatedAt: now };
-      await s.setJSON('customerOffPremisePricing', current);
-      return json({ ok: true, customerOffPremisePricing: current });
+    if (action === 'saveCartonPackQty') {
+      // Cans per carton — set per SKU group on the Product List Prices page, since each SKU
+      // can genuinely come in a different carton size. Used by both margin calculators.
+      const { groupId, cartonPackQty, updatedBy } = payload;
+      const current = (await s.get('groupPrices', { type: 'json' })) || {};
+      const existing = current[groupId] || {};
+      current[groupId] = { ...existing, cartonPackQty: Number(cartonPackQty), updatedBy, updatedAt: now };
+      await s.setJSON('groupPrices', current);
+      return json({ ok: true, groupPrices: current });
+    }
+
+    if (action === 'saveMultipackQty') {
+      // Cans per multipack — set per SKU group (not per customer), since different beers can
+      // come in different multipack sizes (e.g. a 4-pack vs a 6-pack).
+      const { groupId, multipackQty, updatedBy } = payload;
+      const current = (await s.get('groupPrices', { type: 'json' })) || {};
+      const existing = current[groupId] || {};
+      current[groupId] = { ...existing, multipackQty: Number(multipackQty), updatedBy, updatedAt: now };
+      await s.setJSON('groupPrices', current);
+      return json({ ok: true, groupPrices: current });
+    }
+
+    if (action === 'saveCanSizeMl') {
+      // mL per can — set per SKU group, for display/reference alongside carton math.
+      const { groupId, canSizeMl, updatedBy } = payload;
+      const current = (await s.get('groupPrices', { type: 'json' })) || {};
+      const existing = current[groupId] || {};
+      current[groupId] = { ...existing, canSizeMl: Number(canSizeMl), updatedBy, updatedAt: now };
+      await s.setJSON('groupPrices', current);
+      return json({ ok: true, groupPrices: current });
     }
 
     if (action === 'saveOffPremisePrice') {

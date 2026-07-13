@@ -332,10 +332,10 @@
           <button class="btn secondary no-print" onclick="exportDealPriceListCSV()">Export deal price list</button>
         </div>
       </div>
-      <div class="hint" style="margin-bottom:10px;">One list price per SKU group (ex GST/WET) — this is what every customer deal is calculated from, shared live with your team. Kegs are priced per keg; cartons are priced per carton (the pack size is shown under each price field, and flagged where a group mixes pack sizes). Deal prices below are rounded up to the nearest whole dollar. Use the "Enabled" toggle to control which SKU groups appear on the Pricing Grid, temporary deals, and customer summaries.</div>
+      <div class="hint" style="margin-bottom:10px;">One list price per SKU group (ex GST/WET) — this is what every customer deal is calculated from, shared live with your team. Kegs are priced per keg; cartons are priced per carton. Each carton SKU has its own <strong>cans/carton</strong>, <strong>cans/multipack</strong> and <strong>can size</strong> — set these accurately, since the margin calculators use them directly (a wrong carton size will throw off every margin figure for that beer). Deal prices below are rounded up to the nearest whole dollar. Use the "Enabled" toggle to control which SKU groups appear on the Pricing Grid, temporary deals, and customer summaries.</div>
       <div class="tablewrap">
         <table class="datatable">
-          <thead><tr><th class="center">Enabled</th><th>SKU group</th><th>Format</th><th class="num-cell">List price</th><th>Deal price reference (for invoicing)</th><th>Updated</th></tr></thead>
+          <thead><tr><th class="center">Enabled</th><th>SKU group</th><th>Format</th><th>Pack sizes (cartons only)</th><th class="num-cell">List price</th><th>Deal price reference (for invoicing)</th><th>Updated</th></tr></thead>
           <tbody id="pp_body"></tbody>
         </table>
       </div>
@@ -586,6 +586,37 @@ function saveVisibleCols() { localStorage.setItem(LS_VISIBLE_COLS, JSON.stringif
 
 function dcKey(outletId, groupId) { return outletId + '|' + groupId; }
 function listPriceFor(groupId) { const rec = productPrices[groupId]; return rec ? rec.listPrice : null; }
+
+// Default multipack size (cans) used until a SKU has its own value set on the Product List
+// Prices page.
+const DEFAULT_MULTIPACK_QTY = 6;
+
+// Carton/multipack/can sizing — set per SKU group on the Product List Prices page, since each
+// SKU can genuinely come in a different carton size, multipack size, and can size. These are
+// what the margin calculators use for carton math; falling back to the auto-detected pack size
+// from sales history (g.refPackQty) only until someone sets the real value here.
+function cartonPackQtyFor(groupId) {
+  const rec = productPrices[groupId];
+  if (rec && rec.cartonPackQty != null) return rec.cartonPackQty;
+  const g = groups[groupId];
+  return (g && g.refPackQty) || 1;
+}
+function multipackQtyFor(groupId) {
+  const rec = productPrices[groupId];
+  if (rec && rec.multipackQty != null) return rec.multipackQty;
+  return DEFAULT_MULTIPACK_QTY;
+}
+function canSizeMlFor(groupId) {
+  const rec = productPrices[groupId];
+  return (rec && rec.canSizeMl != null) ? rec.canSizeMl : null;
+}
+// Display label for a group's carton size — dynamic (reflects any admin override) for cartons,
+// unchanged ("keg") for kegs.
+function saleUnitLabelFor(groupId) {
+  const g = groups[groupId];
+  if (bucketOf(g) === 'CARTONS') return `${cartonPackQtyFor(groupId)}-pack carton`;
+  return g.saleUnitLabel;
+}
 function standingDealFor(outletId, groupId) { return customerDeals[dcKey(outletId, groupId)] || null; }
 function groupSummaryFor(outletId, groupId) { return groupSummary[dcKey(outletId, groupId)] || null; }
 function flagsFor(outletId) { return customerFlags[outletId] || { pricingUpdated: false, metWithCustomer: false }; }
@@ -709,8 +740,10 @@ function buildServerPayload(fnName, args) {
     case 'saveGlassSize':  return { outletId: args[0], glassKey: args[1], sizeMl: args[2], updatedBy: args[3] };
     case 'saveGlassPrice': return { outletId: args[0], groupId: args[1], glassKey: args[2], price: args[3], updatedBy: args[4] };
     case 'savePickFee':    return { outletId: args[0], unitType: args[1], fee: args[2], updatedBy: args[3] };
-    case 'saveOffPremiseMultipackQty': return { outletId: args[0], qty: args[1], updatedBy: args[2] };
     case 'saveOffPremisePrice': return { outletId: args[0], groupId: args[1], priceType: args[2], price: args[3], updatedBy: args[4] };
+    case 'saveCartonPackQty': return { groupId: args[0], cartonPackQty: args[1], updatedBy: args[2] };
+    case 'saveMultipackQty':  return { groupId: args[0], multipackQty: args[1], updatedBy: args[2] };
+    case 'saveCanSizeMl':     return { groupId: args[0], canSizeMl: args[1], updatedBy: args[2] };
     default: return {};
   }
 }
@@ -1205,11 +1238,28 @@ function renderProductPrices() {
   if (statusFilter === 'disabled') list = list.filter(g => !isGroupEnabled(g.id));
   if (pkgFilter) list = list.filter(g => bucketOf(g) === pkgFilter);
   const body = document.getElementById('pp_body');
-  if (list.length === 0) { body.innerHTML = `<tr><td colspan="6"><div class="empty">No SKU groups match.</div></td></tr>`; return; }
+  if (list.length === 0) { body.innerHTML = `<tr><td colspan="7"><div class="empty">No SKU groups match.</div></td></tr>`; return; }
   body.innerHTML = list.map(g => {
     const rec = productPrices[g.id];
     const enabled = isGroupEnabled(g.id);
     const memberDescs = g.members.map(pid => products[pid] ? products[pid].desc.replace(g.subbrand,'').trim() : pid).join(', ');
+    const isCarton = bucketOf(g) === 'CARTONS';
+    const canMl = canSizeMlFor(g.id);
+    const packSizesCell = isCarton ? `
+      <div class="rowflex" style="gap:8px; flex-wrap:wrap;">
+        <div class="fld" style="margin:0;">
+          <label style="font-size:10px;">Cans/carton</label>
+          <input type="number" step="1" min="1" style="width:64px;" value="${cartonPackQtyFor(g.id)}" onchange="updateCartonPackQty('${g.id}', this.value)">
+        </div>
+        <div class="fld" style="margin:0;">
+          <label style="font-size:10px;">Cans/multipack</label>
+          <input type="number" step="1" min="1" style="width:64px;" value="${multipackQtyFor(g.id)}" onchange="updateGroupMultipackQty('${g.id}', this.value)">
+        </div>
+        <div class="fld" style="margin:0;">
+          <label style="font-size:10px;">Can size (mL)</label>
+          <input type="number" step="5" min="1" style="width:64px;" placeholder="—" value="${canMl===null?'':canMl}" onchange="updateCanSizeMl('${g.id}', this.value)">
+        </div>
+      </div>` : '<span class="muted">—</span>';
     return `<tr>
       <td class="center">
         <label class="rowflex" style="gap:6px; justify-content:center; cursor:pointer;">
@@ -1219,13 +1269,14 @@ function renderProductPrices() {
       </td>
       <td>
         <div>${escapeHtml(g.label)} ${g.isCore?'<span class="badge blue">Core range</span>':''}</div>
-        <div class="muted" style="font-size:11.5px; margin-top:2px;">${escapeHtml(memberDescs)}${g.packQtys&&g.packQtys.length>1?` <span class="badge amber" style="font-size:9.5px;">mixed: ${g.packQtys.join('pk, ')}pk</span>`:''}</div>
+        <div class="muted" style="font-size:11.5px; margin-top:2px;">${escapeHtml(memberDescs)}${g.packQtys&&g.packQtys.length>1?` <span class="badge amber" style="font-size:9.5px;">mixed in sales history: ${g.packQtys.join('pk, ')}pk</span>`:''}</div>
       </td>
       <td><span class="badge ${bucketOf(g).toLowerCase()}">${escapeHtml(g.formatLabel||g.format)}</span></td>
+      <td>${packSizesCell}</td>
       <td class="num-cell">
         <input type="number" step="0.01" class="inline-input" style="width:100px;" value="${rec&&rec.listPrice!=null?rec.listPrice:''}" placeholder="0.00" data-listprice-input="${g.id}"
           onchange="updateGroupPrice('${g.id}', this.value)">
-        <div class="hint" style="text-align:right;">per ${escapeHtml(g.saleUnitLabel)}</div>
+        <div class="hint" style="text-align:right;">per ${escapeHtml(saleUnitLabelFor(g.id))}</div>
       </td>
       <td id="dealref_${g.id}" style="min-width:280px;">${dealPriceRefHtml(g, rec?rec.listPrice:null)}</td>
       <td class="muted">${rec && rec.updatedAt ? (escapeHtml(rec.updatedBy||'')+'<br>'+new Date(rec.updatedAt).toLocaleDateString('en-AU')) : '—'}</td>
@@ -1242,6 +1293,30 @@ function updateGroupPrice(groupId, val) {
   renderGrid();
   toast('Saving list price…');
   callServer('saveGroupPrice', [groupId, price, currentUserEmail], () => toast('List price saved.'));
+}
+function updateCartonPackQty(groupId, val) {
+  const num = parseInt(val, 10);
+  if (isNaN(num) || num <= 0) { toast('Enter a valid carton size.'); renderProductPrices(); return; }
+  const existing = productPrices[groupId] || {};
+  productPrices[groupId] = { ...existing, cartonPackQty: num, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+  renderProductPrices();
+  callServer('saveCartonPackQty', [groupId, num, currentUserEmail], () => toast('Carton size saved.'));
+}
+function updateGroupMultipackQty(groupId, val) {
+  const num = parseInt(val, 10);
+  if (isNaN(num) || num <= 0) { toast('Enter a valid multipack size.'); renderProductPrices(); return; }
+  const existing = productPrices[groupId] || {};
+  productPrices[groupId] = { ...existing, multipackQty: num, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+  renderProductPrices();
+  callServer('saveMultipackQty', [groupId, num, currentUserEmail], () => toast('Multipack size saved.'));
+}
+function updateCanSizeMl(groupId, val) {
+  const num = parseFloat(val);
+  if (isNaN(num) || num <= 0) { toast('Enter a valid can size.'); renderProductPrices(); return; }
+  const existing = productPrices[groupId] || {};
+  productPrices[groupId] = { ...existing, canSizeMl: num, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+  renderProductPrices();
+  callServer('saveCanSizeMl', [groupId, num, currentUserEmail], () => toast('Can size saved.'));
 }
 function onGroupEnabledToggle(groupId, checked) {
   const existing = productPrices[groupId] || {};
@@ -1623,7 +1698,7 @@ function exportDealPriceListCSV() {
     const rec = productPrices[gid];
     const listPrice = rec ? rec.listPrice : null;
     const applicable = new Set(dealSetFor(g.bucket));
-    const row = [g.label, g.formatLabel||g.format, g.saleUnitLabel, listPrice??''];
+    const row = [g.label, g.formatLabel||g.format, saleUnitLabelFor(gid), listPrice??''];
     allTiers.forEach(x => {
       if (!applicable.has(x) || listPrice===null || listPrice===undefined) { row.push(''); return; }
       row.push(effPrice(listPrice, x).toFixed(2));
@@ -1641,7 +1716,7 @@ function exportCustomerCSV(outletId) {
     const pr = resolvePricing(outletId, gid);
     const gs = groupSummaryFor(outletId, gid);
     const dealTxt = pr.source==='temp' ? dealLabel(pr.dealX)+' (temp)' : pr.source==='standing' ? dealLabel(pr.dealX) : 'Nil';
-    lines.push([g.label, g.formatLabel||g.format, g.saleUnitLabel, pr.listPrice??'', dealTxt, pr.eff!==null?pr.eff.toFixed(2):'', gs?gs.lastPrice:'', gs?gs.lastPackQty+'pk':'', gs?gs.lastDate:''].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','));
+    lines.push([g.label, g.formatLabel||g.format, saleUnitLabelFor(gid), pr.listPrice??'', dealTxt, pr.eff!==null?pr.eff.toFixed(2):'', gs?gs.lastPrice:'', gs?gs.lastPackQty+'pk':'', gs?gs.lastDate:''].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','));
   });
   downloadFile(`YMT_Pricing_${(o.name||outletId).replace(/[^a-z0-9]/gi,'_')}.csv`, lines.join('\n'), 'text/csv');
 }
@@ -1659,7 +1734,7 @@ function exportAllCSV() {
     const gs = groupSummaryFor(outletId, groupId);
     const flags = flagsFor(outletId);
     const wholesaler = (outletSummary[outletId]||{}).lastWhouse || '';
-    const row = [o.name, outletId, wholesaler, flags.pricingUpdated?'Yes':'No', flags.metWithCustomer?'Yes':'No', g.label, g.formatLabel||g.format, g.saleUnitLabel, pr.listPrice??'', pr.source, dealLabel(pr.dealX), pr.eff!==null?pr.eff.toFixed(2):'', pr.tempDeal?pr.tempDeal.start:'', pr.tempDeal?pr.tempDeal.end:'', gs?gs.lastPrice:'', gs?gs.lastPackQty+'pk':'', gs?gs.lastDate:''];
+    const row = [o.name, outletId, wholesaler, flags.pricingUpdated?'Yes':'No', flags.metWithCustomer?'Yes':'No', g.label, g.formatLabel||g.format, saleUnitLabelFor(groupId), pr.listPrice??'', pr.source, dealLabel(pr.dealX), pr.eff!==null?pr.eff.toFixed(2):'', pr.tempDeal?pr.tempDeal.start:'', pr.tempDeal?pr.tempDeal.end:'', gs?gs.lastPrice:'', gs?gs.lastPackQty+'pk':'', gs?gs.lastDate:''];
     lines.push(row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','));
   });
   downloadFile('YMT_Pricing_All_Customers.csv', lines.join('\n'), 'text/csv');
@@ -1677,7 +1752,6 @@ const GLASS_TYPES = [
 // same as everywhere else in this tool. We convert retail down to ex-GST before comparing it
 // to cost, so every margin figure is a fair, like-for-like number.
 const GST_RATE = 0.10;
-const DEFAULT_MULTIPACK_QTY = 6;
 
 let currentMarginOutlet = null;    // Venues (on premise) calculator
 let marginWhatIf = {};             // groupId -> uncommitted dealX, reset when the customer changes
@@ -1858,10 +1932,6 @@ function offPremisePriceIncGstFor(outletId, groupId, priceType) {
   if (!rec || !rec.prices || !rec.prices[groupId] || rec.prices[groupId][priceType]==null) return defaultOffPremisePrice(priceType);
   return rec.prices[groupId][priceType];
 }
-function multipackQtyFor(outletId) {
-  const rec = customerOffPremisePricing[outletId];
-  return (rec && rec.multipackQty) || DEFAULT_MULTIPACK_QTY;
-}
 function updateOffPremisePrice(outletId, groupId, priceType, val, rerenderFn) {
   const num = parseFloat(val);
   if (isNaN(num) || num < 0) { toast('Enter a valid price.'); rerenderFn(outletId); return; }
@@ -1871,14 +1941,6 @@ function updateOffPremisePrice(outletId, groupId, priceType, val, rerenderFn) {
   customerOffPremisePricing[outletId] = { ...current, prices, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
   rerenderFn(outletId);
   callServer('saveOffPremisePrice', [outletId, groupId, priceType, num, currentUserEmail]);
-}
-function updateMultipackQty(outletId, val) {
-  const num = parseInt(val, 10);
-  if (isNaN(num) || num <= 0) { toast('Enter a valid pack size.'); renderOffPremiseMarginPage(outletId); return; }
-  const current = customerOffPremisePricing[outletId] || {};
-  customerOffPremisePricing[outletId] = { ...current, multipackQty: num, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
-  renderOffPremiseMarginPage(outletId);
-  callServer('saveOffPremiseMultipackQty', [outletId, num, currentUserEmail]);
 }
 
 function renderMarginCalculatorPage(outletId) {
@@ -1960,12 +2022,13 @@ function renderMarginCalculatorPage(outletId) {
       ? `<div class="muted" style="font-size:10.5px;">Last paid ${fmtMoney(gs.lastPrice)} (${fmtDateShort(gs.lastDate)})</div>`
       : `<div class="muted" style="font-size:10.5px;">Not yet purchased</div>`;
     const priceIncGst = offPremisePriceIncGstFor(outletId, gid, 'single');
-    const costExGst = singleCostExGst(effForCalc, pickFeeCarton, g.refPackQty);
+    const costExGst = singleCostExGst(effForCalc, pickFeeCarton, cartonPackQtyFor(gid));
     const m = costExGst===null ? null : unitMargin(costExGst, priceIncGst);
+    const canMl = canSizeMlFor(gid);
 
     return `<tr>
       <td>${escapeHtml(g.label)} <span class="badge cartons">${escapeHtml(g.formatLabel)}</span>${purchaseHint}</td>
-      <td class="num-cell mono">${escapeHtml(g.saleUnitLabel)}</td>
+      <td class="num-cell mono">${escapeHtml(saleUnitLabelFor(gid))}</td>
       <td class="num-cell mono">${listPrice!==null?fmtMoney(listPrice):'<span class="badge amber">Not set</span>'}</td>
       <td>
         <select onchange="onMarginDealChange('${outletId}','${gid}',this)" ${locked?'disabled title="Locked by an active temporary deal"':''}>
@@ -1974,6 +2037,7 @@ function renderMarginCalculatorPage(outletId) {
       </td>
       <td class="num-cell mono">${effForCalc!==null?fmtMoney(effForCalc):'—'}</td>
       <td class="num-cell" style="min-width:112px;">
+        ${canMl?`<div class="muted" style="font-size:9.5px;">${canMl}mL can</div>`:''}
         <input type="number" step="0.10" style="width:64px; text-align:right;" value="${priceIncGst}" onchange="updateOffPremisePrice('${outletId}','${gid}','single',this.value,renderMarginCalculatorPage)">
         ${marginBadgeHtml(m)}
       </td>
@@ -2069,7 +2133,6 @@ function renderOffPremiseMarginPage(outletId) {
   const o = outlets[outletId];
   if (!o) { document.getElementById('op_detail').innerHTML=''; return; }
   const pickFeeCarton = pickFeeFor(outletId, 'carton');
-  const multipackQty = multipackQtyFor(outletId);
 
   const allGroups = marginEligibleGroupIds('CARTONS');
   const purchasedIds = new Set(allGroups.filter(gid => groupSummaryFor(outletId, gid)));
@@ -2083,18 +2146,6 @@ function renderOffPremiseMarginPage(outletId) {
       <div class="hint" style="margin-bottom:10px;">Optional. What it costs this customer to have a carton picked &amp; delivered, on top of the wholesale price — added into the cost basis below. Leave blank if not applicable. Shared with the Venues calculator for this customer.</div>
       <div class="formgrid">
         ${pickFeeInputHtml(outletId, 'carton', 'Pick fee per carton', 'renderOffPremiseMarginPage')}
-      </div>
-    </div>`;
-
-  const multipackPanelHtml = `
-    <div class="panel no-print">
-      <h2>Multipack size</h2>
-      <div class="hint" style="margin-bottom:10px;">How many cans make up this customer's multipack (e.g. a 6-pack) — shared across all beers for this customer, same idea as glass sizes on the Venues calculator.</div>
-      <div class="formgrid">
-        <div class="fld">
-          <label>Cans per multipack</label>
-          <input type="number" step="1" min="1" style="width:80px;" value="${multipackQty}" onchange="updateMultipackQty('${outletId}',this.value)">
-        </div>
       </div>
     </div>`;
 
@@ -2112,21 +2163,27 @@ function renderOffPremiseMarginPage(outletId) {
       ? `<div class="muted" style="font-size:10.5px;">Last paid ${fmtMoney(gs.lastPrice)} (${fmtDateShort(gs.lastDate)})</div>`
       : `<div class="muted" style="font-size:10.5px;">Not yet purchased</div>`;
 
+    // Carton, multipack and can sizes are set per SKU on the Product List Prices page — each
+    // beer can genuinely come in a different carton/multipack/can size.
+    const cartonPackQty = cartonPackQtyFor(gid);
+    const multipackQty = multipackQtyFor(gid);
+    const canMl = canSizeMlFor(gid);
+
     const cartonPrice = offPremisePriceIncGstFor(outletId, gid, 'carton');
     const cartonCost = cartonCostExGst(effForCalc, pickFeeCarton);
     const cartonM = cartonCost===null ? null : unitMargin(cartonCost, cartonPrice);
 
     const multiPrice = offPremisePriceIncGstFor(outletId, gid, 'multipack');
-    const multiCost = multipackCostExGst(effForCalc, pickFeeCarton, g.refPackQty, multipackQty);
+    const multiCost = multipackCostExGst(effForCalc, pickFeeCarton, cartonPackQty, multipackQty);
     const multiM = multiCost===null ? null : unitMargin(multiCost, multiPrice);
 
     const singlePrice = offPremisePriceIncGstFor(outletId, gid, 'single');
-    const singleCost = singleCostExGst(effForCalc, pickFeeCarton, g.refPackQty);
+    const singleCost = singleCostExGst(effForCalc, pickFeeCarton, cartonPackQty);
     const singleM = singleCost===null ? null : unitMargin(singleCost, singlePrice);
 
     return `<tr>
       <td>${escapeHtml(g.label)} <span class="badge cartons">${escapeHtml(g.formatLabel)}</span>${purchaseHint}</td>
-      <td class="num-cell mono">${escapeHtml(g.saleUnitLabel)}</td>
+      <td class="num-cell mono">${escapeHtml(saleUnitLabelFor(gid))}</td>
       <td class="num-cell mono">${listPrice!==null?fmtMoney(listPrice):'<span class="badge amber">Not set</span>'}</td>
       <td>
         <select onchange="onOpDealChange('${outletId}','${gid}',this)" ${locked?'disabled title="Locked by an active temporary deal"':''}>
@@ -2139,10 +2196,12 @@ function renderOffPremiseMarginPage(outletId) {
         ${marginBadgeHtml(cartonM)}
       </td>
       <td class="num-cell" style="min-width:112px;">
+        <div class="muted" style="font-size:9.5px;">${multipackQty}-pack</div>
         <input type="number" step="0.10" style="width:64px; text-align:right;" value="${multiPrice}" onchange="updateOffPremisePrice('${outletId}','${gid}','multipack',this.value,renderOffPremiseMarginPage)">
         ${marginBadgeHtml(multiM)}
       </td>
       <td class="num-cell" style="min-width:112px;">
+        ${canMl?`<div class="muted" style="font-size:9.5px;">${canMl}mL can</div>`:''}
         <input type="number" step="0.10" style="width:64px; text-align:right;" value="${singlePrice}" onchange="updateOffPremisePrice('${outletId}','${gid}','single',this.value,renderOffPremiseMarginPage)">
         ${marginBadgeHtml(singleM)}
       </td>
@@ -2153,16 +2212,15 @@ function renderOffPremiseMarginPage(outletId) {
   document.getElementById('op_detail').innerHTML = `
     ${productPickerHtml}
     ${pickFeePanelHtml}
-    ${multipackPanelHtml}
     <div class="panel">
       <div class="rowflex" style="justify-content:space-between;">
         <h2 style="margin:0;">Margin by carton</h2>
         <button class="btn secondary no-print" onclick="window.print()">Print</button>
       </div>
-      <div class="hint" style="margin:8px 0;">Retail prices below are <strong>inc GST</strong> (what the bottleshop charges); carton list/deal prices are <strong>ex GST/WET</strong> like everywhere else in this tool — margin is calculated ex GST so it's a fair comparison. The single-can price is shared with the Venues calculator for this customer. Change the deal to see the margin impact as a "what-if" — it won't be saved until you click <strong>Apply deal</strong>.</div>
+      <div class="hint" style="margin:8px 0;">Retail prices below are <strong>inc GST</strong> (what the bottleshop charges); carton list/deal prices are <strong>ex GST/WET</strong> like everywhere else in this tool — margin is calculated ex GST so it's a fair comparison. The single-can price is shared with the Venues calculator for this customer. Carton, multipack and can sizes come from the Product List Prices page — set them there if a beer's numbers look off. Change the deal to see the margin impact as a "what-if" — it won't be saved until you click <strong>Apply deal</strong>.</div>
       <div class="tablewrap">
         <table class="datatable">
-          <thead><tr><th>Beer</th><th class="num-cell">Carton size</th><th class="num-cell">List price</th><th>Deal</th><th class="num-cell">Effective / carton</th><th class="num-cell">Carton (inc GST)</th><th class="num-cell">${multipackQty}-pack (inc GST)</th><th class="num-cell">Single (inc GST)</th><th class="no-print"></th></tr></thead>
+          <thead><tr><th>Beer</th><th class="num-cell">Carton size</th><th class="num-cell">List price</th><th>Deal</th><th class="num-cell">Effective / carton</th><th class="num-cell">Carton (inc GST)</th><th class="num-cell">Multipack (inc GST)</th><th class="num-cell">Single (inc GST)</th><th class="no-print"></th></tr></thead>
           <tbody>${rowsHtml || '<tr><td colspan="9"><div class="empty">No products selected above — tick some to see their margin, or use the "All" / "Already purchasing" buttons.</div></td></tr>'}</tbody>
         </table>
       </div>
