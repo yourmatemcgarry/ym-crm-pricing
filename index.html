@@ -2709,6 +2709,11 @@ function renderPerfPage() {
   const nowLabel = isCurrentQuarter ? 'Current' : 'End of quarter';
 
   document.getElementById('perf_detail').innerHTML = `
+    <div class="panel">
+      <h3>Total Volume by RSM <span class="muted" style="font-weight:400; font-size:11.5px;">(this quarter, kegs + cartons)</span></h3>
+      <div class="hint" style="margin-bottom:4px;">Compare territories — always shows every RSM regardless of the View selected above.</div>
+      ${perfVolumeByRsmChart(startWeekIdx, endWeekIdx, rsmList)}
+    </div>
     <div class="panel no-print">
       <h2>${scope===PERF_ALL?'Sales Team targets':'Targets — '+escapeHtml(scope)}</h2>
       <div class="hint" style="margin-bottom:10px;">${scope===PERF_ALL?"This is the sum of every RSM's targets for this quarter — set individual targets from each RSM's own view above, shared live with your team." : 'Set targets for '+escapeHtml(scope)+' for this quarter. Leave a field blank to clear it. Saves automatically, shared live with your team.'}</div>
@@ -2718,11 +2723,6 @@ function renderPerfPage() {
       ${perfKpiCardHtml('Total Volume', totalVolumeLitres, targets.totalVolumeTarget, ' L')}
       ${perfKpiCardHtml('Keg Volume', kegQ.totalLitres, targets.kegVolumeTarget, ' L')}
       ${perfKpiCardHtml('Carton Volume', cartonQ.totalLitres, targets.cartonVolumeTarget, ' L')}
-    </div>
-    <div class="panel">
-      <h3>Total Volume by RSM <span class="muted" style="font-weight:400; font-size:11.5px;">(this quarter, kegs + cartons)</span></h3>
-      <div class="hint" style="margin-bottom:4px;">Compare territories — always shows every RSM regardless of the View selected above.</div>
-      ${perfVolumeByRsmChart(startWeekIdx, endWeekIdx, rsmList)}
     </div>
     <div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">
       <div class="panel" style="flex:1; min-width:340px;">
