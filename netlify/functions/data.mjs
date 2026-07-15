@@ -36,7 +36,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing] = await Promise.all([
+  const [groupPrices, customerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('tempDeals', { type: 'json' }),
@@ -44,6 +44,7 @@ async function readAll(s) {
     s.get('customerGlassPricing', { type: 'json' }),
     s.get('customerPickFees', { type: 'json' }),
     s.get('customerOffPremisePricing', { type: 'json' }),
+    s.get('rsmTargets', { type: 'json' }),
   ]);
   return {
     groupPrices: groupPrices || {},
@@ -53,6 +54,7 @@ async function readAll(s) {
     customerGlassPricing: customerGlassPricing || {},
     customerPickFees: customerPickFees || {},
     customerOffPremisePricing: customerOffPremisePricing || {},
+    rsmTargets: rsmTargets || {},
   };
 }
 
@@ -232,6 +234,24 @@ export default async (req) => {
       current[outletId] = { ...existingOutlet, prices, updatedBy, updatedAt: now };
       await s.setJSON('customerOffPremisePricing', current);
       return json({ ok: true, customerOffPremisePricing: current });
+    }
+
+    if (action === 'saveRsmTarget') {
+      // field is one of: totalVolumeTarget, kegVolumeTarget, cartonVolumeTarget,
+      // kegListingsTarget, cartonListingsTarget. value may be null to clear it (back to blank).
+      const { rsm, quarterKey, field, value, updatedBy } = payload;
+      const current = (await s.get('rsmTargets', { type: 'json' })) || {};
+      const key = rsm + '|' + quarterKey;
+      const existing = current[key] || {};
+      if (value === null || value === undefined) {
+        const updated = { ...existing };
+        delete updated[field];
+        current[key] = { ...updated, updatedBy, updatedAt: now };
+      } else {
+        current[key] = { ...existing, [field]: Number(value), updatedBy, updatedAt: now };
+      }
+      await s.setJSON('rsmTargets', current);
+      return json({ ok: true, rsmTargets: current });
     }
 
     return json({ error: 'Unknown action: ' + action }, 400);
