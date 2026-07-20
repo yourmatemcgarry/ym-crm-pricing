@@ -36,7 +36,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets] = await Promise.all([
+  const [groupPrices, customerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('tempDeals', { type: 'json' }),
@@ -45,6 +45,7 @@ async function readAll(s) {
     s.get('customerPickFees', { type: 'json' }),
     s.get('customerOffPremisePricing', { type: 'json' }),
     s.get('rsmTargets', { type: 'json' }),
+    s.get('activations', { type: 'json' }),
   ]);
   return {
     groupPrices: groupPrices || {},
@@ -55,6 +56,7 @@ async function readAll(s) {
     customerPickFees: customerPickFees || {},
     customerOffPremisePricing: customerOffPremisePricing || {},
     rsmTargets: rsmTargets || {},
+    activations: activations || [],
   };
 }
 
@@ -252,6 +254,30 @@ export default async (req) => {
       }
       await s.setJSON('rsmTargets', current);
       return json({ ok: true, rsmTargets: current });
+    }
+
+    if (action === 'saveActivation') {
+      const { id, outletId, productType, activationType, start, end, dealX, bonusStock, pos, consumerPricing, groupId, tempDealId, updatedBy } = payload;
+      const current = (await s.get('activations', { type: 'json' })) || [];
+      const newId = id || ('act_' + Date.now() + '_' + Math.round(Math.random() * 10000));
+      const idx = current.findIndex((a) => a.id === newId);
+      const rec = {
+        id: newId, outletId, productType, activationType, start, end,
+        dealX: Number(dealX) || 0, bonusStock: bonusStock || '', pos: pos || '', consumerPricing: consumerPricing || '',
+        groupId: groupId || null, tempDealId: tempDealId || null,
+        updatedBy, updatedAt: now,
+      };
+      if (idx >= 0) current[idx] = rec; else current.push(rec);
+      await s.setJSON('activations', current);
+      return json({ ok: true, id: newId, activations: current });
+    }
+
+    if (action === 'deleteActivation') {
+      const { id } = payload;
+      const current = (await s.get('activations', { type: 'json' })) || [];
+      const next = current.filter((a) => a.id !== id);
+      await s.setJSON('activations', next);
+      return json({ ok: true, activations: next });
     }
 
     return json({ error: 'Unknown action: ' + action }, 400);
