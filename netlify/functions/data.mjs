@@ -36,7 +36,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations] = await Promise.all([
+  const [groupPrices, customerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('tempDeals', { type: 'json' }),
@@ -46,6 +46,9 @@ async function readAll(s) {
     s.get('customerOffPremisePricing', { type: 'json' }),
     s.get('rsmTargets', { type: 'json' }),
     s.get('activations', { type: 'json' }),
+    s.get('trucks', { type: 'json' }),
+    s.get('orders', { type: 'json' }),
+    s.get('deliveryRuns', { type: 'json' }),
   ]);
   return {
     groupPrices: groupPrices || {},
@@ -57,6 +60,9 @@ async function readAll(s) {
     customerOffPremisePricing: customerOffPremisePricing || {},
     rsmTargets: rsmTargets || {},
     activations: activations || [],
+    trucks: trucks || [],
+    orders: orders || [],
+    deliveryRuns: deliveryRuns || [],
   };
 }
 
@@ -278,6 +284,78 @@ export default async (req) => {
       const next = current.filter((a) => a.id !== id);
       await s.setJSON('activations', next);
       return json({ ok: true, activations: next });
+    }
+
+    if (action === 'saveWeightKg') {
+      // Weight per sale unit (per keg, or per carton) — used by the Orders/Delivery tools to
+      // work out a load's total weight and check it against a truck's capacity.
+      const { groupId, weightKg, updatedBy } = payload;
+      const current = (await s.get('groupPrices', { type: 'json' })) || {};
+      const existing = current[groupId] || {};
+      current[groupId] = { ...existing, weightKg: Number(weightKg), updatedBy, updatedAt: now };
+      await s.setJSON('groupPrices', current);
+      return json({ ok: true, groupPrices: current });
+    }
+
+    if (action === 'saveTruck') {
+      const { id, name, maxWeightKg, updatedBy } = payload;
+      const current = (await s.get('trucks', { type: 'json' })) || [];
+      const newId = id || ('truck_' + Date.now() + '_' + Math.round(Math.random() * 10000));
+      const idx = current.findIndex((t) => t.id === newId);
+      const rec = { id: newId, name, maxWeightKg: Number(maxWeightKg), updatedBy, updatedAt: now };
+      if (idx >= 0) current[idx] = rec; else current.push(rec);
+      await s.setJSON('trucks', current);
+      return json({ ok: true, id: newId, trucks: current });
+    }
+
+    if (action === 'deleteTruck') {
+      const { id } = payload;
+      const current = (await s.get('trucks', { type: 'json' })) || [];
+      const next = current.filter((t) => t.id !== id);
+      await s.setJSON('trucks', next);
+      return json({ ok: true, trucks: next });
+    }
+
+    if (action === 'saveOrder') {
+      // The whole order record (lines[], delivery{}, etc.) is sent as one object — simpler and
+      // less error-prone than flattening a deeply nested shape into individual args. The server
+      // just assigns an id if it's new and upserts by id, same pattern as everywhere else.
+      const { order } = payload;
+      const current = (await s.get('orders', { type: 'json' })) || [];
+      const newId = order.id || ('ord_' + Date.now() + '_' + Math.round(Math.random() * 10000));
+      const idx = current.findIndex((o) => o.id === newId);
+      const rec = { ...order, id: newId, updatedAt: now };
+      if (idx >= 0) current[idx] = rec; else current.push(rec);
+      await s.setJSON('orders', current);
+      return json({ ok: true, id: newId, orders: current });
+    }
+
+    if (action === 'deleteOrder') {
+      const { id } = payload;
+      const current = (await s.get('orders', { type: 'json' })) || [];
+      const next = current.filter((o) => o.id !== id);
+      await s.setJSON('orders', next);
+      return json({ ok: true, orders: next });
+    }
+
+    if (action === 'saveRun') {
+      // Same whole-object upsert pattern as saveOrder.
+      const { run } = payload;
+      const current = (await s.get('deliveryRuns', { type: 'json' })) || [];
+      const newId = run.id || ('run_' + Date.now() + '_' + Math.round(Math.random() * 10000));
+      const idx = current.findIndex((r) => r.id === newId);
+      const rec = { ...run, id: newId, updatedAt: now };
+      if (idx >= 0) current[idx] = rec; else current.push(rec);
+      await s.setJSON('deliveryRuns', current);
+      return json({ ok: true, id: newId, deliveryRuns: current });
+    }
+
+    if (action === 'deleteRun') {
+      const { id } = payload;
+      const current = (await s.get('deliveryRuns', { type: 'json' })) || [];
+      const next = current.filter((r) => r.id !== id);
+      await s.setJSON('deliveryRuns', next);
+      return json({ ok: true, deliveryRuns: next });
     }
 
     return json({ error: 'Unknown action: ' + action }, 400);
