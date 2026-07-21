@@ -261,8 +261,13 @@
   <button class="tab-btn" data-tab="margin">Margin Calculator - Venues (On Prem)</button>
   <button class="tab-btn" data-tab="offpremise">Margin Calculator - Bottleshops (Off Prem)</button>
   <button class="tab-btn" data-tab="performance">Team Dashboard</button>
+  <button class="tab-btn" data-tab="targets">Set Targets</button>
+  <button class="tab-btn" data-tab="trends">Volume Trends</button>
   <button class="tab-btn" data-tab="atrisk">At Risk Listings</button>
   <button class="tab-btn" data-tab="activations">Activations</button>
+  <button class="tab-btn" data-tab="orders">Orders</button>
+  <button class="tab-btn" data-tab="runs">Delivery Runs</button>
+  <button class="tab-btn" data-tab="deliveryreports">Delivery Reports</button>
 </nav>
 
 <main>
@@ -381,7 +386,7 @@
       <div class="hint" style="margin-bottom:10px;">One list price per SKU group (ex GST/WET) — this is what every customer deal is calculated from, shared live with your team. Kegs are priced per keg; cartons are priced per carton. Each carton SKU has its own <strong>cans/carton</strong>, <strong>cans/multipack</strong> and <strong>can size</strong> — set these accurately, since the margin calculators use them directly (a wrong carton size will throw off every margin figure for that beer). Deal prices below are rounded up to the nearest whole dollar. Use the "Enabled" toggle to control which SKU groups appear on the Pricing Grid, temporary deals, and customer summaries.</div>
       <div class="tablewrap">
         <table class="datatable">
-          <thead><tr><th class="center">Enabled</th><th>SKU group</th><th>Format</th><th>Pack sizes (cartons only)</th><th class="num-cell">List price</th><th>Deal price reference (for invoicing)</th><th>Updated</th></tr></thead>
+          <thead><tr><th class="center">Enabled</th><th>SKU group</th><th>Format</th><th>Pack sizes (cartons only)</th><th class="num-cell">List price</th><th class="num-cell">Weight</th><th>Deal price reference (for invoicing)</th><th>Updated</th></tr></thead>
           <tbody id="pp_body"></tbody>
         </table>
       </div>
@@ -501,6 +506,12 @@
   <!-- ================= VENUES (ON PREMISE) MARGIN CALCULATOR ================= -->
   <div class="tabpage" id="tab-margin">
     <div class="panel no-print">
+      <h2 style="margin:0;">Quick Margin Calculator</h2>
+      <div class="hint" style="margin-top:6px;">Tick the beers you want to compare, pick a deal for each, enter retail pricing, and see the margin instantly — not tied to any customer, just a quick what-if. Nothing here is saved.</div>
+      <div class="rowflex" style="flex-wrap:wrap; gap:4px 14px; margin-top:10px;" id="qmc_picker"></div>
+      <div id="qmc_body" style="margin-top:10px;"></div>
+    </div>
+    <div class="panel no-print">
       <h2>Choose a customer</h2>
       <div class="fld autocomplete" style="max-width:420px;">
         <label>Customer</label>
@@ -514,6 +525,12 @@
 
   <!-- ================= OFF PREMISE (BOTTLESHOPS) MARGIN CALCULATOR ================= -->
   <div class="tabpage" id="tab-offpremise">
+    <div class="panel no-print">
+      <h2 style="margin:0;">Quick Margin Calculator</h2>
+      <div class="hint" style="margin-top:6px;">Tick the beers you want to compare, pick a deal for each, enter retail pricing, and see the margin instantly — not tied to any customer, just a quick what-if. Nothing here is saved.</div>
+      <div class="rowflex" style="flex-wrap:wrap; gap:4px 14px; margin-top:10px;" id="qop_picker"></div>
+      <div id="qop_body" style="margin-top:10px;"></div>
+    </div>
     <div class="panel no-print">
       <h2>Choose a customer</h2>
       <div class="fld autocomplete" style="max-width:420px;">
@@ -544,6 +561,54 @@
       <div class="hint" style="margin-top:8px;">Financial-year quarters (Q1 Jul–Sep … Q4 Apr–Jun). Volumes are shown in <strong>litres</strong> — kegs converted using keg size, cartons converted using each historical sale's actual can size — so keg and carton volume are directly comparable regardless of pack size. A "listing" means one beer actively being bought by one venue. Targets are set per RSM each quarter, shared live with your team; the Sales Team view automatically totals them. This all runs off your sales data, so it updates the moment you refresh it (e.g. your weekly Tuesday update).</div>
     </div>
     <div id="perf_detail"></div>
+  </div>
+
+  <!-- ================= SET TARGETS ================= -->
+  <div class="tabpage" id="tab-targets">
+    <div class="panel no-print">
+      <div class="rowflex" style="justify-content:space-between; flex-wrap:wrap; gap:14px;">
+        <h2 style="margin:0;">Set quarterly targets — every RSM</h2>
+        <div class="qnav">
+          <button class="qstep" onclick="stepTargetsQuarter(-1)" title="Previous quarter">‹</button>
+          <div class="qlabel" id="tg_qlabel"></div>
+          <button class="qstep" onclick="stepTargetsQuarter(1)" title="Next quarter">›</button>
+          <button class="btn small secondary" onclick="jumpTargetsCurrentQuarter()">Current quarter</button>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:6px;">Enter each RSM's target for this quarter directly in the table below — saves automatically, shared live with your team. Leave a cell blank to clear that target. Total Volume is calculated automatically as Keg Volume + Carton Volume and can't be edited directly. The Sales Team row is the sum of every RSM and is read-only.</div>
+      <div class="tablewrap" style="margin-top:10px;">
+        <table class="datatable" id="tg_table">
+          <thead><tr>
+            <th>RSM</th><th>Total Volume (L)</th><th>Keg Volume (L)</th><th>Carton Volume (L)</th>
+            <th>Keg Listings</th><th>Carton Listings</th><th>Keg Activations</th><th>Carton Activations</th><th>Direct Delivery Onboarded</th>
+          </tr></thead>
+          <tbody id="tg_body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= VOLUME TRENDS ================= -->
+  <div class="tabpage" id="tab-trends">
+    <div class="panel no-print">
+      <h2 style="margin:0;">Volume Trends</h2>
+      <div class="hint" style="margin-top:6px;">Kegs are shown by month, cartons by financial quarter — matching each pack type's usual listing cycle. Use the filters to drill into one RSM, customer type, or beer.</div>
+      <div class="rowflex" style="margin-top:10px; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="fld" style="margin:0;"><label>RSM</label><select id="vt_rsm"><option value="">All RSMs</option></select></div>
+        <div class="fld" style="margin:0;"><label>Customer type</label><select id="vt_custType"><option value="">All types</option></select></div>
+        <div class="fld" style="margin:0;"><label>Beer</label><select id="vt_subbrand"><option value="">All beers</option></select></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 style="margin:0 0 4px;">Kegs <span class="badge kegs" style="font-size:9.5px;">by month</span></h2>
+    </div>
+    <div id="vt_kegs"></div>
+
+    <div class="panel">
+      <h2 style="margin:0 0 4px;">Cartons <span class="badge cartons" style="font-size:9.5px;">by quarter</span></h2>
+    </div>
+    <div id="vt_cartons"></div>
   </div>
 
   <!-- ================= AT RISK LISTINGS ================= -->
@@ -646,6 +711,112 @@
     </div>
   </div>
 
+  <!-- ================= ORDERS ================= -->
+  <div class="tabpage" id="tab-orders">
+    <div class="panel no-print">
+      <h2>New order</h2>
+      <div class="fld autocomplete" style="max-width:420px;">
+        <label>Customer</label>
+        <input id="ord_outletSearch" placeholder="Search customer…" autocomplete="off">
+        <div class="ac-results" id="ord_outletResults"></div>
+        <input type="hidden" id="ord_outletId">
+      </div>
+      <div id="ord_lines" style="margin-top:12px;"></div>
+      <div id="ord_summary" style="margin-top:10px;"></div>
+      <div class="fld" style="margin-top:10px; max-width:420px;"><label>Delivery notes</label><input id="ord_notes" placeholder="e.g. deliver before 10am, use side entrance"></div>
+      <div class="rowflex" style="margin-top:12px;">
+        <button class="btn" onclick="saveOrder()">Save order</button>
+        <button class="btn secondary" onclick="resetOrderForm()">Clear form</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="rowflex" style="justify-content:space-between; flex-wrap:wrap; gap:10px;">
+        <h2 style="margin:0;">Orders <span class="muted" id="ord_count" style="font-weight:400;"></span></h2>
+      </div>
+      <div class="rowflex" style="margin-top:10px; gap:10px; flex-wrap:wrap;">
+        <select id="ord_statusFilter">
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="allocated">Allocated</option>
+          <option value="completed">Completed</option>
+        </select>
+        <select id="ord_rsmFilter"><option value="">All RSMs</option></select>
+      </div>
+      <div class="tablewrap" style="margin-top:10px;">
+        <table class="datatable">
+          <thead><tr><th>Customer</th><th>RSM</th><th>Items</th><th class="num-cell">Total price</th><th class="num-cell">Weight</th><th>Status</th><th>Created</th><th class="no-print">Action</th></tr></thead>
+          <tbody id="ord_body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DELIVERY RUNS ================= -->
+  <div class="tabpage" id="tab-runs">
+    <div class="panel no-print">
+      <h2 style="margin:0;">Trucks</h2>
+      <div class="hint" style="margin-top:6px;">Set up your delivery fleet — name + max weight capacity — used to check if a run is overloaded.</div>
+      <div class="rowflex" style="margin-top:10px; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="fld" style="margin:0;"><label>Truck name</label><input id="trk_name" placeholder="e.g. Truck 1"></div>
+        <div class="fld" style="margin:0;"><label>Max weight (kg)</label><input id="trk_capacity" type="number" step="1" min="1" style="width:110px;" placeholder="e.g. 4000"></div>
+        <button class="btn" onclick="saveNewTruck()">Add truck</button>
+      </div>
+      <div class="tablewrap" style="margin-top:10px;">
+        <table class="datatable">
+          <thead><tr><th>Truck</th><th class="num-cell">Max weight</th><th class="no-print">Action</th></tr></thead>
+          <tbody id="trk_body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel no-print">
+      <h2 style="margin:0;">Create a run</h2>
+      <div class="rowflex" style="margin-top:10px; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="fld" style="margin:0;"><label>Run name</label><input id="run_name" placeholder="e.g. Wide Bay run"></div>
+        <div class="fld" style="margin:0;"><label>Date</label><input id="run_date" type="date"></div>
+        <div class="fld" style="margin:0;"><label>Truck</label><select id="run_truck"><option value="">Select truck…</option></select></div>
+        <button class="btn" onclick="createRun()">Create run</button>
+      </div>
+    </div>
+
+    <div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">
+      <div class="panel" style="flex:1; min-width:280px;">
+        <h3>Planning</h3>
+        <div id="run_list_planning"></div>
+      </div>
+      <div class="panel" style="flex:1; min-width:280px;">
+        <h3>In progress</h3>
+        <div id="run_list_inprogress"></div>
+      </div>
+      <div class="panel" style="flex:1; min-width:280px;">
+        <h3>Completed (recent)</h3>
+        <div id="run_list_completed"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div id="run_detail"></div>
+    </div>
+  </div>
+
+  <!-- ================= DELIVERY REPORTS ================= -->
+  <div class="tabpage" id="tab-deliveryreports">
+    <div class="panel no-print">
+      <h2 style="margin:0;">Delivery Reports</h2>
+      <div class="hint" style="margin-top:6px;">Built from completed delivery runs — weight delivered, empty kegs collected, and deliveries per hour, last 12 weeks.</div>
+    </div>
+    <div id="drpt_charts"></div>
+    <div class="panel">
+      <h2 style="margin:0;">Completed runs</h2>
+      <div class="tablewrap" style="margin-top:10px;">
+        <table class="datatable">
+          <thead><tr><th>Run</th><th>Date</th><th>Truck</th><th class="num-cell">Stops</th><th class="num-cell">Weight delivered</th><th class="num-cell">Kegs collected</th><th class="num-cell">Duration</th></tr></thead>
+          <tbody id="drpt_body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <div class="toast" id="toast"></div>
@@ -680,16 +851,14 @@ function renderDataAsOfBadge() {
   el.textContent = `Sales data as of ${fmtDate(meta.salesDataTo)} (${label})`;
 }
 
-// Prices for an actual X+1 deal are always rounded UP to the nearest whole
-// dollar, so customer-facing deal pricing is always a clean amount for
-// invoicing. The plain list price (no deal, x<=0) is NOT rounded — it's
-// shown exactly as entered — and neither are historical "last price paid"
-// figures.
+// Prices for an actual X+1 deal are the exact result of the deal math, shown to the cent (two
+// decimal places) — not rounded up to the nearest whole dollar. The plain list price (no deal,
+// x<=0) is likewise shown exactly as entered, as are historical "last price paid" figures.
 function effPrice(listPrice, x) {
   listPrice = Number(listPrice) || 0;
   x = Number(x) || 0;
   if (x <= 0) return listPrice;
-  return Math.ceil(listPrice * x / (x + 1));
+  return listPrice * x / (x + 1);
 }
 function dealLabel(x) {
   x = Number(x) || 0;
@@ -701,7 +870,7 @@ function toast(msg) {
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), 1800);
 }
-const DEAL_SETS = { KEGS: [0,2,3,4,5,6], CARTONS: [0,3,5,7,10,15] };
+const DEAL_SETS = { KEGS: [0,2,3,4,5,6,8,10], CARTONS: [0,3,5,7,10,15] };
 function dealSetFor(bucket) { return DEAL_SETS[bucket] || DEAL_SETS.CARTONS; }
 
 function dealOptionsHtml(selectedX, bucket) {
@@ -739,6 +908,9 @@ let customerPickFees = {}; // keyed by outletId: {keg, carton, updatedBy, update
 let customerOffPremisePricing = {}; // keyed by outletId: {multipackQty, prices:{groupId:{carton,multipack,single}}, updatedBy, updatedAt} — shared
 let rsmTargets = {}; // keyed by "rsm|quarterKey": {totalVolumeTarget, kegVolumeTarget, cartonVolumeTarget, kegListingsTarget, cartonListingsTarget, kegActivationsTarget, cartonActivationsTarget, directDeliveryTarget, updatedBy, updatedAt} — shared
 let activations = []; // [ {id, outletId, productType, activationType, start, end, dealX, groupId, tempDealId, bonusStock, pos, consumerPricing, updatedBy, updatedAt} ] — shared
+let trucks = []; // [ {id, name, maxWeightKg, updatedBy, updatedAt} ] — shared
+let orders = []; // [ {id, outletId, lines, notes, status, runId, delivery, createdBy, createdAt, updatedBy, updatedAt} ] — shared
+let deliveryRuns = []; // [ {id, name, date, truckId, stopOrder, status, startedAt, finishedAt, createdBy, createdAt, updatedBy, updatedAt} ] — shared
 let dataReady = false;
 
 // ===================== Simple per-device identity (no login) =====================
@@ -795,6 +967,26 @@ function multipackQtyFor(groupId) {
 function canSizeMlFor(groupId) {
   const rec = productPrices[groupId];
   return (rec && rec.canSizeMl != null) ? rec.canSizeMl : null;
+}
+// Weight per sale unit (per keg, or per carton) — used by the Orders/Delivery tools to work out
+// a load's total weight and check it against a truck's capacity. These are rough placeholder
+// estimates (keg: litres × ~1.01kg/L for the beer + an approximate steel shell weight; carton:
+// ~0.42kg per can including packaging) until set to the real figures here.
+function defaultWeightKgFor(groupId) {
+  const g = groups[groupId];
+  if (!g) return 0;
+  if (bucketOf(g) === 'KEGS') {
+    const litres = g.kegLitres || 50;
+    const shellKg = litres <= 30 ? 10 : 13;
+    return Math.round(litres * 1.01 + shellKg);
+  }
+  const packQty = cartonPackQtyFor(groupId);
+  return Math.round(packQty * 0.42 * 10) / 10;
+}
+function weightKgFor(groupId) {
+  const rec = productPrices[groupId];
+  if (rec && rec.weightKg != null) return rec.weightKg;
+  return defaultWeightKgFor(groupId);
 }
 // Display label for a group's carton size — dynamic (reflects any admin override) for cartons,
 // unchanged ("keg") for kegs.
@@ -933,6 +1125,13 @@ function buildServerPayload(fnName, args) {
     case 'saveRsmTarget':     return { rsm: args[0], quarterKey: args[1], field: args[2], value: args[3], updatedBy: args[4] };
     case 'saveActivation':    return { id: args[0], outletId: args[1], productType: args[2], activationType: args[3], start: args[4], end: args[5], dealX: args[6], bonusStock: args[7], pos: args[8], consumerPricing: args[9], groupId: args[10], tempDealId: args[11], updatedBy: args[12] };
     case 'deleteActivation':  return { id: args[0] };
+    case 'saveWeightKg':      return { groupId: args[0], weightKg: args[1], updatedBy: args[2] };
+    case 'saveTruck':         return { id: args[0], name: args[1], maxWeightKg: args[2], updatedBy: args[3] };
+    case 'deleteTruck':       return { id: args[0] };
+    case 'saveOrder':         return { order: args[0] };
+    case 'deleteOrder':       return { id: args[0] };
+    case 'saveRun':           return { run: args[0] };
+    case 'deleteRun':         return { id: args[0] };
     default: return {};
   }
 }
@@ -941,6 +1140,10 @@ function buildServerPayload(fnName, args) {
 // (the optimistic UI update already happened, so the user sees their
 // change locally — if the save genuinely failed we tell them to retry
 // rather than silently losing it).
+// Actions whose onSuccess callback expects just the new/kept record id (a plain string) rather
+// than the full { ok, id, ...collection } response — every save-with-an-id action, so call
+// sites can do `(newId) => record.id = newId` consistently.
+const ID_ONLY_SERVER_ACTIONS = ['saveTempDeal', 'saveActivation', 'saveTruck', 'saveOrder', 'saveRun'];
 function callServer(fnName, args, onSuccess, onFailure) {
   fetch(API_URL, {
     method: 'POST',
@@ -950,7 +1153,7 @@ function callServer(fnName, args, onSuccess, onFailure) {
     .then(r => r.json().then(data => ({ ok: r.ok, data })))
     .then(({ ok, data }) => {
       if (!ok || data.error) throw new Error((data && data.error) || 'Server error');
-      if (fnName === 'saveTempDeal') { if (onSuccess) onSuccess(data.id); }
+      if (ID_ONLY_SERVER_ACTIONS.includes(fnName)) { if (onSuccess) onSuccess(data.id); }
       else if (onSuccess) onSuccess(data);
     })
     .catch(err => {
@@ -1427,7 +1630,7 @@ function renderProductPrices() {
   if (statusFilter === 'disabled') list = list.filter(g => !isGroupEnabled(g.id));
   if (pkgFilter) list = list.filter(g => bucketOf(g) === pkgFilter);
   const body = document.getElementById('pp_body');
-  if (list.length === 0) { body.innerHTML = `<tr><td colspan="7"><div class="empty">No SKU groups match.</div></td></tr>`; return; }
+  if (list.length === 0) { body.innerHTML = `<tr><td colspan="8"><div class="empty">No SKU groups match.</div></td></tr>`; return; }
   body.innerHTML = list.map(g => {
     const rec = productPrices[g.id];
     const enabled = isGroupEnabled(g.id);
@@ -1466,6 +1669,10 @@ function renderProductPrices() {
         <input type="number" step="0.01" class="inline-input" style="width:100px;" value="${rec&&rec.listPrice!=null?rec.listPrice:''}" placeholder="0.00" data-listprice-input="${g.id}"
           onchange="updateGroupPrice('${g.id}', this.value)">
         <div class="hint" style="text-align:right;">per ${escapeHtml(saleUnitLabelFor(g.id))}</div>
+      </td>
+      <td class="num-cell">
+        <input type="number" step="0.1" min="0" style="width:70px; text-align:right;" value="${weightKgFor(g.id)}" onchange="updateWeightKg('${g.id}', this.value)">
+        <div class="hint" style="text-align:right;">kg per ${bucketOf(g)==='KEGS'?'keg':'carton'}</div>
       </td>
       <td id="dealref_${g.id}" style="min-width:280px;">${dealPriceRefHtml(g, rec?rec.listPrice:null)}</td>
       <td class="muted">${rec && rec.updatedAt ? (escapeHtml(rec.updatedBy||'')+'<br>'+new Date(rec.updatedAt).toLocaleDateString('en-AU')) : '—'}</td>
@@ -1507,6 +1714,14 @@ function updateCanSizeMl(groupId, val) {
   renderProductPrices();
   callServer('saveCanSizeMl', [groupId, num, currentUserEmail], () => toast('Can size saved.'));
 }
+function updateWeightKg(groupId, val) {
+  const num = parseFloat(val);
+  if (isNaN(num) || num < 0) { toast('Enter a valid weight.'); renderProductPrices(); return; }
+  const existing = productPrices[groupId] || {};
+  productPrices[groupId] = { ...existing, weightKg: num, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+  renderProductPrices();
+  callServer('saveWeightKg', [groupId, num, currentUserEmail], () => toast('Weight saved.'));
+}
 function onGroupEnabledToggle(groupId, checked) {
   const existing = productPrices[groupId] || {};
   productPrices[groupId] = { ...existing, enabled: checked, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
@@ -1546,7 +1761,7 @@ function populateTempDealXOptions(bucket, keepValue) {
     return;
   }
   sel.innerHTML = stdDealOptionsHtml(bucket) + `<option value="custom">Custom…</option>`;
-  hint.textContent = bucket === 'KEGS' ? 'Standard keg deals: 2+1, 3+1, 4+1, 5+1, 6+1.' : 'Standard carton deals: 3+1, 5+1, 7+1, 10+1, 15+1.';
+  hint.textContent = bucket === 'KEGS' ? 'Standard keg deals: 2+1, 3+1, 4+1, 5+1, 6+1, 8+1, 10+1.' : 'Standard carton deals: 3+1, 5+1, 7+1, 10+1, 15+1.';
   if (keepValue !== undefined && [...sel.options].some(o=>o.value===String(keepValue))) sel.value = String(keepValue);
 }
 
@@ -2132,6 +2347,121 @@ function updateOffPremisePrice(outletId, groupId, priceType, val, rerenderFn) {
   callServer('saveOffPremisePrice', [outletId, groupId, priceType, num, currentUserEmail]);
 }
 
+// ---------- Quick Margin Calculator (Venues) — not tied to any customer ----------
+// A scratch-pad "what if" tool: tick as many beers as you like to compare side by side, each
+// with its own deal + retail pricing, see the margin instantly. Nothing here is saved.
+let quickMcSelected = new Set();
+let quickMcState = {}; // groupId -> { dealX, pickFee, sizes, glassPrices, singleCanPrice }
+function quickMcStateFor(gid) {
+  return quickMcState[gid] || (quickMcState[gid] = { dealX: 0, pickFee: 0, sizes: null, glassPrices: {}, singleCanPrice: null });
+}
+function quickMcToggle(gid, checked) {
+  if (checked) { quickMcSelected.add(gid); quickMcStateFor(gid); }
+  else { quickMcSelected.delete(gid); delete quickMcState[gid]; }
+  renderQuickMc();
+}
+function quickMcRemove(gid) {
+  quickMcSelected.delete(gid);
+  delete quickMcState[gid];
+  const cb = document.getElementById('qmc_chk_'+gid);
+  if (cb) cb.checked = false;
+  renderQuickMc();
+}
+function quickMcOnDealChange(gid, sel) {
+  const state = quickMcStateFor(gid);
+  if (sel.value === 'custom') {
+    const val = window.prompt('Enter the custom deal number (X for X+1):');
+    const num = parseFloat(val);
+    state.dealX = (!isNaN(num) && num > 0) ? num : 0;
+  } else {
+    state.dealX = parseFloat(sel.value) || 0;
+  }
+  renderQuickMc();
+}
+function quickMcOnPickFeeChange(gid, val) {
+  const num = parseFloat(val);
+  quickMcStateFor(gid).pickFee = isNaN(num) ? 0 : num;
+  renderQuickMc();
+}
+function quickMcOnSizeChange(gid, glassKey, val) {
+  const num = parseFloat(val);
+  const state = quickMcStateFor(gid);
+  if (!state.sizes) state.sizes = defaultGlassSizes();
+  state.sizes[glassKey] = isNaN(num) ? defaultGlassSizes()[glassKey] : num;
+  renderQuickMc();
+}
+function quickMcOnGlassPriceChange(gid, glassKey, val) {
+  const num = parseFloat(val);
+  quickMcStateFor(gid).glassPrices[glassKey] = isNaN(num) ? 0 : num;
+  renderQuickMc();
+}
+function quickMcOnSingleCanChange(gid, val) {
+  const num = parseFloat(val);
+  quickMcStateFor(gid).singleCanPrice = isNaN(num) ? 0 : num;
+  renderQuickMc();
+}
+function quickMcCardHtml(gid) {
+  const g = groups[gid];
+  if (!g) return '';
+  const bucket = bucketOf(g);
+  const state = quickMcStateFor(gid);
+  const listPrice = listPriceFor(gid);
+  const effForCalc = listPrice !== null ? effPrice(listPrice, state.dealX) : null;
+  const sizes = state.sizes || defaultGlassSizes();
+
+  let body = `<div class="rowflex" style="gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+    <div class="fld" style="margin:0;"><label>List price</label><div class="kpi-num" style="font-size:14px;">${listPrice!==null?fmtMoney(listPrice):'Not set'}</div></div>
+    <div class="fld" style="margin:0;"><label>Deal</label><select onchange="quickMcOnDealChange('${gid}',this)">${dealOptionsHtml(state.dealX, bucket)}</select></div>
+    <div class="fld" style="margin:0;"><label>Effective</label><div class="kpi-num" style="font-size:14px;">${effForCalc!==null?fmtMoney(effForCalc):'—'}</div></div>
+    <div class="fld" style="margin:0;"><label>Pick fee</label><input type="number" step="0.10" style="width:70px;" value="${state.pickFee||''}" placeholder="0.00" onchange="quickMcOnPickFeeChange('${gid}',this.value)"></div>
+  </div>
+  ${listPrice===null?'<div class="hint" style="margin-bottom:8px;">No list price set yet — set it on Product List Prices.</div>':''}`;
+
+  if (bucket === 'KEGS') {
+    body += `<div class="tablewrap"><table class="datatable">
+      <thead><tr><th>Glass</th><th class="num-cell">Size (mL)</th><th class="num-cell">Retail (inc GST)</th><th class="num-cell">Margin</th></tr></thead>
+      <tbody>${GLASS_TYPES.map(gt => {
+        const sizeMl = sizes[gt.key];
+        const priceIncGst = state.glassPrices[gt.key] != null ? state.glassPrices[gt.key] : gt.defaultPrice;
+        const m = effForCalc!==null ? computeMargin(effForCalc, g.kegLitres, sizeMl, priceIncGst, state.pickFee) : null;
+        return `<tr>
+          <td>${gt.label}</td>
+          <td class="num-cell"><input type="number" step="5" style="width:64px; text-align:right;" value="${sizeMl}" onchange="quickMcOnSizeChange('${gid}','${gt.key}',this.value)"></td>
+          <td class="num-cell"><input type="number" step="0.10" style="width:64px; text-align:right;" value="${priceIncGst}" onchange="quickMcOnGlassPriceChange('${gid}','${gt.key}',this.value)"></td>
+          <td class="num-cell">${marginBadgeHtml(m)}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+  } else {
+    const singlePrice = state.singleCanPrice != null ? state.singleCanPrice : defaultOffPremisePrice('single');
+    const costExGst = singleCostExGst(effForCalc, state.pickFee, cartonPackQtyFor(gid));
+    const m = costExGst===null ? null : unitMargin(costExGst, singlePrice);
+    const canMl = canSizeMlFor(gid);
+    body += `<div class="tablewrap"><table class="datatable">
+      <thead><tr><th>Unit</th><th class="num-cell">Retail (inc GST)</th><th class="num-cell">Margin</th></tr></thead>
+      <tbody><tr>
+        <td>Single can${canMl?` (${canMl}mL)`:''}</td>
+        <td class="num-cell"><input type="number" step="0.10" style="width:64px; text-align:right;" value="${singlePrice}" onchange="quickMcOnSingleCanChange('${gid}',this.value)"></td>
+        <td class="num-cell">${marginBadgeHtml(m)}</td>
+      </tr></tbody>
+    </table></div>`;
+  }
+  return `<div class="panel" style="flex:1; min-width:360px;">
+    <div class="rowflex" style="justify-content:space-between; align-items:center;">
+      <h3 style="margin:0;">${escapeHtml(g.label)} <span class="badge ${bucket==='KEGS'?'kegs':'cartons'}" style="font-size:9px;">${escapeHtml(g.formatLabel)}</span></h3>
+      <button class="btn small secondary no-print" onclick="quickMcRemove('${gid}')">Remove</button>
+    </div>
+    ${body}
+  </div>`;
+}
+function renderQuickMc() {
+  const el = document.getElementById('qmc_body');
+  if (!el) return;
+  const gids = [...quickMcSelected];
+  if (!gids.length) { el.innerHTML = `<div class="empty">Tick one or more beers above to calculate their margin.</div>`; return; }
+  el.innerHTML = `<div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">${gids.map(quickMcCardHtml).join('')}</div>`;
+}
+
 function renderMarginCalculatorPage(outletId) {
   if (currentMarginOutlet !== outletId) { marginProductSelection = null; marginWhatIf = {}; }
   currentMarginOutlet = outletId;
@@ -2316,6 +2646,99 @@ function applyMarginDeal(outletId, groupId) {
 }
 
 // ===================== OFF PREMISE (BOTTLESHOPS) =====================
+// ---------- Quick Margin Calculator (Off Premise) — not tied to any customer ----------
+// Same idea as the Venues quick tool: tick as many carton SKUs as you like, each with its own
+// deal + carton/multipack/single retail pricing, see the margin instantly. Nothing here saved.
+let quickOpSelected = new Set();
+let quickOpState = {}; // groupId -> { dealX, pickFee, prices: {carton, multipack, single} }
+function quickOpStateFor(gid) {
+  return quickOpState[gid] || (quickOpState[gid] = { dealX: 0, pickFee: 0, prices: {} });
+}
+function quickOpToggle(gid, checked) {
+  if (checked) { quickOpSelected.add(gid); quickOpStateFor(gid); }
+  else { quickOpSelected.delete(gid); delete quickOpState[gid]; }
+  renderQuickOp();
+}
+function quickOpRemove(gid) {
+  quickOpSelected.delete(gid);
+  delete quickOpState[gid];
+  const cb = document.getElementById('qop_chk_'+gid);
+  if (cb) cb.checked = false;
+  renderQuickOp();
+}
+function quickOpOnDealChange(gid, sel) {
+  const state = quickOpStateFor(gid);
+  if (sel.value === 'custom') {
+    const val = window.prompt('Enter the custom deal number (X for X+1):');
+    const num = parseFloat(val);
+    state.dealX = (!isNaN(num) && num > 0) ? num : 0;
+  } else {
+    state.dealX = parseFloat(sel.value) || 0;
+  }
+  renderQuickOp();
+}
+function quickOpOnPickFeeChange(gid, val) {
+  const num = parseFloat(val);
+  quickOpStateFor(gid).pickFee = isNaN(num) ? 0 : num;
+  renderQuickOp();
+}
+function quickOpOnPriceChange(gid, type, val) {
+  const num = parseFloat(val);
+  quickOpStateFor(gid).prices[type] = isNaN(num) ? 0 : num;
+  renderQuickOp();
+}
+function quickOpCardHtml(gid) {
+  const g = groups[gid];
+  if (!g) return '';
+  const state = quickOpStateFor(gid);
+  const listPrice = listPriceFor(gid);
+  const effForCalc = listPrice !== null ? effPrice(listPrice, state.dealX) : null;
+  const cartonPackQty = cartonPackQtyFor(gid);
+  const multipackQty = multipackQtyFor(gid);
+  const canMl = canSizeMlFor(gid);
+
+  const cartonPrice = state.prices.carton != null ? state.prices.carton : defaultOffPremisePrice('carton');
+  const cartonCost = cartonCostExGst(effForCalc, state.pickFee);
+  const cartonM = cartonCost===null ? null : unitMargin(cartonCost, cartonPrice);
+
+  const multiPrice = state.prices.multipack != null ? state.prices.multipack : defaultOffPremisePrice('multipack');
+  const multiCost = multipackCostExGst(effForCalc, state.pickFee, cartonPackQty, multipackQty);
+  const multiM = multiCost===null ? null : unitMargin(multiCost, multiPrice);
+
+  const singlePrice = state.prices.single != null ? state.prices.single : defaultOffPremisePrice('single');
+  const singleCost = singleCostExGst(effForCalc, state.pickFee, cartonPackQty);
+  const singleM = singleCost===null ? null : unitMargin(singleCost, singlePrice);
+
+  return `<div class="panel" style="flex:1; min-width:400px;">
+    <div class="rowflex" style="justify-content:space-between; align-items:center;">
+      <h3 style="margin:0;">${escapeHtml(g.label)} <span class="badge cartons" style="font-size:9px;">${escapeHtml(g.formatLabel)}</span></h3>
+      <button class="btn small secondary no-print" onclick="quickOpRemove('${gid}')">Remove</button>
+    </div>
+    <div class="rowflex" style="gap:10px; flex-wrap:wrap; margin:8px 0;">
+      <div class="fld" style="margin:0;"><label>List price</label><div class="kpi-num" style="font-size:14px;">${listPrice!==null?fmtMoney(listPrice):'Not set'}</div></div>
+      <div class="fld" style="margin:0;"><label>Deal</label><select onchange="quickOpOnDealChange('${gid}',this)">${dealOptionsHtml(state.dealX, 'CARTONS')}</select></div>
+      <div class="fld" style="margin:0;"><label>Effective</label><div class="kpi-num" style="font-size:14px;">${effForCalc!==null?fmtMoney(effForCalc):'—'}</div></div>
+      <div class="fld" style="margin:0;"><label>Pick fee</label><input type="number" step="0.10" style="width:70px;" value="${state.pickFee||''}" placeholder="0.00" onchange="quickOpOnPickFeeChange('${gid}',this.value)"></div>
+    </div>
+    ${listPrice===null?'<div class="hint" style="margin-bottom:8px;">No list price set yet — set it on Product List Prices.</div>':''}
+    <div class="tablewrap"><table class="datatable">
+      <thead><tr><th>Unit</th><th class="num-cell">Retail (inc GST)</th><th class="num-cell">Margin</th></tr></thead>
+      <tbody>
+        <tr><td>Carton${cartonPackQty?` (${cartonPackQty}-pack)`:''}</td><td class="num-cell"><input type="number" step="0.10" style="width:64px; text-align:right;" value="${cartonPrice}" onchange="quickOpOnPriceChange('${gid}','carton',this.value)"></td><td class="num-cell">${marginBadgeHtml(cartonM)}</td></tr>
+        <tr><td>Multipack${multipackQty?` (${multipackQty}-pack)`:''}</td><td class="num-cell"><input type="number" step="0.10" style="width:64px; text-align:right;" value="${multiPrice}" onchange="quickOpOnPriceChange('${gid}','multipack',this.value)"></td><td class="num-cell">${marginBadgeHtml(multiM)}</td></tr>
+        <tr><td>Single can${canMl?` (${canMl}mL)`:''}</td><td class="num-cell"><input type="number" step="0.10" style="width:64px; text-align:right;" value="${singlePrice}" onchange="quickOpOnPriceChange('${gid}','single',this.value)"></td><td class="num-cell">${marginBadgeHtml(singleM)}</td></tr>
+      </tbody>
+    </table></div>
+  </div>`;
+}
+function renderQuickOp() {
+  const el = document.getElementById('qop_body');
+  if (!el) return;
+  const gids = [...quickOpSelected];
+  if (!gids.length) { el.innerHTML = `<div class="empty">Tick one or more beers above to calculate their margin.</div>`; return; }
+  el.innerHTML = `<div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">${gids.map(quickOpCardHtml).join('')}</div>`;
+}
+
 function renderOffPremiseMarginPage(outletId) {
   if (currentOpOutlet !== outletId) { opProductSelection = null; opWhatIf = {}; }
   currentOpOutlet = outletId;
@@ -2628,13 +3051,22 @@ function perfNewListingsPerWeek(bucket, startDayIdx, endDayIdx, outletFilterFn) 
 }
 
 // ---------- Targets (per RSM, per quarter — the Sales Team view sums across RSMs) ----------
+// Total Volume target is NOT its own directly-editable field — it's always the sum of the Keg
+// and Carton Volume targets, computed on the fly via totalVolumeTargetOf() below, so it can
+// never drift out of sync with its two sub-targets.
 const PERF_TARGET_FIELDS = [
-  {key:'totalVolumeTarget', label:'Total Volume target (L)'},
   {key:'kegVolumeTarget', label:'Keg Volume target (L)'},
   {key:'cartonVolumeTarget', label:'Carton Volume target (L)'},
   {key:'kegListingsTarget', label:'Keg Listings target'},
   {key:'cartonListingsTarget', label:'Carton Listings target'},
+  {key:'kegActivationsTarget', label:'Keg Activations target'},
+  {key:'cartonActivationsTarget', label:'Carton Activations target'},
+  {key:'directDeliveryTarget', label:'Direct Delivery Customers Onboarded target'},
 ];
+function totalVolumeTargetOf(t) {
+  if (t.kegVolumeTarget == null && t.cartonVolumeTarget == null) return null;
+  return (Number(t.kegVolumeTarget)||0) + (Number(t.cartonVolumeTarget)||0);
+}
 function targetKey(scope, quarterKey) { return `${scope}|${quarterKey}`; }
 function rsmTargetFor(rsm, quarterKey) { return rsmTargets[targetKey(rsm, quarterKey)] || {}; }
 function sumTargetsForAllRsms(quarterKey, rsmList) {
@@ -2744,24 +3176,21 @@ function perfRankListHtml(list, suffix, bucket, curStartD, curEndD, priorStartD,
   `;
   }).join('')}</ol>`;
 }
-// Count of activations logged for `bucket` ('KEGS'|'CARTONS') whose start date falls in the
-// given quarter, restricted to outlets passing outletFilterFn — feeds the Activations KPI cards.
-function perfActivationCount(bucket, fy, q, outletFilterFn) {
-  return activationsInQuarter(fy, q, a => a.productType === bucket && outletFilterFn(a.outletId)).length;
-}
-// Count of outlets whose first-ever YMT-warehouse (direct delivery) order falls in the given
-// quarter — this is the "Direct Delivery Customers Onboarded" indicator.
-function perfDirectDeliveryOnboardedCount(fy, q, outletFilterFn) {
+// Outlets whose first-ever YMT-warehouse (direct delivery) order falls in the given quarter —
+// this is the "Direct Delivery Customers Onboarded" indicator. Returns the actual list (not just
+// a count) so the Team Dashboard can show who they are.
+function directDeliveryOnboardedList(fy, q, outletFilterFn) {
   const [qStart, qEndExcl] = quarterBoundsOf(fy, q);
   const qStartStr = qStart.toISOString().slice(0,10);
   const qEndStr = new Date(qEndExcl.getTime()-86400000).toISOString().slice(0,10);
-  let count = 0;
+  const list = [];
   for (const oid in outlets) {
     if (!outletFilterFn(oid)) continue;
     const fd = (outletSummary[oid]||{}).firstYmtDate;
-    if (fd && fd >= qStartStr && fd <= qEndStr) count++;
+    if (fd && fd >= qStartStr && fd <= qEndStr) list.push({ outletId: oid, firstYmtDate: fd });
   }
-  return count;
+  list.sort((a,b) => a.firstYmtDate.localeCompare(b.firstYmtDate));
+  return list;
 }
 // Bar chart comparing every RSM's Total Volume (kegs+cartons, litres) for a given week range —
 // lets you compare territories at a glance, regardless of which RSM/scope the page is showing.
@@ -2786,16 +3215,47 @@ function perfVolumeByRsmChart(startDayIdx, endDayIdx, rsmList) {
   </div>`;
 }
 function perfTargetsFormHtml(scope, qKey, targets, readOnly) {
+  const totalVol = totalVolumeTargetOf(targets);
+  const totalField = `<div class="fld"><label>Total Volume target (L)</label><div class="kpi-num" style="font-size:16px;">${totalVol!=null?fmtNum(totalVol):'—'}</div></div>`;
   if (readOnly) {
-    return `<div class="target-form">${PERF_TARGET_FIELDS.map(f => `
+    return `<div class="target-form">${totalField}${PERF_TARGET_FIELDS.map(f => `
       <div class="fld"><label>${f.label}</label><div class="kpi-num" style="font-size:16px;">${targets[f.key]!=null?fmtNum(targets[f.key]):'—'}</div></div>
     `).join('')}</div>`;
   }
-  return `<div class="target-form">${PERF_TARGET_FIELDS.map(f => `
+  return `<div class="target-form">${totalField}${PERF_TARGET_FIELDS.map(f => `
     <div class="fld"><label>${f.label}</label>
       <input type="number" step="1" min="0" value="${targets[f.key]!=null?targets[f.key]:''}" placeholder="Not set" onchange="updateRsmTarget('${scope}','${qKey}','${f.key}',this.value)">
     </div>
   `).join('')}</div>`;
+}
+// Read-only "who" behind the Activations KPI cards — reused by the Team Dashboard.
+function perfActivationsTableHtml(list) {
+  if (!list.length) return `<div class="empty">No activations logged for this quarter yet.</div>`;
+  return `<div class="tablewrap"><table class="datatable">
+    <thead><tr><th>Customer</th><th>RSM</th><th>Activation</th><th>Start</th><th>End</th><th>Deal</th></tr></thead>
+    <tbody>${list.map(a => {
+      const o = outlets[a.outletId] || {};
+      return `<tr>
+        <td>${escapeHtml(o.name||a.outletId)}</td>
+        <td>${escapeHtml(o.rsm||'—')}</td>
+        <td>${escapeHtml(a.activationType)}</td>
+        <td class="mono">${fmtDate(a.start)}</td>
+        <td class="mono">${fmtDate(a.end)}</td>
+        <td>${dealLabel(a.dealX)}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+// Read-only "who" behind the Direct Delivery Customers Onboarded KPI card.
+function perfDirectDeliveryTableHtml(list) {
+  if (!list.length) return `<div class="empty">No new direct delivery customers onboarded this quarter yet.</div>`;
+  return `<div class="tablewrap"><table class="datatable">
+    <thead><tr><th>Customer</th><th>RSM</th><th>First direct delivery order</th></tr></thead>
+    <tbody>${list.map(d => {
+      const o = outlets[d.outletId] || {};
+      return `<tr><td>${escapeHtml(o.name||d.outletId)}</td><td>${escapeHtml(o.rsm||'—')}</td><td class="mono">${fmtDate(d.firstYmtDate)}</td></tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
 }
 
 function renderPerfPage() {
@@ -2835,9 +3295,12 @@ function renderPerfPage() {
   const kegNew = perfNewListingsPerWeek('KEGS', startDayIdx, endDayIdx, outletFilter);
   const cartonNew = perfNewListingsPerWeek('CARTONS', startDayIdx, endDayIdx, outletFilter);
 
-  const kegActivationsCount = perfActivationCount('KEGS', fy, q, outletFilter);
-  const cartonActivationsCount = perfActivationCount('CARTONS', fy, q, outletFilter);
-  const directDeliveryCount = perfDirectDeliveryOnboardedCount(fy, q, outletFilter);
+  const kegActivationsList = activationsInQuarter(fy, q, a => a.productType === 'KEGS' && outletFilter(a.outletId)).slice().sort((a,b)=>(a.start||'').localeCompare(b.start||''));
+  const cartonActivationsList = activationsInQuarter(fy, q, a => a.productType === 'CARTONS' && outletFilter(a.outletId)).slice().sort((a,b)=>(a.start||'').localeCompare(b.start||''));
+  const directDeliveryList = directDeliveryOnboardedList(fy, q, outletFilter);
+  const kegActivationsCount = kegActivationsList.length;
+  const cartonActivationsCount = cartonActivationsList.length;
+  const directDeliveryCount = directDeliveryList.length;
 
   const nowLabel = isCurrentQuarter ? 'Current' : 'End of quarter';
 
@@ -2853,7 +3316,7 @@ function renderPerfPage() {
       ${perfTargetsFormHtml(scope, qKey, targets, scope===PERF_ALL)}
     </div>
     <div class="kpi-grid" style="margin-bottom:16px;">
-      ${perfKpiCardHtml('Total Volume', totalVolumeLitres, targets.totalVolumeTarget, ' L')}
+      ${perfKpiCardHtml('Total Volume', totalVolumeLitres, totalVolumeTargetOf(targets), ' L')}
       ${perfKpiCardHtml('Keg Volume', kegQ.totalLitres, targets.kegVolumeTarget, ' L')}
       ${perfKpiCardHtml('Carton Volume', cartonQ.totalLitres, targets.cartonVolumeTarget, ' L')}
     </div>
@@ -2861,6 +3324,21 @@ function renderPerfPage() {
       ${perfKpiCardHtml('Keg Activations', kegActivationsCount, targets.kegActivationsTarget, '')}
       ${perfKpiCardHtml('Carton Activations', cartonActivationsCount, targets.cartonActivationsTarget, '')}
       ${perfKpiCardHtml('Direct Delivery Customers Onboarded', directDeliveryCount, targets.directDeliveryTarget, '')}
+    </div>
+    <div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">
+      <div class="panel" style="flex:1; min-width:340px;">
+        <h3>Keg Activations logged <span class="muted" style="font-weight:400; font-size:11.5px;">(${kegActivationsCount})</span></h3>
+        ${perfActivationsTableHtml(kegActivationsList)}
+      </div>
+      <div class="panel" style="flex:1; min-width:340px;">
+        <h3>Carton Activations logged <span class="muted" style="font-weight:400; font-size:11.5px;">(${cartonActivationsCount})</span></h3>
+        ${perfActivationsTableHtml(cartonActivationsList)}
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Direct Delivery customers onboarded <span class="muted" style="font-weight:400; font-size:11.5px;">(${directDeliveryCount})</span></h3>
+      <div class="hint" style="margin-bottom:4px;">Outlets whose first-ever order via the YMT warehouse fell in this quarter.</div>
+      ${perfDirectDeliveryTableHtml(directDeliveryList)}
     </div>
     <div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">
       <div class="panel" style="flex:1; min-width:340px;">
@@ -3056,7 +3534,7 @@ function populateActivationDealOptions(bucket, keepValue) {
     return;
   }
   sel.innerHTML = stdDealOptionsHtml(bucket) + `<option value="custom">Custom…</option>`;
-  hint.textContent = bucket === 'KEGS' ? 'Standard keg deals: 2+1, 3+1, 4+1, 5+1, 6+1.' : 'Standard carton deals: 3+1, 5+1, 7+1, 10+1, 15+1.';
+  hint.textContent = bucket === 'KEGS' ? 'Standard keg deals: 2+1, 3+1, 4+1, 5+1, 6+1, 8+1, 10+1.' : 'Standard carton deals: 3+1, 5+1, 7+1, 10+1, 15+1.';
   if (keepValue !== undefined && [...sel.options].some(o=>o.value===String(keepValue))) sel.value = String(keepValue);
 }
 // The SKU picker on the Activations form only offers SKU groups matching the selected product
@@ -3267,6 +3745,821 @@ function deleteActivation(id) {
   }
 }
 
+// ===================== SET TARGETS (every RSM, one quarter, one page) =====================
+// A dedicated page for entering every RSM's targets for a given quarter in one table, instead
+// of switching the Team Dashboard's scope selector one RSM at a time. (The "who's actually
+// behind the numbers" breakdown lives on the Team Dashboard, next to the KPI cards it explains.)
+let targetsQuarter = { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q };
+function stepTargetsQuarter(delta) {
+  targetsQuarter = shiftQuarter(targetsQuarter.fy, targetsQuarter.q, delta);
+  renderTargetsPage();
+}
+function jumpTargetsCurrentQuarter() {
+  targetsQuarter = { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q };
+  renderTargetsPage();
+}
+function onTargetsCellChange(rsm, quarterKey, field, val) {
+  updateRsmTarget(rsm, quarterKey, field, val);
+  renderTargetsPage();
+}
+function renderTargetsPage() {
+  const { fy, q } = targetsQuarter;
+  const qKey = quarterKeyOf(fy, q);
+  document.getElementById('tg_qlabel').textContent = quarterLabelOf(fy, q);
+  const rsmList = uniqueVals('rsm', outlets);
+
+  const rows = rsmList.map(rsm => {
+    const t = rsmTargetFor(rsm, qKey);
+    const totalVol = totalVolumeTargetOf(t);
+    const cells = PERF_TARGET_FIELDS.map(f => `<td><input type="number" step="1" min="0" value="${t[f.key]!=null?t[f.key]:''}" placeholder="—" style="width:100px;" onchange="onTargetsCellChange('${rsm}','${qKey}','${f.key}',this.value)"></td>`).join('');
+    return `<tr><td>${escapeHtml(rsm)}</td><td class="mono">${totalVol!=null?fmtNum(totalVol):'—'}</td>${cells}</tr>`;
+  }).join('');
+
+  const totals = sumTargetsForAllRsms(qKey, rsmList);
+  const totalsTotalVol = totalVolumeTargetOf(totals);
+  const totalCells = PERF_TARGET_FIELDS.map(f => `<td class="mono">${totals[f.key]!=null?fmtNum(totals[f.key]):'—'}</td>`).join('');
+  const totalsRow = `<tr style="font-weight:600;"><td>Sales Team (total)</td><td class="mono">${totalsTotalVol!=null?fmtNum(totalsTotalVol):'—'}</td>${totalCells}</tr>`;
+
+  document.getElementById('tg_body').innerHTML = (rsmList.length ? rows : `<tr><td colspan="9"><div class="empty">No RSMs found.</div></td></tr>`) + totalsRow;
+}
+
+// Unit sizes used to express volume-per-listing (VPL) as whole units on the Volume Trends page.
+const KEG_UNIT_LITRES = 50;    // 1 keg = 50L
+const CARTON_UNIT_LITRES = 6;  // 1 carton = 6L
+
+// ===================== VOLUME TRENDS =====================
+// Kegs trend by calendar month (matches the 4-week keg listing cycle), cartons trend by fiscal
+// quarter (matches the 13-week carton listing cycle) — same cadence used everywhere else for
+// each pack type. Filters (RSM / customer type / beer) apply to both.
+function trendRangeStats(bucket, startDayIdx, endDayIdx, outletFilterFn, groupFilterFn) {
+  let totalLitres = 0, listingsCount = 0;
+  for (const key in dailyVolume) {
+    const sep = key.indexOf('|');
+    const oid = key.slice(0, sep), gid = key.slice(sep+1);
+    const g = groups[gid];
+    if (!g || bucketOf(g) !== bucket) continue;
+    if (!outletFilterFn(oid)) continue;
+    if (groupFilterFn && !groupFilterFn(gid, g)) continue;
+    const arr = dailyVolume[key];
+    let active = false, sum = 0;
+    for (let i = 0; i < arr.length; i += 2) {
+      const w = arr[i];
+      if (w >= startDayIdx && w <= endDayIdx) { active = true; sum += arr[i+1]; }
+    }
+    if (active) { listingsCount++; totalLitres += sum; }
+  }
+  return { totalLitres, listingsCount };
+}
+function vtMonthsBack(numMonths, endY, endM) {
+  const out = [];
+  let y = endY, m = endM;
+  for (let i = 0; i < numMonths; i++) {
+    out.push({ y, m });
+    m--; if (m < 0) { m = 11; y--; }
+  }
+  return out.reverse();
+}
+function vtMonthLabelOf(y, m) {
+  return new Date(y, m, 1).toLocaleDateString('en-AU', { month: 'short', year: '2-digit' });
+}
+function vtOutletFilter() {
+  const rsmSel = document.getElementById('vt_rsm').value;
+  const typeSel = document.getElementById('vt_custType').value;
+  return oid => {
+    const o = outlets[oid];
+    if (!o) return false;
+    if (rsmSel && o.rsm !== rsmSel) return false;
+    if (typeSel && o.custType !== typeSel) return false;
+    return true;
+  };
+}
+function vtGroupFilter() {
+  const sub = document.getElementById('vt_subbrand').value;
+  return (gid, g) => !sub || g.subbrand === sub;
+}
+// Bar chart matching the visual style used elsewhere on the Team Dashboard. `decimals` lets the
+// VPL charts show one decimal place instead of the usual rounded-to-whole-number formatting.
+function vtBarChartHtml(labels, values, cssClass, suffix, decimals) {
+  const max = Math.max(1, ...values);
+  const fmt = v => decimals != null ? v.toFixed(decimals) : fmtNum(v);
+  return `<div class="bar-chart" style="height:130px;">
+    ${values.map((v,i) => {
+      const h = Math.max(2, Math.round((v/max)*100));
+      return `<div class="bar-col" title="${labels[i]}: ${fmt(v)}${suffix||''}">
+        <div class="bar-val">${fmt(v)}</div>
+        <div class="bar-rect ${cssClass}" style="height:${h}px;"></div>
+        <div class="bar-wk">${labels[i]}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function renderVolumeTrendsPage() {
+  const outletFilterFn = vtOutletFilter();
+  const groupFilterFn = vtGroupFilter();
+
+  // Kegs — monthly, last 12 months ending at the most recent month with data.
+  const kegMonths = vtMonthsBack(12, PERF_TODAY.getFullYear(), PERF_TODAY.getMonth());
+  const kegLabels = kegMonths.map(({y,m}) => vtMonthLabelOf(y,m));
+  const kegVol = [], kegListings = [], kegVpl = [];
+  kegMonths.forEach(({y,m}) => {
+    const start = new Date(y, m, 1);
+    const endIncl = new Date(y, m+1, 0); // last day of month
+    const stats = trendRangeStats('KEGS', dayIndexOf(start), dayIndexOf(endIncl), outletFilterFn, groupFilterFn);
+    kegVol.push(stats.totalLitres);
+    kegListings.push(stats.listingsCount);
+    kegVpl.push(stats.listingsCount > 0 ? (stats.totalLitres / stats.listingsCount) / KEG_UNIT_LITRES : 0);
+  });
+
+  // Cartons — quarterly, last 8 quarters (2 years).
+  const cartonQuarters = [];
+  let cq = PERF_CURRENT_Q;
+  for (let i = 0; i < 8; i++) { cartonQuarters.push(cq); cq = shiftQuarter(cq.fy, cq.q, -1); }
+  cartonQuarters.reverse();
+  const cartonLabels = cartonQuarters.map(({fy,q}) => quarterKeyOf(fy,q));
+  const cartonVol = [], cartonListings = [], cartonVpl = [];
+  cartonQuarters.forEach(({fy,q}) => {
+    const [qStart, qEndExcl] = quarterBoundsOf(fy, q);
+    const qEndIncl = new Date(qEndExcl.getTime() - 86400000);
+    const stats = trendRangeStats('CARTONS', dayIndexOf(qStart), dayIndexOf(qEndIncl), outletFilterFn, groupFilterFn);
+    cartonVol.push(stats.totalLitres);
+    cartonListings.push(stats.listingsCount);
+    cartonVpl.push(stats.listingsCount > 0 ? (stats.totalLitres / stats.listingsCount) / CARTON_UNIT_LITRES : 0);
+  });
+
+  document.getElementById('vt_kegs').innerHTML = `
+    <div class="panel"><h3>Keg Volume per month <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${vtBarChartHtml(kegLabels, kegVol, 'kegs', ' L')}</div>
+    <div class="panel"><h3>Keg Listings per month</h3>${vtBarChartHtml(kegLabels, kegListings, 'kegs', '')}</div>
+    <div class="panel"><h3>Keg Volume per Listing per month <span class="muted" style="font-weight:400; font-size:11px;">(kegs, 50L/keg)</span></h3>${vtBarChartHtml(kegLabels, kegVpl, 'kegs', ' kegs', 1)}</div>
+  `;
+  document.getElementById('vt_cartons').innerHTML = `
+    <div class="panel"><h3>Carton Volume per quarter <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${vtBarChartHtml(cartonLabels, cartonVol, 'cartons', ' L')}</div>
+    <div class="panel"><h3>Carton Listings per quarter</h3>${vtBarChartHtml(cartonLabels, cartonListings, 'cartons', '')}</div>
+    <div class="panel"><h3>Carton Volume per Listing per quarter <span class="muted" style="font-weight:400; font-size:11px;">(cartons, 6L/carton)</span></h3>${vtBarChartHtml(cartonLabels, cartonVpl, 'cartons', ' ctns', 1)}</div>
+  `;
+}
+
+// ===================== TRUCKS (delivery fleet config) — shared =====================
+function truckFor(truckId) { return trucks.find(t=>t.id===truckId) || null; }
+function saveNewTruck() {
+  const name = document.getElementById('trk_name').value.trim();
+  const cap = parseFloat(document.getElementById('trk_capacity').value);
+  if (!name) { toast('Enter a truck name.'); return; }
+  if (isNaN(cap) || cap <= 0) { toast('Enter a valid max weight (kg).'); return; }
+  toast('Saving…');
+  callServer('saveTruck', [null, name, cap, currentUserEmail], (newId) => {
+    trucks.push({ id: newId, name, maxWeightKg: cap, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() });
+    document.getElementById('trk_name').value = '';
+    document.getElementById('trk_capacity').value = '';
+    renderDeliveryRunsPage();
+    toast('Truck added.');
+  });
+}
+function updateTruckCapacity(truckId, val) {
+  const t = truckFor(truckId);
+  if (!t) return;
+  const num = parseFloat(val);
+  if (isNaN(num) || num <= 0) { toast('Enter a valid capacity.'); renderDeliveryRunsPage(); return; }
+  t.maxWeightKg = num;
+  t.updatedBy = currentUserEmail;
+  t.updatedAt = new Date().toISOString();
+  renderDeliveryRunsPage();
+  callServer('saveTruck', [truckId, t.name, num, currentUserEmail]);
+}
+function deleteTruck(truckId) {
+  if (!confirm('Delete this truck? Any runs already assigned to it will keep it as a reference, but you won\'t be able to pick it for new runs.')) return;
+  trucks = trucks.filter(t=>t.id!==truckId);
+  renderDeliveryRunsPage();
+  callServer('deleteTruck', [truckId], () => toast('Truck deleted.'));
+}
+function renderTrucksPanel() {
+  const body = document.getElementById('trk_body');
+  if (!body) return;
+  body.innerHTML = trucks.length ? trucks.map(t => `<tr>
+    <td>${escapeHtml(t.name)}</td>
+    <td class="num-cell"><input type="number" step="1" min="1" style="width:90px; text-align:right;" value="${t.maxWeightKg}" onchange="updateTruckCapacity('${t.id}',this.value)"> kg</td>
+    <td class="no-print"><button class="btn small danger" onclick="deleteTruck('${t.id}')">Delete</button></td>
+  </tr>`).join('') : `<tr><td colspan="3"><div class="empty">No trucks set up yet — add one above.</div></td></tr>`;
+}
+
+// ===================== ORDERS — shared =====================
+// An order is a customer's requested qty per beer (with an optional "free stock" flag per line).
+// It starts 'pending' (unallocated), becomes 'allocated' once added to a delivery run, and
+// 'completed' once that run finishes. Unlike Temp Deals/Activations, editing an order updates it
+// in place (upsert by id) rather than delete-then-recreate, since the server already supports it.
+let orderFormOutletId = '';
+let orderFormLines = {}; // groupId -> {qty, free}
+let orderFormEditingId = null;
+function orderLineWeightKg(line) { return (Number(line.qty)||0) * weightKgFor(line.groupId); }
+function orderTotalWeightKg(order) { return order.lines.reduce((s,l)=>s+orderLineWeightKg(l),0); }
+function orderLinePriceExGst(outletId, line) {
+  if (line.free) return 0;
+  const pr = resolvePricing(outletId, line.groupId);
+  return pr.eff !== null ? pr.eff * (Number(line.qty)||0) : 0;
+}
+function orderTotalPriceExGst(order) {
+  return order.lines.reduce((s,l)=>s+orderLinePriceExGst(order.outletId, l), 0);
+}
+function orderFormOnQtyChange(groupId, val) {
+  const num = parseInt(val, 10);
+  const line = orderFormLines[groupId] || (orderFormLines[groupId] = { qty: 0, free: false });
+  line.qty = isNaN(num) || num < 0 ? 0 : num;
+  renderOrderForm();
+}
+function orderFormOnFreeToggle(groupId, checked) {
+  const line = orderFormLines[groupId] || (orderFormLines[groupId] = { qty: 0, free: false });
+  line.free = checked;
+  renderOrderForm();
+}
+function resetOrderForm() {
+  orderFormOutletId = '';
+  orderFormLines = {};
+  orderFormEditingId = null;
+  document.getElementById('ord_outletSearch').value = '';
+  document.getElementById('ord_outletId').value = '';
+  document.getElementById('ord_notes').value = '';
+  renderOrderForm();
+}
+function renderOrderForm() {
+  const body = document.getElementById('ord_lines');
+  if (!body) return;
+  const outletId = orderFormOutletId;
+  const o = outlets[outletId];
+  if (!outletId || !o) {
+    body.innerHTML = `<div class="empty">Pick a customer above to start an order.</div>`;
+    document.getElementById('ord_summary').innerHTML = '';
+    return;
+  }
+  const allGroups = marginEligibleGroupIds('ALL');
+  const kegGroups = allGroups.filter(gid => bucketOf(groups[gid]) === 'KEGS');
+  const cartonGroups = allGroups.filter(gid => bucketOf(groups[gid]) === 'CARTONS');
+
+  const lineRow = gid => {
+    const g = groups[gid];
+    const line = orderFormLines[gid] || { qty: 0, free: false };
+    const pr = resolvePricing(outletId, gid);
+    const lineTotal = line.free ? 0 : (pr.eff!==null ? pr.eff * (line.qty||0) : 0);
+    return `<tr>
+      <td>${escapeHtml(g.label)} <span class="badge ${bucketOf(g)==='KEGS'?'kegs':'cartons'}" style="font-size:9px;">${escapeHtml(g.formatLabel)}</span></td>
+      <td class="num-cell mono">${pr.eff!==null?fmtMoney(pr.eff):'—'}</td>
+      <td class="num-cell"><input type="number" step="1" min="0" style="width:64px; text-align:right;" value="${line.qty||''}" placeholder="0" onchange="orderFormOnQtyChange('${gid}',this.value)"></td>
+      <td class="center"><input type="checkbox" ${line.free?'checked':''} onchange="orderFormOnFreeToggle('${gid}',this.checked)"></td>
+      <td class="num-cell mono">${line.qty?fmtMoney(lineTotal):'—'}</td>
+      <td class="num-cell mono">${line.qty?fmtNum(line.qty*weightKgFor(gid)):'—'} kg</td>
+    </tr>`;
+  };
+
+  body.innerHTML = `
+    <div class="tablewrap">
+      <table class="datatable">
+        <thead><tr><th>Beer</th><th class="num-cell">Price ea (ex GST/WET)</th><th class="num-cell">Qty</th><th class="center">Free stock?</th><th class="num-cell">Line total</th><th class="num-cell">Weight</th></tr></thead>
+        <tbody>
+          ${kegGroups.map(lineRow).join('')}
+          ${cartonGroups.map(lineRow).join('')}
+        </tbody>
+      </table>
+    </div>`;
+
+  const activeLines = Object.entries(orderFormLines).filter(([gid,l]) => l.qty > 0);
+  const totalPrice = activeLines.reduce((s,[gid,l]) => s + (l.free?0:(resolvePricing(outletId,gid).eff||0)*l.qty), 0);
+  const totalWeight = activeLines.reduce((s,[gid,l]) => s + (l.qty*weightKgFor(gid)), 0);
+  document.getElementById('ord_summary').innerHTML = `
+    <div class="rowflex" style="gap:18px; flex-wrap:wrap;">
+      <div class="fld" style="margin:0;"><label>Total price (ex GST/WET)</label><div class="kpi-num" style="font-size:18px;">${fmtMoney(totalPrice)}</div></div>
+      <div class="fld" style="margin:0;"><label>Total weight</label><div class="kpi-num" style="font-size:18px;">${fmtNum(totalWeight)} kg</div></div>
+      <div class="fld" style="margin:0;"><label>Line items</label><div class="kpi-num" style="font-size:18px;">${activeLines.length}</div></div>
+    </div>`;
+}
+function saveOrder() {
+  const outletId = orderFormOutletId;
+  if (!outletId || !outlets[outletId]) { toast('Please select a customer.'); return; }
+  const lines = Object.entries(orderFormLines).filter(([gid,l]) => l.qty > 0).map(([gid,l]) => ({ groupId: gid, qty: l.qty, free: !!l.free }));
+  if (!lines.length) { toast('Enter a quantity for at least one beer.'); return; }
+  const notes = document.getElementById('ord_notes').value.trim();
+
+  if (orderFormEditingId) {
+    const idx = orders.findIndex(o=>o.id===orderFormEditingId);
+    if (idx < 0) return;
+    const updated = { ...orders[idx], outletId, lines, notes, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+    orders[idx] = updated;
+    renderOrdersList();
+    toast('Saving…');
+    callServer('saveOrder', [updated], () => toast('Order updated.'));
+  } else {
+    const newOrder = {
+      id: null, outletId, lines, notes, status: 'pending', runId: null,
+      delivery: { status: 'pending', deliveredLines: null, emptyKegsCollected: 0, deliveredAt: null, driverNotes: '' },
+      createdBy: currentUserEmail, createdAt: new Date().toISOString(), updatedBy: currentUserEmail, updatedAt: new Date().toISOString(),
+    };
+    toast('Saving…');
+    callServer('saveOrder', [newOrder], (newId) => {
+      orders.push({ ...newOrder, id: newId });
+      renderOrdersList();
+      toast('Order saved.');
+    });
+  }
+  resetOrderForm();
+}
+function editOrder(orderId) {
+  const ord = orders.find(o=>o.id===orderId);
+  if (!ord) return;
+  if (ord.status !== 'pending') { toast('Only pending (unallocated) orders can be edited — remove it from its run first.'); return; }
+  orderFormEditingId = orderId;
+  orderFormOutletId = ord.outletId;
+  orderFormLines = {};
+  ord.lines.forEach(l => { orderFormLines[l.groupId] = { qty: l.qty, free: l.free }; });
+  document.getElementById('ord_outletId').value = ord.outletId;
+  document.getElementById('ord_outletSearch').value = outlets[ord.outletId] ? outletLabel(outlets[ord.outletId]) : ord.outletId;
+  document.getElementById('ord_notes').value = ord.notes || '';
+  renderOrderForm();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+function deleteOrder(orderId) {
+  if (!confirm('Delete this order?')) return;
+  const ord = orders.find(o=>o.id===orderId);
+  if (ord && ord.runId) {
+    const run = deliveryRuns.find(r=>r.id===ord.runId);
+    if (run) { run.stopOrder = run.stopOrder.filter(id=>id!==orderId); callServer('saveRun', [run]); }
+  }
+  orders = orders.filter(o=>o.id!==orderId);
+  renderOrdersList();
+  renderDeliveryRunsPage();
+  callServer('deleteOrder', [orderId], () => toast('Order deleted.'));
+}
+function renderOrdersList() {
+  const statusFilter = document.getElementById('ord_statusFilter').value;
+  const rsmFilter = document.getElementById('ord_rsmFilter').value;
+  let list = orders.slice();
+  if (statusFilter) list = list.filter(o=>o.status===statusFilter);
+  if (rsmFilter) list = list.filter(o => (outlets[o.outletId]||{}).rsm === rsmFilter);
+  list.sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt));
+  document.getElementById('ord_count').textContent = `(${list.length})`;
+  const body = document.getElementById('ord_body');
+  if (!list.length) { body.innerHTML = `<tr><td colspan="8"><div class="empty">No orders yet.</div></td></tr>`; return; }
+  const statusBadge = s => s==='pending'?'<span class="badge grey">Pending</span>':s==='allocated'?'<span class="badge blue">Allocated</span>':'<span class="badge green">Completed</span>';
+  body.innerHTML = list.map(o => {
+    const out = outlets[o.outletId] || {};
+    const itemsSummary = o.lines.map(l => `${l.qty}× ${groups[l.groupId]?groups[l.groupId].label:l.groupId}${l.free?' (free)':''}`).join(', ');
+    return `<tr>
+      <td>${escapeHtml(out.name||o.outletId)}</td>
+      <td>${escapeHtml(out.rsm||'—')}</td>
+      <td style="max-width:260px;">${escapeHtml(itemsSummary)}</td>
+      <td class="num-cell mono">${fmtMoney(orderTotalPriceExGst(o))}</td>
+      <td class="num-cell mono">${fmtNum(orderTotalWeightKg(o))} kg</td>
+      <td>${statusBadge(o.status)}</td>
+      <td class="muted">${new Date(o.createdAt).toLocaleDateString('en-AU')}</td>
+      <td class="no-print rowflex">
+        ${o.status==='pending'?`<button class="btn small secondary" onclick="editOrder('${o.id}')">Edit</button>`:''}
+        ${o.status==='pending'?`<button class="btn small danger" onclick="deleteOrder('${o.id}')">Delete</button>`:''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ===================== DELIVERY RUNS — shared =====================
+// A run collates orders into a truck load with a delivery sequence. Lifecycle: planning (build
+// the stop list, check weight vs the truck's capacity) -> in-progress (driver checklist) ->
+// completed (locked, feeds Delivery Reports).
+let currentRunId = null;
+function runFor(runId) { return deliveryRuns.find(r=>r.id===runId) || null; }
+function runTotalWeightKg(run) {
+  return run.stopOrder.reduce((s,oid) => { const o = orders.find(x=>x.id===oid); return s + (o?orderTotalWeightKg(o):0); }, 0);
+}
+function runDurationHours(run) {
+  if (!run.startedAt || !run.finishedAt) return null;
+  return (new Date(run.finishedAt) - new Date(run.startedAt)) / 3600000;
+}
+function createRun() {
+  const name = document.getElementById('run_name').value.trim();
+  const date = document.getElementById('run_date').value;
+  const truckId = document.getElementById('run_truck').value;
+  if (!name) { toast('Enter a run name.'); return; }
+  if (!truckId) { toast('Pick a truck.'); return; }
+  const newRun = { id: null, name, date: date||todayStr(), truckId, stopOrder: [], status: 'planning', startedAt: null, finishedAt: null, createdBy: currentUserEmail, createdAt: new Date().toISOString(), updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+  toast('Creating run…');
+  callServer('saveRun', [newRun], (newId) => {
+    deliveryRuns.push({ ...newRun, id: newId });
+    document.getElementById('run_name').value = '';
+    currentRunId = newId;
+    renderDeliveryRunsPage();
+    toast('Run created.');
+  });
+}
+function selectRun(runId) {
+  currentRunId = runId;
+  renderDeliveryRunsPage();
+}
+function addOrderToRun(runId, orderId) {
+  const run = runFor(runId);
+  const ord = orders.find(o=>o.id===orderId);
+  if (!run || !ord || ord.status!=='pending') return;
+  run.stopOrder.push(orderId);
+  ord.status = 'allocated';
+  ord.runId = runId;
+  ord.updatedBy = currentUserEmail;
+  ord.updatedAt = new Date().toISOString();
+  run.updatedBy = currentUserEmail;
+  run.updatedAt = new Date().toISOString();
+  renderDeliveryRunsPage();
+  callServer('saveRun', [run]);
+  callServer('saveOrder', [ord]);
+}
+function removeOrderFromRun(runId, orderId) {
+  const run = runFor(runId);
+  const ord = orders.find(o=>o.id===orderId);
+  if (!run) return;
+  run.stopOrder = run.stopOrder.filter(id=>id!==orderId);
+  if (ord) { ord.status='pending'; ord.runId=null; ord.updatedAt=new Date().toISOString(); }
+  renderDeliveryRunsPage();
+  callServer('saveRun', [run]);
+  if (ord) callServer('saveOrder', [ord]);
+}
+function moveStop(runId, orderId, delta) {
+  const run = runFor(runId);
+  if (!run) return;
+  const idx = run.stopOrder.indexOf(orderId);
+  const newIdx = idx + delta;
+  if (idx<0 || newIdx<0 || newIdx>=run.stopOrder.length) return;
+  const [item] = run.stopOrder.splice(idx,1);
+  run.stopOrder.splice(newIdx,0,item);
+  renderDeliveryRunsPage();
+  callServer('saveRun', [run]);
+}
+function deleteRun(runId) {
+  if (!confirm('Delete this run? Any allocated orders will go back to pending.')) return;
+  const run = runFor(runId);
+  const affectedOrders = [];
+  if (run) run.stopOrder.forEach(oid => { const o = orders.find(x=>x.id===oid); if (o) { o.status='pending'; o.runId=null; affectedOrders.push(o); } });
+  deliveryRuns = deliveryRuns.filter(r=>r.id!==runId);
+  if (currentRunId===runId) currentRunId = null;
+  renderDeliveryRunsPage();
+  callServer('deleteRun', [runId], () => {
+    affectedOrders.forEach(o => callServer('saveOrder', [o]));
+    toast('Run deleted.');
+  });
+}
+function startRun(runId) {
+  const run = runFor(runId);
+  if (!run) return;
+  if (!run.stopOrder.length) { toast('Add at least one stop before starting the run.'); return; }
+  run.status = 'in-progress';
+  run.startedAt = new Date().toISOString();
+  run.updatedBy = currentUserEmail;
+  run.updatedAt = new Date().toISOString();
+  renderDeliveryRunsPage();
+  callServer('saveRun', [run], () => toast('Run started.'));
+}
+function finishRun(runId) {
+  const run = runFor(runId);
+  if (!run) return;
+  if (!confirm('Finish this run? Any stops without a recorded outcome will be marked "Not delivered".')) return;
+  const affectedOrders = [];
+  run.stopOrder.forEach(oid => {
+    const o = orders.find(x=>x.id===oid);
+    if (o && o.delivery.status==='pending') o.delivery.status='not-delivered';
+    if (o) { o.status='completed'; affectedOrders.push(o); }
+  });
+  run.status = 'completed';
+  run.finishedAt = new Date().toISOString();
+  run.updatedBy = currentUserEmail;
+  run.updatedAt = new Date().toISOString();
+  renderDeliveryRunsPage();
+  callServer('saveRun', [run], () => {
+    affectedOrders.forEach(o => callServer('saveOrder', [o]));
+    toast('Run finished.');
+  });
+}
+function setDeliveryStatus(orderId, status) {
+  const o = orders.find(x=>x.id===orderId);
+  if (!o) return;
+  o.delivery.status = status;
+  if (status === 'delivered') {
+    o.delivery.deliveredLines = o.lines.map(l => ({ groupId: l.groupId, qtyDelivered: l.qty }));
+    o.delivery.deliveredAt = new Date().toISOString();
+  } else if (status === 'partial') {
+    if (!o.delivery.deliveredLines) o.delivery.deliveredLines = o.lines.map(l => ({ groupId: l.groupId, qtyDelivered: l.qty }));
+    o.delivery.deliveredAt = new Date().toISOString();
+  } else if (status === 'not-delivered') {
+    o.delivery.deliveredLines = o.lines.map(l => ({ groupId: l.groupId, qtyDelivered: 0 }));
+    o.delivery.deliveredAt = new Date().toISOString();
+  }
+  o.updatedBy = currentUserEmail;
+  o.updatedAt = new Date().toISOString();
+  renderDeliveryRunsPage();
+  callServer('saveOrder', [o]);
+}
+function updateDeliveredQty(orderId, groupId, val) {
+  const o = orders.find(x=>x.id===orderId);
+  if (!o) return;
+  const num = parseInt(val, 10);
+  if (!o.delivery.deliveredLines) o.delivery.deliveredLines = o.lines.map(l => ({ groupId: l.groupId, qtyDelivered: l.qty }));
+  const dl = o.delivery.deliveredLines.find(x=>x.groupId===groupId);
+  if (dl) dl.qtyDelivered = isNaN(num)||num<0 ? 0 : num;
+  o.updatedBy = currentUserEmail;
+  o.updatedAt = new Date().toISOString();
+  renderDeliveryRunsPage();
+  callServer('saveOrder', [o]);
+}
+function updateEmptyKegsCollected(orderId, val) {
+  const o = orders.find(x=>x.id===orderId);
+  if (!o) return;
+  const num = parseInt(val, 10);
+  o.delivery.emptyKegsCollected = isNaN(num)||num<0 ? 0 : num;
+  o.updatedBy = currentUserEmail;
+  o.updatedAt = new Date().toISOString();
+  renderDeliveryRunsPage();
+  callServer('saveOrder', [o]);
+}
+function updateDriverNotes(orderId, val) {
+  const o = orders.find(x=>x.id===orderId);
+  if (!o) return;
+  o.delivery.driverNotes = val;
+  o.updatedBy = currentUserEmail;
+  o.updatedAt = new Date().toISOString();
+  callServer('saveOrder', [o]);
+}
+function runPlanningDetailHtml(run) {
+  const truck = truckFor(run.truckId);
+  const weight = runTotalWeightKg(run);
+  const over = truck && weight > truck.maxWeightKg;
+  const pctOfCap = truck ? Math.min(100, (weight/truck.maxWeightKg)*100) : 0;
+  const pendingOrders = orders.filter(o=>o.status==='pending');
+
+  const stopsHtml = run.stopOrder.length ? run.stopOrder.map((oid,idx) => {
+    const o = orders.find(x=>x.id===oid);
+    if (!o) return '';
+    const out = outlets[o.outletId] || {};
+    return `<tr>
+      <td class="mono">${idx+1}</td>
+      <td>${escapeHtml(out.name||o.outletId)}<div class="muted" style="font-size:10.5px;">${escapeHtml(out.address||'')}, ${escapeHtml(out.suburb||'')}</div></td>
+      <td class="num-cell mono">${fmtNum(orderTotalWeightKg(o))}kg</td>
+      <td class="no-print rowflex" style="gap:4px;">
+        <button class="btn small secondary" onclick="moveStop('${run.id}','${oid}',-1)" ${idx===0?'disabled':''}>▲</button>
+        <button class="btn small secondary" onclick="moveStop('${run.id}','${oid}',1)" ${idx===run.stopOrder.length-1?'disabled':''}>▼</button>
+        <button class="btn small danger" onclick="removeOrderFromRun('${run.id}','${oid}')">Remove</button>
+      </td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="4"><div class="empty">No stops yet — add pending orders below.</div></td></tr>`;
+
+  const pendingHtml = pendingOrders.length ? pendingOrders.map(o => {
+    const out = outlets[o.outletId] || {};
+    return `<tr>
+      <td>${escapeHtml(out.name||o.outletId)}</td>
+      <td class="num-cell mono">${fmtNum(orderTotalWeightKg(o))}kg</td>
+      <td class="no-print"><button class="btn small" onclick="addOrderToRun('${run.id}','${o.id}')">Add to run</button></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="3"><div class="empty">No pending orders to allocate.</div></td></tr>`;
+
+  return `
+    <div class="rowflex" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <h2 style="margin:0;">${escapeHtml(run.name)} <span class="badge grey">Planning</span></h2>
+      <button class="btn danger small no-print" onclick="deleteRun('${run.id}')">Delete run</button>
+    </div>
+    <div class="hint" style="margin:6px 0 10px;">${fmtDate(run.date)} · Truck: ${truck?escapeHtml(truck.name):'—'}</div>
+    <div class="panel" style="margin:0 0 14px; background:${over?'var(--red-bg)':'var(--card)'};">
+      <div class="rowflex" style="justify-content:space-between;">
+        <div><strong>${fmtNum(weight)} kg</strong> loaded ${truck?`of ${fmtNum(truck.maxWeightKg)} kg capacity`:''}</div>
+        ${over?'<span class="badge red">OVERLOADED</span>':(truck?'<span class="badge green">Within capacity</span>':'')}
+      </div>
+      ${truck?`<div class="progress-track" style="margin-top:6px;"><div class="progress-fill ${over?'red':(pctOfCap>=90?'amber':'green')}" style="width:${pctOfCap}%;"></div></div>`:''}
+    </div>
+    <h3>Stops (delivery sequence)</h3>
+    <div class="tablewrap"><table class="datatable">
+      <thead><tr><th>#</th><th>Customer</th><th class="num-cell">Weight</th><th class="no-print">Action</th></tr></thead>
+      <tbody>${stopsHtml}</tbody>
+    </table></div>
+    <h3 style="margin-top:16px;">Pending orders — add to this run</h3>
+    <div class="tablewrap"><table class="datatable">
+      <thead><tr><th>Customer</th><th class="num-cell">Weight</th><th class="no-print">Action</th></tr></thead>
+      <tbody>${pendingHtml}</tbody>
+    </table></div>
+    <div class="rowflex no-print" style="margin-top:14px;">
+      <button class="btn" onclick="startRun('${run.id}')">Start run</button>
+    </div>
+  `;
+}
+function runDriverDetailHtml(run) {
+  const truck = truckFor(run.truckId);
+  const stops = run.stopOrder.map(oid => orders.find(x=>x.id===oid)).filter(Boolean);
+  const allDone = stops.every(o => o.delivery.status !== 'pending');
+
+  const stopHtml = (o, idx) => {
+    const out = outlets[o.outletId] || {};
+    const st = o.delivery.status;
+    const dLines = o.delivery.deliveredLines || o.lines.map(l=>({groupId:l.groupId, qtyDelivered:l.qty}));
+    return `<div class="panel" style="margin-bottom:10px;">
+      <div class="rowflex" style="justify-content:space-between; align-items:flex-start; flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:600;">${idx+1}. ${escapeHtml(out.name||o.outletId)}</div>
+          <div class="muted" style="font-size:11.5px;">${escapeHtml(out.address||'')}, ${escapeHtml(out.suburb||'')} ${escapeHtml(out.state||'')} ${escapeHtml(out.postcode||'')}${out.phone?' · '+escapeHtml(out.phone):''}</div>
+          ${o.notes?`<div class="hint" style="margin-top:4px;">Order notes: ${escapeHtml(o.notes)}</div>`:''}
+        </div>
+        <div>${st==='pending'?'<span class="badge grey">Pending</span>':st==='delivered'?'<span class="badge green">Delivered</span>':st==='partial'?'<span class="badge amber">Partial</span>':'<span class="badge red">Not delivered</span>'}</div>
+      </div>
+      <div class="tablewrap" style="margin-top:8px;">
+        <table class="datatable">
+          <thead><tr><th>Beer</th><th class="num-cell">Ordered</th><th class="num-cell">Delivered</th></tr></thead>
+          <tbody>${o.lines.map(l => {
+            const g = groups[l.groupId];
+            const dl = dLines.find(x=>x.groupId===l.groupId);
+            const qtyDelivered = dl ? dl.qtyDelivered : l.qty;
+            return `<tr>
+              <td>${g?escapeHtml(g.label):l.groupId}${l.free?' <span class="badge blue" style="font-size:8.5px;">Free</span>':''}</td>
+              <td class="num-cell mono">${l.qty}</td>
+              <td class="num-cell">${st==='partial'?`<input type="number" step="1" min="0" style="width:60px; text-align:right;" value="${qtyDelivered}" onchange="updateDeliveredQty('${o.id}','${l.groupId}',this.value)">`:`<span class="mono">${st==='pending'?'—':qtyDelivered}</span>`}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>
+      <div class="rowflex" style="gap:14px; flex-wrap:wrap; margin-top:10px; align-items:flex-end;">
+        <div class="fld" style="margin:0;"><label>Empty kegs collected</label><input type="number" step="1" min="0" style="width:80px;" value="${o.delivery.emptyKegsCollected||''}" placeholder="0" onchange="updateEmptyKegsCollected('${o.id}',this.value)"></div>
+        <div class="fld" style="margin:0; flex:1; min-width:200px;"><label>Driver notes</label><input value="${escapeHtml(o.delivery.driverNotes||'')}" onchange="updateDriverNotes('${o.id}',this.value)"></div>
+        <div class="fld" style="margin:0;"><label>Time</label><div class="muted" style="font-size:11px;">${o.delivery.deliveredAt?new Date(o.delivery.deliveredAt).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}):'—'}</div></div>
+      </div>
+      <div class="rowflex no-print" style="gap:6px; margin-top:10px;">
+        <button class="btn small ${st==='delivered'?'':'secondary'}" onclick="setDeliveryStatus('${o.id}','delivered')">Delivered</button>
+        <button class="btn small ${st==='partial'?'':'secondary'}" onclick="setDeliveryStatus('${o.id}','partial')">Partial</button>
+        <button class="btn small ${st==='not-delivered'?'':'secondary'}" onclick="setDeliveryStatus('${o.id}','not-delivered')">Not delivered</button>
+      </div>
+    </div>`;
+  };
+
+  return `
+    <div class="rowflex" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <h2 style="margin:0;">${escapeHtml(run.name)} <span class="badge amber">In progress</span></h2>
+    </div>
+    <div class="hint" style="margin:6px 0 10px;">${fmtDate(run.date)} · Truck: ${truck?escapeHtml(truck.name):'—'} · Started ${run.startedAt?new Date(run.startedAt).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}):'—'}</div>
+    ${stops.map(stopHtml).join('')}
+    <div class="rowflex no-print" style="margin-top:10px;">
+      <button class="btn" onclick="finishRun('${run.id}')">Finish run</button>
+    </div>
+    ${!allDone?'<div class="hint" style="margin-top:6px;">Some stops don\'t have an outcome recorded yet — finishing the run will mark them "Not delivered".</div>':''}
+  `;
+}
+function runCompletedDetailHtml(run) {
+  const truck = truckFor(run.truckId);
+  const stops = run.stopOrder.map(oid => orders.find(x=>x.id===oid)).filter(Boolean);
+  const totalKegsCollected = stops.reduce((s,o)=>s+(o.delivery.emptyKegsCollected||0),0);
+  const durHrs = runDurationHours(run);
+  const perHour = durHrs ? (stops.length/durHrs) : null;
+
+  const stopHtml = (o, idx) => {
+    const out = outlets[o.outletId] || {};
+    const st = o.delivery.status;
+    return `<tr>
+      <td class="mono">${idx+1}</td>
+      <td>${escapeHtml(out.name||o.outletId)}</td>
+      <td>${st==='delivered'?'<span class="badge green">Delivered</span>':st==='partial'?'<span class="badge amber">Partial</span>':st==='not-delivered'?'<span class="badge red">Not delivered</span>':'<span class="badge grey">Pending</span>'}</td>
+      <td class="num-cell mono">${o.delivery.emptyKegsCollected||0}</td>
+      <td class="muted">${o.delivery.deliveredAt?new Date(o.delivery.deliveredAt).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}):'—'}</td>
+    </tr>`;
+  };
+
+  return `
+    <h2 style="margin:0;">${escapeHtml(run.name)} <span class="badge green">Completed</span></h2>
+    <div class="hint" style="margin:6px 0 10px;">${fmtDate(run.date)} · Truck: ${truck?escapeHtml(truck.name):'—'}</div>
+    <div class="kpi-grid" style="margin-bottom:16px;">
+      <div class="kpi-card"><div class="kpi-lbl">Stops</div><div class="kpi-num">${stops.length}</div></div>
+      <div class="kpi-card"><div class="kpi-lbl">Empty kegs collected</div><div class="kpi-num">${totalKegsCollected}</div></div>
+      <div class="kpi-card"><div class="kpi-lbl">Run duration</div><div class="kpi-num">${durHrs!=null?durHrs.toFixed(1)+'h':'—'}</div></div>
+      <div class="kpi-card"><div class="kpi-lbl">Deliveries/hour</div><div class="kpi-num">${perHour!=null?perHour.toFixed(1):'—'}</div></div>
+    </div>
+    <div class="tablewrap"><table class="datatable">
+      <thead><tr><th>#</th><th>Customer</th><th>Outcome</th><th class="num-cell">Kegs collected</th><th>Time</th></tr></thead>
+      <tbody>${stops.map(stopHtml).join('')}</tbody>
+    </table></div>
+  `;
+}
+function renderDeliveryRunsPage() {
+  renderTrucksPanel();
+
+  const truckSel = document.getElementById('run_truck');
+  if (truckSel) {
+    const keep = truckSel.value;
+    truckSel.innerHTML = '<option value="">Select truck…</option>' + trucks.map(t=>`<option value="${t.id}">${escapeHtml(t.name)} (max ${fmtNum(t.maxWeightKg)}kg)</option>`).join('');
+    if ([...truckSel.options].some(o=>o.value===keep)) truckSel.value = keep;
+  }
+
+  const planning = deliveryRuns.filter(r=>r.status==='planning');
+  const inProgress = deliveryRuns.filter(r=>r.status==='in-progress');
+  const completed = deliveryRuns.filter(r=>r.status==='completed').sort((a,b)=>new Date(b.finishedAt)-new Date(a.finishedAt));
+
+  const runListItemHtml = r => {
+    const truck = truckFor(r.truckId);
+    const weight = runTotalWeightKg(r);
+    const over = truck && weight > truck.maxWeightKg;
+    return `<div class="rowflex" style="justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px dashed var(--border); cursor:pointer;" onclick="selectRun('${r.id}')">
+      <div>
+        <div style="font-weight:600;">${escapeHtml(r.name)} ${currentRunId===r.id?'<span class="badge blue">Viewing</span>':''}</div>
+        <div class="muted" style="font-size:11px;">${fmtDate(r.date)} · ${truck?escapeHtml(truck.name):'No truck'} · ${r.stopOrder.length} stop${r.stopOrder.length===1?'':'s'} · ${fmtNum(weight)}kg ${over?'<span class="badge red">OVERLOADED</span>':''}</div>
+      </div>
+    </div>`;
+  };
+
+  document.getElementById('run_list_planning').innerHTML = planning.length ? planning.map(runListItemHtml).join('') : '<div class="empty">No runs being planned.</div>';
+  document.getElementById('run_list_inprogress').innerHTML = inProgress.length ? inProgress.map(runListItemHtml).join('') : '<div class="empty">No runs in progress.</div>';
+  document.getElementById('run_list_completed').innerHTML = completed.length ? completed.slice(0,20).map(runListItemHtml).join('') : '<div class="empty">No completed runs yet.</div>';
+
+  const detailEl = document.getElementById('run_detail');
+  const run = currentRunId ? runFor(currentRunId) : null;
+  if (!run) { detailEl.innerHTML = `<div class="empty">Select a run above to view or plan it.</div>`; return; }
+  if (run.status === 'planning') detailEl.innerHTML = runPlanningDetailHtml(run);
+  else if (run.status === 'in-progress') detailEl.innerHTML = runDriverDetailHtml(run);
+  else detailEl.innerHTML = runCompletedDetailHtml(run);
+}
+
+// ===================== DELIVERY REPORTS =====================
+function mondayOf(dateObj) {
+  const d = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+  const day = (d.getDay()+6)%7; // 0=Mon..6=Sun
+  d.setDate(d.getDate()-day);
+  return d;
+}
+function weekKeyOf(dateObj) { return mondayOf(dateObj).toISOString().slice(0,10); }
+function weekLabelOf(weekKey) {
+  const d = new Date(weekKey+'T00:00:00');
+  return d.toLocaleDateString('en-AU',{day:'2-digit',month:'short'});
+}
+function deliveryWeeklyAggregates(numWeeks) {
+  const completedRuns = deliveryRuns.filter(r=>r.status==='completed' && r.finishedAt);
+  const endDate = completedRuns.length ? new Date(Math.max(...completedRuns.map(r=>new Date(r.finishedAt).getTime()))) : new Date();
+  const endMonday = mondayOf(endDate);
+  const weeks = [];
+  for (let i=numWeeks-1; i>=0; i--) {
+    const d = new Date(endMonday);
+    d.setDate(d.getDate() - i*7);
+    weeks.push(weekKeyOf(d));
+  }
+  const byWeek = {};
+  weeks.forEach(wk => byWeek[wk] = { weightKg: 0, kegsCollected: 0, stops: 0, runHours: 0 });
+
+  completedRuns.forEach(run => {
+    const wk = weekKeyOf(new Date(run.finishedAt));
+    if (!byWeek[wk]) return;
+    const stops = run.stopOrder.map(oid=>orders.find(x=>x.id===oid)).filter(Boolean);
+    let runWeight = 0, runKegs = 0;
+    stops.forEach(o => {
+      const dLines = o.delivery.deliveredLines || [];
+      runWeight += dLines.reduce((s,dl) => s + (dl.qtyDelivered||0) * weightKgFor(dl.groupId), 0);
+      runKegs += o.delivery.emptyKegsCollected || 0;
+    });
+    byWeek[wk].weightKg += runWeight;
+    byWeek[wk].kegsCollected += runKegs;
+    byWeek[wk].stops += stops.length;
+    const durHrs = runDurationHours(run);
+    if (durHrs) byWeek[wk].runHours += durHrs;
+  });
+
+  return weeks.map(wk => {
+    const a = byWeek[wk];
+    return { weekKey: wk, label: weekLabelOf(wk), weightKg: a.weightKg, kegsCollected: a.kegsCollected, stops: a.stops, deliveriesPerHour: a.runHours>0 ? a.stops/a.runHours : 0 };
+  });
+}
+function renderDeliveryReportsPage() {
+  const weeks = deliveryWeeklyAggregates(12);
+  const labels = weeks.map(w=>w.label);
+  const chartsEl = document.getElementById('drpt_charts');
+  if (!chartsEl) return;
+  chartsEl.innerHTML = `
+    <div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">
+      <div class="panel" style="flex:1; min-width:300px;">
+        <h3>Weight delivered per week <span class="muted" style="font-weight:400; font-size:11px;">(kg, from completed runs)</span></h3>
+        ${vtBarChartHtml(labels, weeks.map(w=>w.weightKg), 'kegs', ' kg')}
+      </div>
+      <div class="panel" style="flex:1; min-width:300px;">
+        <h3>Empty kegs collected per week</h3>
+        ${vtBarChartHtml(labels, weeks.map(w=>w.kegsCollected), 'cartons', '')}
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Deliveries per hour <span class="muted" style="font-weight:400; font-size:11px;">(stops ÷ total run hours, per week)</span></h3>
+      ${vtBarChartHtml(labels, weeks.map(w=>w.deliveriesPerHour), 'kegs', '', 1)}
+    </div>
+  `;
+
+  const completedRuns = deliveryRuns.filter(r=>r.status==='completed').sort((a,b)=>new Date(b.finishedAt)-new Date(a.finishedAt));
+  const body = document.getElementById('drpt_body');
+  if (!body) return;
+  body.innerHTML = completedRuns.length ? completedRuns.map(run => {
+    const truck = truckFor(run.truckId);
+    const stops = run.stopOrder.map(oid=>orders.find(x=>x.id===oid)).filter(Boolean);
+    const kegs = stops.reduce((s,o)=>s+(o.delivery.emptyKegsCollected||0),0);
+    const weight = stops.reduce((s,o)=>{
+      const dLines = o.delivery.deliveredLines || [];
+      return s + dLines.reduce((s2,dl)=>s2+(dl.qtyDelivered||0)*weightKgFor(dl.groupId),0);
+    },0);
+    const durHrs = runDurationHours(run);
+    return `<tr>
+      <td>${escapeHtml(run.name)}</td>
+      <td class="mono">${fmtDate(run.date)}</td>
+      <td>${truck?escapeHtml(truck.name):'—'}</td>
+      <td class="num-cell mono">${stops.length}</td>
+      <td class="num-cell mono">${fmtNum(weight)} kg</td>
+      <td class="num-cell mono">${kegs}</td>
+      <td class="num-cell mono">${durHrs!=null?durHrs.toFixed(1)+'h':'—'}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="7"><div class="empty">No completed runs yet.</div></td></tr>`;
+}
+
 // ===================== Tabs =====================
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -3361,6 +4654,26 @@ function renderEverything() {
   csAcRef = csAc;
   csRsm.addEventListener('change', csAc.refresh);
 
+  // Quick Margin Calculator (Venues) — beer checkbox picker, not tied to a customer
+  const qmcPickerEl = document.getElementById('qmc_picker');
+  marginEligibleGroupIds('ALL').forEach(gid => {
+    const g = groups[gid];
+    const label = document.createElement('label');
+    label.style.cssText = 'display:inline-flex; align-items:center; gap:5px; font-size:12.5px; white-space:nowrap;';
+    label.innerHTML = `<input type="checkbox" id="qmc_chk_${gid}" onchange="quickMcToggle('${gid}',this.checked)"> ${escapeHtml(g.label)} <span class="badge ${bucketOf(g)==='KEGS'?'kegs':'cartons'}" style="font-size:9px;">${escapeHtml(g.formatLabel)}</span>`;
+    qmcPickerEl.appendChild(label);
+  });
+
+  // Quick Margin Calculator (Off Premise) — beer checkbox picker, not tied to a customer
+  const qopPickerEl = document.getElementById('qop_picker');
+  marginEligibleGroupIds('CARTONS').forEach(gid => {
+    const g = groups[gid];
+    const label = document.createElement('label');
+    label.style.cssText = 'display:inline-flex; align-items:center; gap:5px; font-size:12.5px; white-space:nowrap;';
+    label.innerHTML = `<input type="checkbox" id="qop_chk_${gid}" onchange="quickOpToggle('${gid}',this.checked)"> ${escapeHtml(g.label)} <span class="badge cartons" style="font-size:9px;">${escapeHtml(g.formatLabel)}</span>`;
+    qopPickerEl.appendChild(label);
+  });
+
   // Venues (on premise) margin calculator picker
   setupAutocomplete('mc_search','mc_results', outletList, outletLabel, id => {
     document.getElementById('mc_search').value = outlets[id].name;
@@ -3381,6 +4694,16 @@ function renderEverything() {
     rsmVals.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
   perfScopeSel.addEventListener('change', () => { perfScope = perfScopeSel.value; renderPerfPage(); });
   renderPerfPage();
+
+  // Set Targets page
+  renderTargetsPage();
+
+  // Volume Trends page
+  populateSelect('vt_rsm', rsmVals);
+  populateSelect('vt_custType', typeVals);
+  populateSelect('vt_subbrand', uniqueVals('subbrand', groups));
+  ['vt_rsm','vt_custType','vt_subbrand'].forEach(id => document.getElementById(id).addEventListener('change', renderVolumeTrendsPage));
+  renderVolumeTrendsPage();
 
   // At Risk Listings page
   populateSelect('ar_rsm', rsmVals);
@@ -3409,6 +4732,25 @@ function renderEverything() {
   document.getElementById('ac_search').addEventListener('input', renderActivationsList);
   renderActivationsList();
 
+  // Orders page
+  setupAutocomplete('ord_outletSearch','ord_outletResults', outletList, outletLabel, id => {
+    document.getElementById('ord_outletId').value = id;
+    document.getElementById('ord_outletSearch').value = outlets[id].name;
+    orderFormOutletId = id;
+    renderOrderForm();
+  });
+  populateSelect('ord_rsmFilter', rsmVals);
+  document.getElementById('ord_statusFilter').addEventListener('change', renderOrdersList);
+  document.getElementById('ord_rsmFilter').addEventListener('change', renderOrdersList);
+  renderOrderForm();
+  renderOrdersList();
+
+  // Delivery Runs page (trucks + run planning/driver/completed views)
+  renderDeliveryRunsPage();
+
+  // Delivery Reports page
+  renderDeliveryReportsPage();
+
   dataReady = true;
   document.getElementById('loadingScreen').style.display = 'none';
 
@@ -3428,6 +4770,9 @@ function onInitialDataLoaded(data) {
   customerOffPremisePricing = data.customerOffPremisePricing || {};
   rsmTargets = data.rsmTargets || {};
   activations = data.activations || [];
+  trucks = data.trucks || [];
+  orders = data.orders || [];
+  deliveryRuns = data.deliveryRuns || [];
   renderEverything();
 }
 
@@ -3456,6 +4801,9 @@ function refreshPricingFromServer() {
       customerOffPremisePricing = data.customerOffPremisePricing || {};
       rsmTargets = data.rsmTargets || {};
       activations = data.activations || [];
+      trucks = data.trucks || [];
+      orders = data.orders || [];
+      deliveryRuns = data.deliveryRuns || [];
       renderSummaryCards();
       renderGrid();
       renderProductPrices();
@@ -3466,6 +4814,10 @@ function refreshPricingFromServer() {
       if (currentOpOutlet) renderOffPremiseMarginPage(currentOpOutlet);
       renderActivationsList();
       renderPerfPage();
+      renderTargetsPage();
+      renderOrdersList();
+      renderDeliveryRunsPage();
+      renderDeliveryReportsPage();
     })
     .catch(err => console.error('refresh failed', err));
 }
