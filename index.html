@@ -3942,32 +3942,36 @@ function renderTrucksPanel() {
 }
 
 // ===================== ORDERS — shared =====================
-// An order is a customer's requested qty per beer (with an optional "free stock" flag per line).
-// It starts 'pending' (unallocated), becomes 'allocated' once added to a delivery run, and
-// 'completed' once that run finishes. Unlike Temp Deals/Activations, editing an order updates it
-// in place (upsert by id) rather than delete-then-recreate, since the server already supports it.
+// An order is a customer's requested qty per beer, with an optional free-stock qty per line
+// (e.g. 3 kegs where 1 is free stock and 2 are paid — freeQty is always <= qty). It starts
+// 'pending' (unallocated), becomes 'allocated' once added to a delivery run, and 'completed'
+// once that run finishes. Unlike Temp Deals/Activations, editing an order updates it in place
+// (upsert by id) rather than delete-then-recreate, since the server already supports it.
 let orderFormOutletId = '';
-let orderFormLines = {}; // groupId -> {qty, free}
+let orderFormLines = {}; // groupId -> {qty, freeQty}
 let orderFormEditingId = null;
 function orderLineWeightKg(line) { return (Number(line.qty)||0) * weightKgFor(line.groupId); }
 function orderTotalWeightKg(order) { return order.lines.reduce((s,l)=>s+orderLineWeightKg(l),0); }
+function orderLinePaidQty(line) { return Math.max(0, (Number(line.qty)||0) - (Number(line.freeQty)||0)); }
 function orderLinePriceExGst(outletId, line) {
-  if (line.free) return 0;
   const pr = resolvePricing(outletId, line.groupId);
-  return pr.eff !== null ? pr.eff * (Number(line.qty)||0) : 0;
+  return pr.eff !== null ? pr.eff * orderLinePaidQty(line) : 0;
 }
 function orderTotalPriceExGst(order) {
   return order.lines.reduce((s,l)=>s+orderLinePriceExGst(order.outletId, l), 0);
 }
 function orderFormOnQtyChange(groupId, val) {
   const num = parseInt(val, 10);
-  const line = orderFormLines[groupId] || (orderFormLines[groupId] = { qty: 0, free: false });
+  const line = orderFormLines[groupId] || (orderFormLines[groupId] = { qty: 0, freeQty: 0 });
   line.qty = isNaN(num) || num < 0 ? 0 : num;
+  if (line.freeQty > line.qty) line.freeQty = line.qty;
   renderOrderForm();
 }
-function orderFormOnFreeToggle(groupId, checked) {
-  const line = orderFormLines[groupId] || (orderFormLines[groupId] = { qty: 0, free: false });
-  line.free = checked;
+function orderFormOnFreeQtyChange(groupId, val) {
+  const num = parseInt(val, 10);
+  const line = orderFormLines[groupId] || (orderFormLines[groupId] = { qty: 0, freeQty: 0 });
+  const clamped = isNaN(num) || num < 0 ? 0 : num;
+  line.freeQty = Math.min(clamped, line.qty);
   renderOrderForm();
 }
 function resetOrderForm() {
@@ -3995,14 +3999,15 @@ function renderOrderForm() {
 
   const lineRow = gid => {
     const g = groups[gid];
-    const line = orderFormLines[gid] || { qty: 0, free: false };
+    const line = orderFormLines[gid] || { qty: 0, freeQty: 0 };
     const pr = resolvePricing(outletId, gid);
-    const lineTotal = line.free ? 0 : (pr.eff!==null ? pr.eff * (line.qty||0) : 0);
+    const paidQty = orderLinePaidQty(line);
+    const lineTotal = pr.eff!==null ? pr.eff * paidQty : 0;
     return `<tr>
       <td>${escapeHtml(g.label)} <span class="badge ${bucketOf(g)==='KEGS'?'kegs':'cartons'}" style="font-size:9px;">${escapeHtml(g.formatLabel)}</span></td>
       <td class="num-cell mono">${pr.eff!==null?fmtMoney(pr.eff):'—'}</td>
       <td class="num-cell"><input type="number" step="1" min="0" style="width:64px; text-align:right;" value="${line.qty||''}" placeholder="0" onchange="orderFormOnQtyChange('${gid}',this.value)"></td>
-      <td class="center"><input type="checkbox" ${line.free?'checked':''} onchange="orderFormOnFreeToggle('${gid}',this.checked)"></td>
+      <td class="num-cell"><input type="number" step="1" min="0" max="${line.qty||0}" style="width:64px; text-align:right;" value="${line.freeQty||''}" placeholder="0" onchange="orderFormOnFreeQtyChange('${gid}',this.value)"></td>
       <td class="num-cell mono">${line.qty?fmtMoney(lineTotal):'—'}</td>
       <td class="num-cell mono">${line.qty?fmtNum(line.qty*weightKgFor(gid)):'—'} kg</td>
     </tr>`;
@@ -4011,28 +4016,31 @@ function renderOrderForm() {
   body.innerHTML = `
     <div class="tablewrap">
       <table class="datatable">
-        <thead><tr><th>Beer</th><th class="num-cell">Price ea (ex GST/WET)</th><th class="num-cell">Qty</th><th class="center">Free stock?</th><th class="num-cell">Line total</th><th class="num-cell">Weight</th></tr></thead>
+        <thead><tr><th>Beer</th><th class="num-cell">Price ea (ex GST/WET)</th><th class="num-cell">Qty</th><th class="num-cell">Free qty</th><th class="num-cell">Line total</th><th class="num-cell">Weight</th></tr></thead>
         <tbody>
           ${kegGroups.map(lineRow).join('')}
           ${cartonGroups.map(lineRow).join('')}
         </tbody>
       </table>
-    </div>`;
+    </div>
+    <div class="hint" style="margin-top:4px;">Free qty must be less than or equal to Qty — e.g. 3 kegs with a free qty of 1 means 2 are paid, 1 is free stock.</div>`;
 
   const activeLines = Object.entries(orderFormLines).filter(([gid,l]) => l.qty > 0);
-  const totalPrice = activeLines.reduce((s,[gid,l]) => s + (l.free?0:(resolvePricing(outletId,gid).eff||0)*l.qty), 0);
+  const totalPrice = activeLines.reduce((s,[gid,l]) => s + ((resolvePricing(outletId,gid).eff||0)*orderLinePaidQty(l)), 0);
   const totalWeight = activeLines.reduce((s,[gid,l]) => s + (l.qty*weightKgFor(gid)), 0);
+  const totalFreeUnits = activeLines.reduce((s,[gid,l]) => s + (Number(l.freeQty)||0), 0);
   document.getElementById('ord_summary').innerHTML = `
     <div class="rowflex" style="gap:18px; flex-wrap:wrap;">
       <div class="fld" style="margin:0;"><label>Total price (ex GST/WET)</label><div class="kpi-num" style="font-size:18px;">${fmtMoney(totalPrice)}</div></div>
       <div class="fld" style="margin:0;"><label>Total weight</label><div class="kpi-num" style="font-size:18px;">${fmtNum(totalWeight)} kg</div></div>
       <div class="fld" style="margin:0;"><label>Line items</label><div class="kpi-num" style="font-size:18px;">${activeLines.length}</div></div>
+      <div class="fld" style="margin:0;"><label>Free units</label><div class="kpi-num" style="font-size:18px;">${totalFreeUnits}</div></div>
     </div>`;
 }
 function saveOrder() {
   const outletId = orderFormOutletId;
   if (!outletId || !outlets[outletId]) { toast('Please select a customer.'); return; }
-  const lines = Object.entries(orderFormLines).filter(([gid,l]) => l.qty > 0).map(([gid,l]) => ({ groupId: gid, qty: l.qty, free: !!l.free }));
+  const lines = Object.entries(orderFormLines).filter(([gid,l]) => l.qty > 0).map(([gid,l]) => ({ groupId: gid, qty: l.qty, freeQty: Math.min(Number(l.freeQty)||0, l.qty) }));
   if (!lines.length) { toast('Enter a quantity for at least one beer.'); return; }
   const notes = document.getElementById('ord_notes').value.trim();
 
@@ -4066,7 +4074,7 @@ function editOrder(orderId) {
   orderFormEditingId = orderId;
   orderFormOutletId = ord.outletId;
   orderFormLines = {};
-  ord.lines.forEach(l => { orderFormLines[l.groupId] = { qty: l.qty, free: l.free }; });
+  ord.lines.forEach(l => { orderFormLines[l.groupId] = { qty: l.qty, freeQty: l.freeQty || 0 }; });
   document.getElementById('ord_outletId').value = ord.outletId;
   document.getElementById('ord_outletSearch').value = outlets[ord.outletId] ? outletLabel(outlets[ord.outletId]) : ord.outletId;
   document.getElementById('ord_notes').value = ord.notes || '';
@@ -4098,7 +4106,7 @@ function renderOrdersList() {
   const statusBadge = s => s==='pending'?'<span class="badge grey">Pending</span>':s==='allocated'?'<span class="badge blue">Allocated</span>':'<span class="badge green">Completed</span>';
   body.innerHTML = list.map(o => {
     const out = outlets[o.outletId] || {};
-    const itemsSummary = o.lines.map(l => `${l.qty}× ${groups[l.groupId]?groups[l.groupId].label:l.groupId}${l.free?' (free)':''}`).join(', ');
+    const itemsSummary = o.lines.map(l => `${l.qty}× ${groups[l.groupId]?groups[l.groupId].label:l.groupId}${l.freeQty?` (${l.freeQty} free)`:''}`).join(', ');
     return `<tr>
       <td>${escapeHtml(out.name||o.outletId)}</td>
       <td>${escapeHtml(out.rsm||'—')}</td>
@@ -4277,12 +4285,52 @@ function updateDriverNotes(orderId, val) {
   o.updatedAt = new Date().toISOString();
   callServer('saveOrder', [o]);
 }
+// Compact "3× Dave Keg (1 free), 5× Lager Carton" text for one order — used on both the pick
+// list stops table and the driver checklist.
+function orderItemsListHtml(o) {
+  return o.lines.map(l => {
+    const g = groups[l.groupId];
+    const label = g ? g.label : l.groupId;
+    return `${l.qty}× ${escapeHtml(label)}${l.freeQty?` (${l.freeQty} free)`:''}`;
+  }).join(', ');
+}
+// Totals every beer across every stop on the run — the actual pick list for loading the truck,
+// independent of which customer it's going to.
+function runPickListBySku(run) {
+  const totals = {};
+  run.stopOrder.forEach(oid => {
+    const o = orders.find(x=>x.id===oid);
+    if (!o) return;
+    o.lines.forEach(l => {
+      if (!totals[l.groupId]) totals[l.groupId] = { qty: 0, freeQty: 0 };
+      totals[l.groupId].qty += l.qty;
+      totals[l.groupId].freeQty += (Number(l.freeQty)||0);
+    });
+  });
+  return Object.entries(totals).map(([groupId, t]) => ({ groupId, ...t })).sort((a,b) => {
+    const ga = groups[a.groupId], gb = groups[b.groupId];
+    return (ga?ga.label:a.groupId).localeCompare(gb?gb.label:b.groupId);
+  });
+}
 function runPlanningDetailHtml(run) {
   const truck = truckFor(run.truckId);
   const weight = runTotalWeightKg(run);
   const over = truck && weight > truck.maxWeightKg;
   const pctOfCap = truck ? Math.min(100, (weight/truck.maxWeightKg)*100) : 0;
   const pendingOrders = orders.filter(o=>o.status==='pending');
+
+  const pickList = runPickListBySku(run);
+  const pickListHtml = pickList.length ? pickList.map(p => {
+    const g = groups[p.groupId];
+    const label = g ? g.label : p.groupId;
+    const bucket = g ? bucketOf(g) : '';
+    return `<tr>
+      <td>${escapeHtml(label)} ${bucket?`<span class="badge ${bucket==='KEGS'?'kegs':'cartons'}" style="font-size:9px;">${bucket==='KEGS'?'Keg':'Carton'}</span>`:''}</td>
+      <td class="num-cell mono">${p.qty}</td>
+      <td class="num-cell mono">${p.freeQty || '—'}</td>
+      <td class="num-cell mono">${fmtNum(p.qty*weightKgFor(p.groupId))} kg</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="4"><div class="empty">No stock allocated to this run yet.</div></td></tr>`;
 
   const stopsHtml = run.stopOrder.length ? run.stopOrder.map((oid,idx) => {
     const o = orders.find(x=>x.id===oid);
@@ -4291,6 +4339,7 @@ function runPlanningDetailHtml(run) {
     return `<tr>
       <td class="mono">${idx+1}</td>
       <td>${escapeHtml(out.name||o.outletId)}<div class="muted" style="font-size:10.5px;">${escapeHtml(out.address||'')}, ${escapeHtml(out.suburb||'')}</div></td>
+      <td style="max-width:280px;">${orderItemsListHtml(o)}${o.notes?`<div class="hint" style="margin-top:2px;">${escapeHtml(o.notes)}</div>`:''}</td>
       <td class="num-cell mono">${fmtNum(orderTotalWeightKg(o))}kg</td>
       <td class="no-print rowflex" style="gap:4px;">
         <button class="btn small secondary" onclick="moveStop('${run.id}','${oid}',-1)" ${idx===0?'disabled':''}>▲</button>
@@ -4298,7 +4347,7 @@ function runPlanningDetailHtml(run) {
         <button class="btn small danger" onclick="removeOrderFromRun('${run.id}','${oid}')">Remove</button>
       </td>
     </tr>`;
-  }).join('') : `<tr><td colspan="4"><div class="empty">No stops yet — add pending orders below.</div></td></tr>`;
+  }).join('') : `<tr><td colspan="5"><div class="empty">No stops yet — add pending orders below.</div></td></tr>`;
 
   const pendingHtml = pendingOrders.length ? pendingOrders.map(o => {
     const out = outlets[o.outletId] || {};
@@ -4312,7 +4361,10 @@ function runPlanningDetailHtml(run) {
   return `
     <div class="rowflex" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
       <h2 style="margin:0;">${escapeHtml(run.name)} <span class="badge grey">Planning</span></h2>
-      <button class="btn danger small no-print" onclick="deleteRun('${run.id}')">Delete run</button>
+      <div class="rowflex no-print" style="gap:8px;">
+        <button class="btn secondary small" onclick="window.print()">Print pick list</button>
+        <button class="btn danger small" onclick="deleteRun('${run.id}')">Delete run</button>
+      </div>
     </div>
     <div class="hint" style="margin:6px 0 10px;">${fmtDate(run.date)} · Truck: ${truck?escapeHtml(truck.name):'—'}</div>
     <div class="panel" style="margin:0 0 14px; background:${over?'var(--red-bg)':'var(--card)'};">
@@ -4322,13 +4374,19 @@ function runPlanningDetailHtml(run) {
       </div>
       ${truck?`<div class="progress-track" style="margin-top:6px;"><div class="progress-fill ${over?'red':(pctOfCap>=90?'amber':'green')}" style="width:${pctOfCap}%;"></div></div>`:''}
     </div>
-    <h3>Stops (delivery sequence)</h3>
+    <h3>Pick list — total by beer</h3>
+    <div class="hint" style="margin-bottom:4px;">Everything that needs to be loaded for this run, across every stop — use this to pick/load the truck before you leave.</div>
     <div class="tablewrap"><table class="datatable">
-      <thead><tr><th>#</th><th>Customer</th><th class="num-cell">Weight</th><th class="no-print">Action</th></tr></thead>
+      <thead><tr><th>Beer</th><th class="num-cell">Total qty</th><th class="num-cell">Of which free</th><th class="num-cell">Weight</th></tr></thead>
+      <tbody>${pickListHtml}</tbody>
+    </table></div>
+    <h3 style="margin-top:16px;">Stops (delivery sequence)</h3>
+    <div class="tablewrap"><table class="datatable">
+      <thead><tr><th>#</th><th>Customer</th><th>Items</th><th class="num-cell">Weight</th><th class="no-print">Action</th></tr></thead>
       <tbody>${stopsHtml}</tbody>
     </table></div>
-    <h3 style="margin-top:16px;">Pending orders — add to this run</h3>
-    <div class="tablewrap"><table class="datatable">
+    <h3 class="no-print" style="margin-top:16px;">Pending orders — add to this run</h3>
+    <div class="tablewrap no-print"><table class="datatable">
       <thead><tr><th>Customer</th><th class="num-cell">Weight</th><th class="no-print">Action</th></tr></thead>
       <tbody>${pendingHtml}</tbody>
     </table></div>
@@ -4363,7 +4421,7 @@ function runDriverDetailHtml(run) {
             const dl = dLines.find(x=>x.groupId===l.groupId);
             const qtyDelivered = dl ? dl.qtyDelivered : l.qty;
             return `<tr>
-              <td>${g?escapeHtml(g.label):l.groupId}${l.free?' <span class="badge blue" style="font-size:8.5px;">Free</span>':''}</td>
+              <td>${g?escapeHtml(g.label):l.groupId}${l.freeQty?` <span class="badge blue" style="font-size:8.5px;">${l.freeQty} free</span>`:''}</td>
               <td class="num-cell mono">${l.qty}</td>
               <td class="num-cell">${st==='partial'?`<input type="number" step="1" min="0" style="width:60px; text-align:right;" value="${qtyDelivered}" onchange="updateDeliveredQty('${o.id}','${l.groupId}',this.value)">`:`<span class="mono">${st==='pending'?'—':qtyDelivered}</span>`}</td>
             </tr>`;
