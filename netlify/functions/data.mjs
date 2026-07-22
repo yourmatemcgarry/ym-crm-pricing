@@ -36,7 +36,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns] = await Promise.all([
+  const [groupPrices, customerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('tempDeals', { type: 'json' }),
@@ -49,6 +49,8 @@ async function readAll(s) {
     s.get('trucks', { type: 'json' }),
     s.get('orders', { type: 'json' }),
     s.get('deliveryRuns', { type: 'json' }),
+    s.get('manualOutlets', { type: 'json' }),
+    s.get('customerDeliveryDetails', { type: 'json' }),
   ]);
   return {
     groupPrices: groupPrices || {},
@@ -63,6 +65,8 @@ async function readAll(s) {
     trucks: trucks || [],
     orders: orders || [],
     deliveryRuns: deliveryRuns || [],
+    manualOutlets: manualOutlets || {},
+    customerDeliveryDetails: customerDeliveryDetails || {},
   };
 }
 
@@ -356,6 +360,39 @@ export default async (req) => {
       const next = current.filter((r) => r.id !== id);
       await s.setJSON('deliveryRuns', next);
       return json({ ok: true, deliveryRuns: next });
+    }
+
+    if (action === 'saveManualOutlet') {
+      // Customers added before they have any sales history — keyed by outlet ID (either a real
+      // ID the rep already knows, e.g. from a licensing/POS system, or an auto-generated
+      // placeholder from the client if not). Dictionary-keyed like groupPrices/customerFlags,
+      // since the id IS the key — no separate "assign a new id" step needed like orders/runs.
+      const { outlet } = payload;
+      const current = (await s.get('manualOutlets', { type: 'json' })) || {};
+      current[outlet.id] = { ...outlet, updatedAt: now };
+      await s.setJSON('manualOutlets', current);
+      return json({ ok: true, id: outlet.id, manualOutlets: current });
+    }
+
+    if (action === 'deleteManualOutlet') {
+      const { id } = payload;
+      const current = (await s.get('manualOutlets', { type: 'json' })) || {};
+      delete current[id];
+      await s.setJSON('manualOutlets', current);
+      return json({ ok: true, manualOutlets: current });
+    }
+
+    if (action === 'saveDeliveryDetails') {
+      // Access notes/on-site contact/preferred timing per customer — dictionary-keyed by outlet
+      // ID like customerFlags/manualOutlets. Saved as one whole record per "Save" click (not
+      // per-field), matching the batch-save UX on the Customer Summary page.
+      const { outletId, accessNotes, contactName, contactPhone, preferredDay, preferredWindow, updatedBy } = payload;
+      const current = (await s.get('customerDeliveryDetails', { type: 'json' })) || {};
+      const isBlank = !accessNotes && !contactName && !contactPhone && !preferredWindow && (!preferredDay || preferredDay === 'Any day');
+      if (isBlank) delete current[outletId];
+      else current[outletId] = { accessNotes, contactName, contactPhone, preferredDay, preferredWindow, updatedBy, updatedAt: now };
+      await s.setJSON('customerDeliveryDetails', current);
+      return json({ ok: true, customerDeliveryDetails: current });
     }
 
     return json({ error: 'Unknown action: ' + action }, 400);
