@@ -36,7 +36,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails] = await Promise.all([
+  const [groupPrices, customerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('tempDeals', { type: 'json' }),
@@ -51,6 +51,7 @@ async function readAll(s) {
     s.get('deliveryRuns', { type: 'json' }),
     s.get('manualOutlets', { type: 'json' }),
     s.get('customerDeliveryDetails', { type: 'json' }),
+    s.get('targetCustomers', { type: 'json' }),
   ]);
   return {
     groupPrices: groupPrices || {},
@@ -67,6 +68,7 @@ async function readAll(s) {
     deliveryRuns: deliveryRuns || [],
     manualOutlets: manualOutlets || {},
     customerDeliveryDetails: customerDeliveryDetails || {},
+    targetCustomers: targetCustomers || [],
   };
 }
 
@@ -288,6 +290,33 @@ export default async (req) => {
       const next = current.filter((a) => a.id !== id);
       await s.setJSON('activations', next);
       return json({ ok: true, activations: next });
+    }
+
+    if (action === 'saveTargetCustomer') {
+      // The quarterly "who are we going after" list for kegs/cartons. Guard against a duplicate
+      // add server-side too (not just client-side), in case two reps race to add the same
+      // customer within the same quarter/bucket. "Onboarded" status is NOT stored — it's computed
+      // live on the client from sales data (active in the current purchase cycle), so there's
+      // nothing to persist here beyond who nominated the target and when.
+      const { outletId, rsm, quarterKey, bucket, updatedBy } = payload;
+      const current = (await s.get('targetCustomers', { type: 'json' })) || [];
+      const dup = current.find((t) => t.outletId === outletId && t.quarterKey === quarterKey && t.bucket === bucket);
+      if (dup) return json({ ok: true, id: dup.id, targetCustomers: current });
+      const newId = 'tc_' + Date.now() + '_' + Math.round(Math.random() * 10000);
+      current.push({
+        id: newId, rsm, quarterKey, bucket, outletId,
+        addedBy: updatedBy, addedAt: now,
+      });
+      await s.setJSON('targetCustomers', current);
+      return json({ ok: true, id: newId, targetCustomers: current });
+    }
+
+    if (action === 'deleteTargetCustomer') {
+      const { id } = payload;
+      const current = (await s.get('targetCustomers', { type: 'json' })) || [];
+      const next = current.filter((t) => t.id !== id);
+      await s.setJSON('targetCustomers', next);
+      return json({ ok: true, targetCustomers: next });
     }
 
     if (action === 'saveWeightKg') {
