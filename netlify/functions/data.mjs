@@ -36,7 +36,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -53,6 +53,7 @@ async function readAll(s) {
     s.get('manualOutlets', { type: 'json' }),
     s.get('customerDeliveryDetails', { type: 'json' }),
     s.get('targetCustomers', { type: 'json' }),
+    s.get('naDistributions', { type: 'json' }),
   ]);
   return {
     groupPrices: groupPrices || {},
@@ -71,6 +72,7 @@ async function readAll(s) {
     manualOutlets: manualOutlets || {},
     customerDeliveryDetails: customerDeliveryDetails || {},
     targetCustomers: targetCustomers || [],
+    naDistributions: naDistributions || {},
   };
 }
 
@@ -169,6 +171,24 @@ export default async (req) => {
       });
       await s.setJSON('wholesalerDeals', current);
       return json({ ok: true, wholesalerDeals: current });
+    }
+
+    if (action === 'saveNaDistribution') {
+      // Manually-entered, quarterly store-distribution counts for Coles/Woolworths (Coles &
+      // Woolworths tab) — we don't get real per-store listing data for these bulk/national
+      // accounts the way we do for Sales Team accounts, so this is entered by hand and used to
+      // compute units-per-store-per-week against real carton sales volume.
+      const { quarterKey, ownerGroup, groupId, count, updatedBy } = payload;
+      const current = (await s.get('naDistributions', { type: 'json' })) || {};
+      const key = quarterKey + '|' + ownerGroup + '|' + groupId;
+      const num = Math.max(0, Math.round(Number(count) || 0));
+      if (num === 0) {
+        delete current[key];
+      } else {
+        current[key] = { count: num, updatedBy, updatedAt: now };
+      }
+      await s.setJSON('naDistributions', current);
+      return json({ ok: true, naDistributions: current });
     }
 
     if (action === 'saveTempDeal') {
