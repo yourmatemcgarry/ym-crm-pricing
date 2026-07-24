@@ -4,7 +4,7 @@
 // deals) in Netlify Blobs, the small built-in database Netlify provides —
 // no separate signup, API keys, or database service to configure.
 //
-// GET  /.netlify/functions/data          -> { groupPrices, customerDeals, tempDeals }
+// GET  /.netlify/functions/data          -> { groupPrices, customerDeals, wholesalerDeals, tempDeals }
 // POST /.netlify/functions/data          -> { action, payload } -> applies one change and
 //                                            returns the updated slice of data
 //
@@ -36,9 +36,10 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
+    s.get('wholesalerDeals', { type: 'json' }),
     s.get('tempDeals', { type: 'json' }),
     s.get('customerFlags', { type: 'json' }),
     s.get('customerGlassPricing', { type: 'json' }),
@@ -56,6 +57,7 @@ async function readAll(s) {
   return {
     groupPrices: groupPrices || {},
     customerDeals: customerDeals || {},
+    wholesalerDeals: wholesalerDeals || {},
     tempDeals: tempDeals || [],
     customerFlags: customerFlags || {},
     customerGlassPricing: customerGlassPricing || {},
@@ -140,6 +142,33 @@ export default async (req) => {
       });
       await s.setJSON('customerDeals', current);
       return json({ ok: true, customerDeals: current });
+    }
+
+    if (action === 'saveWholesalerDeal') {
+      // A second, separate deal record for stock loaded into a wholesaler (ALM/ILG/PAR) rather
+      // than bought direct — kept in its own blob key so it never collides/merges with customerDeals.
+      const { outletId, groupId, dealX, wholesaler, updatedBy } = payload;
+      const current = (await s.get('wholesalerDeals', { type: 'json' })) || {};
+      const key = outletId + '|' + groupId;
+      if (Number(dealX) === 0) {
+        delete current[key];
+      } else {
+        current[key] = { dealX: Number(dealX), wholesaler: wholesaler || null, updatedBy, updatedAt: now };
+      }
+      await s.setJSON('wholesalerDeals', current);
+      return json({ ok: true, wholesalerDeals: current });
+    }
+
+    if (action === 'bulkApplyWholesalerDeal') {
+      const { outletId, groupIds, dealX, wholesaler, updatedBy } = payload;
+      const current = (await s.get('wholesalerDeals', { type: 'json' })) || {};
+      (groupIds || []).forEach((groupId) => {
+        const key = outletId + '|' + groupId;
+        if (Number(dealX) === 0) delete current[key];
+        else current[key] = { dealX: Number(dealX), wholesaler: wholesaler || null, updatedBy, updatedAt: now };
+      });
+      await s.setJSON('wholesalerDeals', current);
+      return json({ ok: true, wholesalerDeals: current });
     }
 
     if (action === 'saveTempDeal') {
