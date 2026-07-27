@@ -45,7 +45,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides, naTargets] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -64,6 +64,7 @@ async function readAll(s) {
     s.get('targetCustomers', { type: 'json' }),
     s.get('naDistributions', { type: 'json' }),
     s.get('rsmZoneOverrides', { type: 'json' }),
+    s.get('naTargets', { type: 'json' }),
   ]);
   // vipContacts is seeded exactly once — the first time anyone loads the app after this feature
   // ships, the blob won't exist yet (null, not just empty), so we seed it from VIP_CONTACTS_SEED
@@ -97,6 +98,7 @@ async function readAll(s) {
     naDistributions: naDistributions || {},
     vipContacts,
     rsmZoneOverrides: rsmZoneOverrides || {},
+    naTargets: naTargets || {},
   };
 }
 
@@ -546,6 +548,24 @@ export default async (req) => {
       if (clean) current[zone] = clean; else delete current[zone];
       await s.setJSON('rsmZoneOverrides', current);
       return json({ ok: true, rsmZoneOverrides: current });
+    }
+
+    if (action === 'saveNaTarget') {
+      // National Accounts (Coles & Woolworths) volume target, per FY quarter — sits outside the
+      // RSM-based rsmTargets collection, used by the Total Volume page to build a combined
+      // company-wide target line. value may be null to clear it (back to blank).
+      const { quarterKey, cartonVolumeTarget, updatedBy } = payload;
+      const current = (await s.get('naTargets', { type: 'json' })) || {};
+      const existing = current[quarterKey] || {};
+      if (cartonVolumeTarget === null || cartonVolumeTarget === undefined) {
+        const updated = { ...existing };
+        delete updated.cartonVolumeTarget;
+        current[quarterKey] = { ...updated, updatedBy, updatedAt: now };
+      } else {
+        current[quarterKey] = { ...existing, cartonVolumeTarget: Number(cartonVolumeTarget), updatedBy, updatedAt: now };
+      }
+      await s.setJSON('naTargets', current);
+      return json({ ok: true, naTargets: current });
     }
 
     return json({ error: 'Unknown action: ' + action }, 400);
