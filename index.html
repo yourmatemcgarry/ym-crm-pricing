@@ -341,6 +341,7 @@
   <button class="tab-btn" data-tab="bannergaps">Banner Gap Report</button>
   <button class="tab-btn" data-tab="activations">Activations</button>
   <button class="tab-btn" data-tab="targets">Set Targets</button>
+  <button class="tab-btn" data-tab="rsmzones">RSM Zones</button>
   <button class="tab-btn" data-tab="trends">Volume Trends</button>
   <button class="tab-btn" data-tab="colesww">Coles &amp; Woolworths</button>
   <button class="tab-btn" data-tab="totalvolume">Total Volume</button>
@@ -415,6 +416,7 @@
         <h2 style="margin:0;">Customer pricing <span class="muted" id="gridCount" style="font-weight:400;"></span></h2>
         <div class="rowflex no-print" style="gap:14px; align-items:center; flex-wrap:wrap;">
           <span class="hint" style="margin:0; max-width:420px;">Keg cells also carry a small <strong>wholesaler deal</strong> selector (10+1/8+1/6+1) below the direct deal — carton wholesaler deals (15+1 only) are set per-customer via the Bulk ▾ button.</span>
+          <button class="btn small secondary" onclick="exportCustomerPricingCSV()" title="Exports the customer list currently shown (respecting all filters above), including who has/hasn't had pricing &amp; deals updated.">Export customer list (CSV)</button>
         <div class="colpanel no-print">
           <button class="colpanel-btn" id="colToggleBtn" onclick="toggleColPanel()">Columns ▾</button>
           <div class="colpanel-menu" id="colPanelMenu">
@@ -819,6 +821,22 @@
     <div id="tg_calc"></div>
   </div>
 
+  <!-- ================= RSM ZONES ================= -->
+  <div class="tabpage" id="tab-rsmzones">
+    <div class="panel no-print">
+      <h2 style="margin:0;">RSM Zone Assignment <span class="muted" id="rz_count" style="font-weight:400;"></span></h2>
+      <div class="hint" style="margin-top:6px;">Every zone the RSM/customer data uses, with the RSM Ontap currently has on file for it. If Ontap hasn't caught up with a recent change yet, pick a different RSM below and save — it takes effect across the whole app immediately (the page will refresh). Overrides stay in place until you clear them here, even across future data refreshes.</div>
+      <div class="tablewrap" style="margin-top:10px;">
+        <table class="datatable">
+          <thead><tr>
+            <th>Zone</th><th class="num-cell">Outlets</th><th>Ontap RSM (baked)</th><th>Reassign to</th><th>Status</th><th class="no-print">Save</th>
+          </tr></thead>
+          <tbody id="rz_body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= VOLUME TRENDS ================= -->
   <div class="tabpage" id="tab-trends">
     <div class="panel no-print">
@@ -1049,7 +1067,12 @@
       <div class="rowflex" style="gap:14px; flex-wrap:wrap; align-items:flex-end; margin-top:10px;">
         <div class="fld" style="margin:0;"><label>Banner</label><select id="bg_banner"></select></div>
         <div class="fld" style="margin:0;"><label>RSM</label><select id="bg_rsm"><option value="">All RSMs</option></select></div>
-        <div class="fld" style="margin:0;"><label>Zone</label><select id="bg_zone"><option value="">All Zones</option></select></div>
+        <div class="fld" style="margin:0;"><label>Zone</label>
+          <div class="msel" id="bg_zone_msel">
+            <button type="button" class="msel-btn" id="bg_zone_btn">All zones ▾</button>
+            <div class="msel-menu" id="bg_zone_menu"></div>
+          </div>
+        </div>
       </div>
       <div class="hint" style="margin-top:8px;">Off-premise (bottleshop) customers only, grouped by their specific banner (Cellarbrations, Bottle-O, Liquor Legends, etc — not the broader banner group). Every core SKU a store doesn't stock is flagged, regardless of what peers do. Stores are sorted by SKU listings, most first. The current (in-progress) quarter looks back a rolling 13 weeks from the latest sales data; closed quarters use their exact dates.</div>
       <div class="fld" style="margin:10px 0 0;">
@@ -1355,6 +1378,14 @@ const outlets = Object.fromEntries(Object.entries(allOutlets).filter(([id, o]) =
 // superseded by a real record (only ever true after a fresh data refresh + redeploy, since this
 // embedded reference data doesn't change mid-session).
 const realOutletIds = new Set(Object.keys(CRM_DATA.outlets));
+// Pristine snapshot of each Sales Team outlet's ORIGINAL (Ontap-baked) RSM, captured once here at
+// load and never mutated afterwards. The RSM Zone Assignment override logic reads from THIS map,
+// not from outlets[id].rsm directly, so the "what does Ontap actually have on file" comparison on
+// the RSM Zones page stays correct even though this build's applyRsmZoneOverrides() can run more
+// than once per page load (initial load, then again on every periodic refreshPricingFromServer()
+// poll) against the same long-lived outlet objects.
+const originalOutletRsm = {};
+Object.values(outlets).forEach(o => { originalOutletRsm[o.id] = o.rsm; });
 const products = CRM_DATA.products;
 const groups = CRM_DATA.groups;
 const groupOrder = CRM_DATA.groupOrder;
@@ -1385,6 +1416,57 @@ let customerDeliveryDetails = {}; // keyed by outletId: {accessNotes, contactNam
 let targetCustomers = []; // [ {id, rsm, quarterKey, bucket, outletId, addedBy, addedAt, onboarded, onboardedBy, onboardedAt} ] — shared, the quarterly "who are we going after" list for kegs/cartons, per RSM
 let naDistributions = {}; // keyed by "quarterKey|ownerGroup|groupId": {count, updatedBy, updatedAt} — shared, manually-entered store-distribution counts (Coles & Woolworths tab)
 let vipContacts = []; // [ {id, name, company, role, email, phone, source, notes, updatedBy, updatedAt} ] — shared; server-seeded once from the Feb'26 customer list import, a normal live CRUD list from then on
+let rsmZoneOverrides = {}; // { [zone]: rsmName } — shared; lets the user immediately reassign which RSM owns a zone, without waiting for the next Ontap-driven data refresh
+let zoneBakedRsm = {}; // { [zone]: {counts:{rsmName:n}, dominant:rsmName} } — the ORIGINAL (pre-override) Ontap RSM assignment per zone, recomputed by applyRsmZoneOverrides() every time data loads, from the immutable originalOutletRsm snapshot above (never from outlets[id].rsm directly)
+let rsmRosterBaked = []; // sorted list of every RSM name currently known (from the baked outlet data, plus any override values already saved) — the options offered on the RSM Zones page's reassignment dropdown
+
+// Recomputes zoneBakedRsm/rsmRosterBaked from the pristine originalOutletRsm snapshot, then
+// applies any active rsmZoneOverrides on top of it — mutating outlets[id].rsm so every other page
+// in the app (Team Dashboard, Volume Trends, Set Targets, Banner Gap Report, Customer Explorer,
+// the Pricing Grid...) sees the override with no further changes needed. Safe to call more than
+// once (idempotent — always resets to override-or-original, never drifts), since unlike the
+// static/Cowork build this app can go a long time between full page reloads (periodic
+// refreshPricingFromServer() polls call this again every time).
+function applyRsmZoneOverrides() {
+  zoneBakedRsm = {};
+  Object.values(outlets).forEach(o => {
+    const rsm = originalOutletRsm[o.id];
+    if (!o.zone || !rsm) return;
+    const bucket = zoneBakedRsm[o.zone] || (zoneBakedRsm[o.zone] = { counts: {} });
+    bucket.counts[rsm] = (bucket.counts[rsm] || 0) + 1;
+  });
+  Object.keys(zoneBakedRsm).forEach(zone => {
+    const counts = zoneBakedRsm[zone].counts;
+    zoneBakedRsm[zone].dominant = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+  });
+  rsmRosterBaked = [...new Set([
+    ...Object.values(originalOutletRsm).filter(Boolean),
+    ...Object.values(rsmZoneOverrides),
+  ])].sort();
+  Object.values(outlets).forEach(o => {
+    const ov = rsmZoneOverrides[o.zone];
+    o.rsm = ov || originalOutletRsm[o.id] || o.rsm;
+  });
+}
+
+// Saves (or clears, if rsmValue is falsy/matches the baked value) an RSM Zone override to the
+// server. A zone's RSM touches dozens of otherwise-untouched pages across this app (Team
+// Dashboard, Volume Trends, Set Targets, Banner Gap Report, Customer Explorer, the Pricing
+// Grid...), and this build's existing reactive refresh (refreshPricingFromServer()) only
+// re-renders a partial set of them — so rather than extending that partial coverage, we do a full
+// reload once the save is confirmed, which re-runs onInitialDataLoaded() and applies the override
+// (or its absence) consistently everywhere in one pass.
+function saveRsmZoneOverride(zone, rsmValue) {
+  const clean = (rsmValue || '').trim();
+  if (clean) rsmZoneOverrides[zone] = clean; else delete rsmZoneOverrides[zone];
+  callServer('saveRsmZoneOverride', [zone, clean, currentUserEmail], () => {
+    toast(clean ? `Zone "${zone}" reassigned to ${clean}.` : `Zone "${zone}" reverted to the Ontap-assigned RSM.`);
+    setTimeout(() => { window.location.reload(); }, 700);
+  }, () => {
+    // revert the optimistic local change on failure so the UI doesn't lie about what was saved
+    if (clean) delete rsmZoneOverrides[zone]; else { /* nothing to revert — clearing failed, override map already lacked this zone */ }
+  });
+}
 // outletList mirrors Object.values(outlets) but is a single mutable array shared by every
 // autocomplete picker in the app — pushing a newly-added manual customer onto this array makes
 // them searchable everywhere immediately, without needing to re-initialise every picker.
@@ -1640,6 +1722,7 @@ function buildServerPayload(fnName, args) {
     case 'saveNaDistribution': return { quarterKey: args[0], ownerGroup: args[1], groupId: args[2], count: args[3], updatedBy: args[4] };
     case 'saveVipContact':    return { contact: args[0] };
     case 'deleteVipContact':  return { id: args[0] };
+    case 'saveRsmZoneOverride': return { zone: args[0], rsm: args[1], updatedBy: args[2] };
     default: return {};
   }
 }
@@ -1786,6 +1869,7 @@ function initMultiSelect(prefix, values, label, onChange, defaultSelected) {
     clear: () => { selected.clear(); renderMenu(); updateBtnLabel(); }
   };
 }
+
 // ===================== PRICING GRID (main page) =====================
 let gridPage = 1;
 const GRID_PAGE_SIZE = 25;
@@ -1865,6 +1949,32 @@ function clearGridFilters() {
   gridPage = 1;
   renderGrid();
   renderGridHeader();
+}
+
+// Exports the customer list currently showing on the Pricing Grid (respecting every active
+// filter — search, RSM, zone, customer type, state, wholesaler, active window, etc) as a CSV,
+// with a "Pricing & deal updated" column so gaps in coverage are easy to spot/sort/filter in a
+// spreadsheet. Reuses getGridFilteredOutlets() rather than re-implementing the filter logic, so
+// this always matches exactly what's on screen.
+function exportCustomerPricingCSV() {
+  const list = getGridFilteredOutlets();
+  if (!list.length) { toast('No customers match the current filters.'); return; }
+  const header = ['Customer', 'Suburb', 'State', 'Zone', 'RSM', 'Customer type', 'Wholesaler', 'Email', 'Pricing & deal updated', 'Met with customer', 'Last sale date'];
+  const lines = [header.join(',')];
+  list.forEach(o => {
+    const f = flagsFor(o.id);
+    const os = outletSummary[o.id] || {};
+    const contact = outletContactInfo(o.id);
+    const row = [
+      o.name || '', o.suburb || '', o.state || '', o.zone || '', o.rsm || '', o.custType || '',
+      os.lastWhouse || '', contact.email || '',
+      f.pricingUpdated ? 'Yes' : 'No', f.metWithCustomer ? 'Yes' : 'No',
+      os.lastDate ? fmtDate(os.lastDate) : '',
+    ];
+    lines.push(row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','));
+  });
+  const filename = `YMT_Customer_Pricing_List_${list.length}_customers.csv`;
+  downloadFile(filename, lines.join('\n'), 'text/csv');
 }
 
 function enabledGroupOrder() { return groupOrder.filter(gid => isGroupEnabled(gid)); }
@@ -2197,6 +2307,7 @@ function setColumns(mode) {
   renderGridHeader();
   renderGrid();
 }
+
 // ===================== PRODUCT LIST PRICES (per SKU group) =====================
 function dealPriceRefHtml(g, listPrice) {
   if (listPrice === null || listPrice === undefined || isNaN(listPrice)) {
@@ -2526,6 +2637,7 @@ function renderActiveTempDealsPage() {
     </tr>`;
   }).join('');
 }
+
 // ===================== CUSTOMER SUMMARY =====================
 let currentSummaryOutlet = null;
 function renderCustomerSummaryPage(outletId) {
@@ -3537,6 +3649,7 @@ let bgQuarter = { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q }; // Banner Gap Re
 let bgHiddenSkus = new Set();     // core carton SKU groupIds hidden from the matrix by the on-screen toggle
 let bgCompareResults = [];        // last "has A but not B" comparison run, kept around for CSV/PDF export
 let bgCompareLabels = null;       // { hasLabel, missLabel, banner, rsm } for the last comparison run
+let bgZoneMsel = null;            // multi-select for Banner Gap Report "Zone" filter
 // The two "by RSM" comparison charts at the top of the Team Dashboard are restricted to the
 // current active reps only, regardless of who else appears in the raw sales data (e.g. former
 // reps, house accounts) — update this list if the sales team roster changes.
@@ -7125,6 +7238,39 @@ function renderVipContactsList() {
   </tr>`).join('');
 }
 
+// ===================== RSM ZONES =====================
+// Lets the user override which RSM owns a given zone, immediately — see applyRsmZoneOverrides()
+// (netlify_part1.js) for how the override actually takes effect (it mutates outlets[id].rsm
+// directly at load time, so every page in the app sees it with no further work).
+function renderRsmZonesPage() {
+  const zones = Object.keys(zoneBakedRsm).sort();
+  document.getElementById('rz_count').textContent = `(${zones.length} zones)`;
+  const body = document.getElementById('rz_body');
+  if (!zones.length) { body.innerHTML = `<tr><td colspan="6"><div class="empty">No zone data found.</div></td></tr>`; return; }
+  body.innerHTML = zones.map((zone, i) => {
+    const baked = zoneBakedRsm[zone];
+    const countEntries = Object.entries(baked.counts).sort((a, b) => b[1] - a[1]);
+    const isMixed = countEntries.length > 1;
+    const bakedLabel = countEntries.map(([rsm, n]) => `${escapeHtml(rsm)} (${n})`).join(', ');
+    const outletCount = countEntries.reduce((s, [, n]) => s + n, 0);
+    const override = rsmZoneOverrides[zone] || '';
+    const options = `<option value="">— Use Ontap (${escapeHtml(baked.dominant)}) —</option>` +
+      rsmRosterBaked.map(r => `<option value="${escapeHtml(r)}" ${r === override ? 'selected' : ''}>${escapeHtml(r)}</option>`).join('');
+    return `<tr>
+      <td>${escapeHtml(zone)}</td>
+      <td class="num-cell">${outletCount}</td>
+      <td>${bakedLabel}${isMixed ? ' <span class="badge amber" title="Ontap has more than one RSM on record across this zone\'s stores">mixed</span>' : ''}</td>
+      <td><select id="rz_sel_${i}" data-zone="${escapeHtml(zone)}">${options}</select></td>
+      <td>${override ? `<span class="badge blue">Override: ${escapeHtml(override)}</span>` : `<span class="badge grey">Following Ontap</span>`}</td>
+      <td class="no-print"><button class="btn small secondary" onclick="saveRsmZoneOverrideFromRow(${i})">Save</button></td>
+    </tr>`;
+  }).join('');
+}
+function saveRsmZoneOverrideFromRow(i) {
+  const sel = document.getElementById('rz_sel_' + i);
+  saveRsmZoneOverride(sel.dataset.zone, sel.value);
+}
+
 // ===================== Banner Gap Report =====================
 // "Banner" here means the outlet's specific chain/banner (Cellarbrations, Bottle-O, Liquor
 // Legends, etc — the o.banner field), not the broader o.majorGroup field the rest of the app
@@ -7145,7 +7291,8 @@ function exportBgPDF() { window.print(); }
 // core SKUs are expected everywhere by definition.
 const BG_GAP_THRESHOLD = 0.25;
 
-function bannerGapMatrix(banner, rsmFilter, fy, q, mode, allowedGids, zoneFilter) {
+function bannerGapMatrix(banner, rsmFilter, fy, q, mode, allowedGids, zoneFilters) {
+  zoneFilters = zoneFilters || [];
   mode = mode === 'core' ? 'core' : 'all';
   const isCurrentQ = (fy === PERF_CURRENT_Q.fy && q === PERF_CURRENT_Q.q);
   let startIdx, endIdx;
@@ -7163,7 +7310,7 @@ function bannerGapMatrix(banner, rsmFilter, fy, q, mode, allowedGids, zoneFilter
   }
 
   const rowOutlets = Object.values(outlets).filter(o =>
-    o.banner === banner && isBottleshop(o) && !o.excluded && (!rsmFilter || o.rsm === rsmFilter) && (!zoneFilter || o.zone === zoneFilter)
+    o.banner === banner && isBottleshop(o) && !o.excluded && (!rsmFilter || o.rsm === rsmFilter) && (!zoneFilters.length || zoneFilters.includes(o.zone))
   );
   const rowIds = new Set(rowOutlets.map(o => o.id));
 
@@ -7277,10 +7424,9 @@ function bgGapSeverity(pct, mode) {
 function renderBannerGapsPage() {
   const bannerSel = document.getElementById('bg_banner');
   const rsmSel = document.getElementById('bg_rsm');
-  const zoneSel = document.getElementById('bg_zone');
   const banner = bannerSel.value;
   const rsmFilter = rsmSel.value;
-  const zoneFilter = zoneSel ? zoneSel.value : '';
+  const zoneFilters = bgZoneMsel ? bgZoneMsel.getValues() : [];
   const mode = 'core'; // report is core-SKU-only — bannerGapMatrix keeps dual-mode support internally
 
   document.getElementById('bg_qlabel').textContent = quarterLabelOf(bgQuarter.fy, bgQuarter.q);
@@ -7293,14 +7439,14 @@ function renderBannerGapsPage() {
 
   const coreGids = coreCartonGroupIds();
   const allowedGids = new Set(coreGids.filter(gid => !bgHiddenSkus.has(gid)));
-  const data = bannerGapMatrix(banner, rsmFilter, bgQuarter.fy, bgQuarter.q, mode, allowedGids, zoneFilter);
+  const data = bannerGapMatrix(banner, rsmFilter, bgQuarter.fy, bgQuarter.q, mode, allowedGids, zoneFilters);
   const qLabel = quarterLabelOf(bgQuarter.fy, bgQuarter.q);
   const windowLabel = data.isCurrentQ
     ? `rolling 13 weeks to ${escapeHtml(dayLabel(data.endIdx))}`
     : escapeHtml(qLabel);
 
   document.getElementById('bg_printSummary').innerHTML =
-    `<strong>Banner Gap Report</strong> — ${escapeHtml(banner)} · ${rsmFilter ? escapeHtml(rsmFilter) : 'All RSMs'}${zoneFilter ? ' · ' + escapeHtml(zoneFilter) : ''} · Core SKU distribution · ${windowLabel}`;
+    `<strong>Banner Gap Report</strong> — ${escapeHtml(banner)} · ${rsmFilter ? escapeHtml(rsmFilter) : 'All RSMs'}${zoneFilters.length ? ' · ' + escapeHtml(zoneFilters.join(', ')) : ''} · Core SKU distribution · ${windowLabel}`;
 
   if (!data.rows.length) {
     document.getElementById('bg_detail').innerHTML = `<div class="panel"><div class="empty">No off-premise ${escapeHtml(banner)} customers found for this filter.</div></div>`;
@@ -7393,8 +7539,7 @@ function bgRunSkuCompare() {
   const missGid = document.getElementById('bg_cmpMiss').value;
   const banner = document.getElementById('bg_banner').value;
   const rsmFilter = document.getElementById('bg_rsm').value;
-  const zoneSelEl = document.getElementById('bg_zone');
-  const zoneFilter = zoneSelEl ? zoneSelEl.value : '';
+  const zoneFilters = bgZoneMsel ? bgZoneMsel.getValues() : [];
   bgCompareResults = [];
   bgCompareLabels = null;
 
@@ -7404,7 +7549,7 @@ function bgRunSkuCompare() {
 
   // Comparisons run against the full core SKU set, regardless of the matrix's on-screen SKU
   // visibility toggle — this tool is about real purchasing behaviour, not what's currently displayed.
-  const data = bannerGapMatrix(banner, rsmFilter, bgQuarter.fy, bgQuarter.q, 'core', null, zoneFilter);
+  const data = bannerGapMatrix(banner, rsmFilter, bgQuarter.fy, bgQuarter.q, 'core', null, zoneFilters);
   const hasG = groups[hasGid], missG = groups[missGid];
   const rows = data.rows
     .filter(r => data.activeSet.has(r.outlet.id + '|' + hasGid) && !data.activeSet.has(r.outlet.id + '|' + missGid))
@@ -7412,7 +7557,7 @@ function bgRunSkuCompare() {
     .sort((a, b) => b.hasVolume - a.hasVolume || a.outlet.name.localeCompare(b.outlet.name));
 
   bgCompareResults = rows;
-  bgCompareLabels = { hasLabel: hasG.label, missLabel: missG.label, banner, rsm: rsmFilter, zone: zoneFilter };
+  bgCompareLabels = { hasLabel: hasG.label, missLabel: missG.label, banner, rsm: rsmFilter, zone: zoneFilters.join(', ') };
 
   if (!rows.length) {
     resultsEl.innerHTML = `<div class="empty">No ${escapeHtml(banner)} bottleshops stock ${escapeHtml(hasG.label)} without also stocking ${escapeHtml(missG.label)}.</div>`;
@@ -7421,7 +7566,7 @@ function bgRunSkuCompare() {
 
   resultsEl.innerHTML = `<div class="panel">
     <h3>Have ${escapeHtml(hasG.label)} but not ${escapeHtml(missG.label)} <span class="badge grey">${fmtNum(rows.length)} store${rows.length===1?'':'s'}</span></h3>
-    <div class="hint" style="margin-bottom:8px;">${escapeHtml(banner)}${rsmFilter?' · '+escapeHtml(rsmFilter):''}${zoneFilter?' · '+escapeHtml(zoneFilter):''} · ${data.isCurrentQ ? `rolling 13 weeks to ${escapeHtml(dayLabel(data.endIdx))}` : escapeHtml(quarterLabelOf(bgQuarter.fy, bgQuarter.q))}</div>
+    <div class="hint" style="margin-bottom:8px;">${escapeHtml(banner)}${rsmFilter?' · '+escapeHtml(rsmFilter):''}${zoneFilters.length?' · '+escapeHtml(zoneFilters.join(', ')):''} · ${data.isCurrentQ ? `rolling 13 weeks to ${escapeHtml(dayLabel(data.endIdx))}` : escapeHtml(quarterLabelOf(bgQuarter.fy, bgQuarter.q))}</div>
     <div class="tablewrap">
       <table class="datatable">
         <thead><tr><th>Customer</th><th>Suburb</th><th>RSM</th><th class="num-cell">${escapeHtml(hasG.label)} volume</th></tr></thead>
@@ -7600,6 +7745,9 @@ function renderEverything() {
   // Set Targets page
   renderTargetsPage();
 
+  // RSM Zones page
+  renderRsmZonesPage();
+
   // Volume Trends page
   populateSelect('vt_rsm', rsmVals);
   vtTypeMsel = initMultiSelect('vt_custType', typeVals, 'types', renderVolumeTrendsPage);
@@ -7668,8 +7816,7 @@ function renderEverything() {
     bgBannerSel.addEventListener('change', renderBannerGapsPage);
     populateSelect('bg_rsm', rsmVals);
     document.getElementById('bg_rsm').addEventListener('change', renderBannerGapsPage);
-    populateSelect('bg_zone', zoneVals);
-    document.getElementById('bg_zone').addEventListener('change', renderBannerGapsPage);
+    bgZoneMsel = initMultiSelect('bg_zone', zoneVals, 'zones', renderBannerGapsPage);
     renderBgSkuToggles();
     renderBgCompareSkuSelects();
     renderBannerGapsPage();
@@ -7768,6 +7915,8 @@ function onInitialDataLoaded(data) {
   targetCustomers = data.targetCustomers || [];
   naDistributions = data.naDistributions || {};
   vipContacts = data.vipContacts || [];
+  rsmZoneOverrides = data.rsmZoneOverrides || {};
+  applyRsmZoneOverrides();
   renderEverything();
 }
 
@@ -7805,6 +7954,8 @@ function refreshPricingFromServer() {
       targetCustomers = data.targetCustomers || [];
       naDistributions = data.naDistributions || {};
   vipContacts = data.vipContacts || [];
+      rsmZoneOverrides = data.rsmZoneOverrides || {};
+      applyRsmZoneOverrides();
       // Pick up any customer a colleague added since our last poll — same fill-gaps-only merge
       // as the initial load, so a real record (should one now exist) is never overwritten.
       Object.keys(manualOutlets).forEach(oid => {
@@ -7825,6 +7976,7 @@ function refreshPricingFromServer() {
       renderDeliveryRunsPage();
       renderDeliveryReportsPage();
       renderManualCustomersPanel();
+      renderRsmZonesPage();
     })
     .catch(err => console.error('refresh failed', err));
 }
