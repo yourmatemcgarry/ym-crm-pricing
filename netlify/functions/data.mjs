@@ -45,7 +45,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -63,6 +63,7 @@ async function readAll(s) {
     s.get('customerDeliveryDetails', { type: 'json' }),
     s.get('targetCustomers', { type: 'json' }),
     s.get('naDistributions', { type: 'json' }),
+    s.get('rsmZoneOverrides', { type: 'json' }),
   ]);
   // vipContacts is seeded exactly once — the first time anyone loads the app after this feature
   // ships, the blob won't exist yet (null, not just empty), so we seed it from VIP_CONTACTS_SEED
@@ -95,6 +96,7 @@ async function readAll(s) {
     targetCustomers: targetCustomers || [],
     naDistributions: naDistributions || {},
     vipContacts,
+    rsmZoneOverrides: rsmZoneOverrides || {},
   };
 }
 
@@ -530,6 +532,20 @@ export default async (req) => {
       const next = current.filter((c) => c.id !== id);
       await s.setJSON('vipContacts', next);
       return json({ ok: true, vipContacts: next });
+    }
+
+    if (action === 'saveRsmZoneOverride') {
+      // Lets the user immediately reassign which RSM a zone belongs to, ahead of the periodic
+      // Ontap-driven data pipeline refresh — { [zone]: rsmName }, keyed by zone. Saving an empty/
+      // blank rsm value clears the override for that zone (reverting it to whatever Ontap has on
+      // file, once the app applies this against the baked outlet data — see applyRsmZoneOverrides()
+      // in netlify_part1.js).
+      const { zone, rsm } = payload;
+      const current = (await s.get('rsmZoneOverrides', { type: 'json' })) || {};
+      const clean = (rsm || '').trim();
+      if (clean) current[zone] = clean; else delete current[zone];
+      await s.setJSON('rsmZoneOverrides', current);
+      return json({ ok: true, rsmZoneOverrides: current });
     }
 
     return json({ error: 'Unknown action: ' + action }, 400);
