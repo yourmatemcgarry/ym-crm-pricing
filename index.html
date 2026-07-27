@@ -65,10 +65,6 @@
   .listing-trio .lt-lbl { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.3px; margin-top:2px; }
   .bar-chart { display:flex; align-items:flex-end; gap:6px; height:150px; padding-top:10px; }
   .bar-chart .bar-col { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
-  /* Multi-series columns (2yrs ago/last year/actual/target stacked side by side) get a fixed
-     min-width instead of shrinking to fit — otherwise the value labels overlap and run into each
-     other. The chart is already wrapped in a horizontal-scroll container, so widening is safe. */
-  .bar-chart .bar-col.multi { flex:0 0 auto; min-width:150px; }
   .bar-chart .bar-val { font-size:10px; color:var(--muted); margin-bottom:3px; white-space:nowrap; }
   .bar-chart .bar-sub { font-size:9px; color:var(--muted); opacity:.75; margin-bottom:3px; white-space:nowrap; }
   .bar-chart .bar-rect { width:100%; max-width:34px; background:var(--blue); border-radius:3px 3px 0 0; min-height:2px; }
@@ -76,22 +72,36 @@
   .bar-chart .bar-rect.cartons { background:var(--pack); }
   .bar-chart .bar-wk { font-size:9.5px; color:var(--muted); margin-top:5px; text-align:center; white-space:nowrap; }
   .bar-track { position:relative; width:100%; height:100px; display:flex; align-items:flex-end; justify-content:center; }
-  .bar-target-line { position:absolute; left:-3px; right:-3px; height:0; border-top:2px dashed var(--navy); }
-  .bar-legend { display:flex; gap:14px; align-items:center; font-size:11px; color:var(--muted); margin-bottom:6px; }
-  .bar-legend .bl-swatch { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
-  .bar-legend .bl-line { display:inline-block; width:12px; height:0; border-top:2px dashed var(--navy); margin-right:4px; vertical-align:3px; }
-  .bar-legend .bl-swatch.target-swatch { opacity:.42; box-shadow: inset 0 0 0 1px var(--navy); }
-  .bar-pair { display:flex; align-items:flex-end; justify-content:center; gap:4px; width:100%; height:100%; }
-  .bar-subcol { display:flex; flex-direction:column; align-items:center; flex:1 1 34px; min-width:34px; height:100%; justify-content:flex-end; }
-  .bar-chart .bar-rect.paired { max-width:18px; }
-  .bar-chart .bar-rect.target-bar { opacity:.42; box-shadow: inset 0 0 0 2px var(--navy); }
-  .bar-chart .bar-val-target { color:var(--navy); }
-  .bar-chart .bar-rect.ly-bar { opacity:.55; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
-  .bar-chart .bar-rect.ly2-bar { opacity:.28; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
-  .bar-chart .bar-val-ly { color:var(--muted); opacity:.9; }
-  .bar-chart .bar-val-ly2 { color:var(--muted); opacity:.7; }
-  .bar-legend .bl-swatch.ly-swatch { opacity:.55; }
-  .bar-legend .bl-swatch.ly2-swatch { opacity:.28; }
+  .bar-legend { display:flex; gap:14px; align-items:center; font-size:11px; color:var(--muted); margin-bottom:6px; flex-wrap:wrap; }
+  .bar-legend .bl-swatch { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px; background:var(--blue); }
+  /* Legend line swatches for the actual / last-year / 2-years-ago line series — the actual swatch's
+     colour is set inline per chart (kegs/cartons/blue) to match its line; ly/ly2 use a fixed
+     dashed/dotted neutral style so they read consistently across every chart. */
+  .bl-line { display:inline-block; width:14px; height:0; margin-right:4px; vertical-align:4px; }
+  .bl-line.lc-actual { border-top:2.5px solid var(--blue); }
+  .bl-line.lc-ly { border-top:2px dashed rgba(20,24,34,.55); }
+  .bl-line.lc-ly2 { border-top:2px dotted rgba(20,24,34,.32); }
+  /* Hybrid bar+line chart: target renders as a bar per period (.lc-bars/.lc-cell/.bar-rect), while
+     actual/last-year/2-years-ago render as SVG line series drawn on top in the same coordinate
+     space. The SVG uses viewBox="0 0 N 100" with preserveAspectRatio="none" so its 0..N horizontal
+     units line up exactly with the N equal-width flex .lc-cell columns beneath it, whatever the
+     chart's actual rendered pixel width turns out to be. */
+  .bar-chart.line-chart { display:block; padding-top:0; }
+  .lc-plot { position:relative; height:100px; }
+  .lc-bars { position:absolute; inset:0; display:flex; }
+  .lc-bars .lc-cell { flex:1; height:100%; display:flex; align-items:flex-end; justify-content:center; }
+  .lc-bars .lc-cell .bar-rect { width:55%; max-width:30px; }
+  .lc-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  .lc-line { fill:none; stroke-width:2px; }
+  .lc-line.lc-actual { stroke-width:2.5px; }
+  .lc-line.lc-ly { stroke:rgba(20,24,34,.55); stroke-dasharray:5,3; }
+  .lc-line.lc-ly2 { stroke:rgba(20,24,34,.32); stroke-dasharray:2,2; }
+  .lc-dot { position:absolute; width:6px; height:6px; border-radius:50%; pointer-events:auto; transform:translate(-50%, 50%); }
+  .lc-dot.lc-actual { width:7px; height:7px; }
+  .lc-dot.lc-ly { background:rgba(20,24,34,.55); }
+  .lc-dot.lc-ly2 { background:rgba(20,24,34,.32); }
+  .lc-monthrow { display:flex; margin-top:5px; }
+  .lc-monthrow .lc-cell { flex:1; font-size:9.5px; color:var(--muted); text-align:center; white-space:nowrap; }
   .delivery-details-box { background:var(--gold-bg,#fbf3e3); border:1px solid var(--gold); border-radius:6px; padding:6px 9px; margin-top:6px; }
   .delivery-details-box .ddb-title { font-size:9.5px; text-transform:uppercase; letter-spacing:.3px; color:var(--gold-dark); font-weight:700; margin-bottom:2px; }
   .delivery-details-box .ddb-line { font-size:11.5px; color:var(--text); margin-top:2px; }
@@ -5146,6 +5156,24 @@ function vtMonthsBack(numMonths, endY, endM) {
   }
   return out.reverse();
 }
+// Extends a trailing {y,m} month list so it always includes every month of "today"'s current FY
+// quarter, even the ones that haven't happened yet — targets are set per quarter, so right at the
+// start of a quarter (when most of its months are still in the future) you want to see the whole
+// quarter's target immediately, not wait for those months to actually pass before they appear on
+// the chart. No-op once the trailing window already reaches the end of the current quarter.
+function vtExtendToFullCurrentQuarter(monthList) {
+  const { fy, q } = fyQuarterOf(PERF_TODAY);
+  const [qStart] = quarterBoundsOf(fy, q);
+  const qStartY = qStart.getFullYear(), qStartM = qStart.getMonth();
+  const lastKey = monthList.length ? monthList[monthList.length-1].y * 12 + monthList[monthList.length-1].m : -Infinity;
+  const out = monthList.slice();
+  for (let i = 0; i < 3; i++) {
+    let y = qStartY, m = qStartM + i;
+    while (m > 11) { m -= 12; y++; }
+    if (y * 12 + m > lastKey) out.push({ y, m });
+  }
+  return out;
+}
 function vtMonthLabelOf(y, m) {
   return new Date(y, m, 1).toLocaleDateString('en-AU', { month: 'short', year: '2-digit' });
 }
@@ -5178,52 +5206,110 @@ function vtGroupFilter() {
 // individual missing data point within an otherwise-present series still renders as "—". The
 // scale accounts for every visible series so no bar is ever clipped off the top of the chart.
 const VT_SERIES_META = {
-  ly2:    { label: '2 years ago',   swatchClass: 'ly2-swatch',    barClass: 'ly2-bar',    valClass: 'bar-val-ly2' },
-  ly:     { label: 'Last year',     swatchClass: 'ly-swatch',     barClass: 'ly-bar',     valClass: 'bar-val-ly' },
-  actual: { label: 'Actual',        swatchClass: '',              barClass: '',           valClass: '' },
-  target: { label: 'Target',        swatchClass: 'target-swatch', barClass: 'target-bar', valClass: 'bar-val-target' },
+  ly2:    { label: '2 years ago', lineClass: 'lc-ly2' },
+  ly:     { label: 'Last year',   lineClass: 'lc-ly' },
+  actual: { label: 'Actual',      lineClass: 'lc-actual' },
+  target: { label: 'Target' },
 };
-// Bars within each period's group run earliest actual data to most recent — 2 years ago, last
-// year, then this period's own actual — with the target pinned to the far right, since it's a
-// goal rather than a point in time and reads more naturally as the thing everything else is
-// being measured against, not another step along the timeline.
+// Target — a single goal figure per period, when set — renders as a bar, the one series that
+// reads naturally as a solid column. Actual, last year, and 2 years ago are all real historical
+// trends, so they render as overlaid lines instead (a standard combo-chart pattern for "trend vs
+// goal"), sharing one 100px-tall plot row per chart via an absolutely-positioned SVG whose viewBox
+// (0..N periods wide, 0..100 tall) is stretched (preserveAspectRatio="none") to exactly match the
+// N equal-width bar columns beneath it, so a line point at period i sits dead-center over that
+// period's bar. This replaced an earlier "bullet graph" layout (reference lines drawn across each
+// period's own bar) and, before that, a grouped-bar layout (up to 4 full bars per period) — lines
+// scale to a long trailing window far better than either, without needing horizontal scrolling.
+// Per-series figures are on hover only (the target bar's tooltip, and each line point's own small
+// marker dot) to keep the chart itself uncluttered. The legend lists series earliest-to-most-
+// recent with target last, since it's a goal rather than a point in time and reads more naturally
+// as the thing everything else is measured against.
 function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries) {
   const activeExtra = ['ly2', 'ly', 'target'].filter(k => extraSeries && extraSeries[k] && extraSeries[k].some(v => v != null));
-  const colKeys = activeExtra.filter(k => k !== 'target').concat(['actual']).concat(activeExtra.includes('target') ? ['target'] : []);
   const fmt = v => decimals != null ? v.toFixed(decimals) : fmtNum(v);
+  const n = values.length;
+
+  if (!activeExtra.length) {
+    // No comparison series at all (e.g. Delivery Reports' weight/kegs-collected charts) — the
+    // original single-bar style, unchanged.
+    const max = Math.max(1, ...values);
+    return `<div class="bar-chart" style="height:150px;">
+      ${values.map((v,i) => `<div class="bar-col" title="${labels[i]}: ${fmt(v)}${suffix||''}">
+        <div class="bar-val">${fmt(v)}${suffix||''}</div>
+        <div class="bar-track"><div class="bar-rect ${cssClass}" style="height:${Math.max(2, Math.round((v/max)*100))}px;"></div></div>
+        <div class="bar-wk">${labels[i]}</div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  const lineKeys = ['ly2', 'ly', 'actual'].filter(k => k === 'actual' || activeExtra.includes(k));
+  const colKeys = lineKeys.concat(activeExtra.includes('target') ? ['target'] : []);
+  const seriesVals = { actual: values, ly: extraSeries.ly || null, ly2: extraSeries.ly2 || null, target: extraSeries.target || null };
   const scaleVals = values.concat(...activeExtra.map(k => extraSeries[k].filter(v => v != null)));
   const max = Math.max(1, ...scaleVals);
-  const swatchStyle = `background:var(${cssClass==='kegs'?'--keg':cssClass==='cartons'?'--pack':'--blue'});`;
-  const legend = activeExtra.length
-    ? `<div class="bar-legend">${colKeys.map(k => `<span><span class="bl-swatch ${VT_SERIES_META[k].swatchClass}" style="${swatchStyle}"></span>${VT_SERIES_META[k].label}</span>`).join('')}</div>`
-    : '';
-  return `${legend}<div class="bar-chart" style="height:150px;">
-    ${values.map((v,i) => {
-      let titleExtra = '';
-      const subcols = colKeys.map(k => {
-        const t = k === 'actual' ? v : extraSeries[k][i];
-        const meta = VT_SERIES_META[k];
-        const tH = (t != null) ? Math.max(2, Math.round((t/max)*100)) : 0;
-        if (k !== 'actual') titleExtra += t != null ? ` · ${meta.label.toLowerCase()} ${fmt(t)}${suffix||''}` : ` · no ${meta.label.toLowerCase()} data`;
-        const rectClass = ['bar-rect', cssClass, colKeys.length>1?'paired':'', meta.barClass].filter(Boolean).join(' ');
-        const valClass = ['bar-val', meta.valClass].filter(Boolean).join(' ');
-        return `<div class="bar-subcol">
-          <div class="${valClass}">${t!=null?fmt(t):'—'}</div>
-          <div class="bar-track"><div class="${rectClass}" style="height:${t!=null?tH:0}px;"></div></div>
-        </div>`;
-      });
-      // "multi" gives the column a fixed min-width instead of shrinking to fit — with up to 4
-      // value labels stacked side by side (2yrs ago/last year/actual/target), letting the column
-      // shrink below its content width is what was causing the labels to overlap and run into
-      // each other; the chart is already wrapped in a horizontal-scroll container (veeScrollChart)
-      // so there's no downside to letting multi-series columns claim the width they need.
-      return `<div class="bar-col${colKeys.length>1?' multi':''}" title="${labels[i]}: ${fmt(v)}${suffix||''}${titleExtra}">
-        <div class="bar-pair">
-          ${subcols.join('')}
-        </div>
-        <div class="bar-wk">${labels[i]}</div>
-      </div>`;
-    }).join('')}
+  const lineColor = `var(${cssClass==='kegs'?'--keg':cssClass==='cartons'?'--pack':'--blue'})`;
+  const heightPx = v => Math.max(0, Math.min(100, Math.round((v/max)*100)));
+
+  const legend = `<div class="bar-legend">${colKeys.map(k => {
+    const meta = VT_SERIES_META[k];
+    const swatch = k === 'target'
+      ? `<span class="bl-swatch" style="background:${lineColor};"></span>`
+      : `<span class="bl-line ${meta.lineClass}" style="${k==='actual'?('border-top-color:'+lineColor+';'):''}"></span>`;
+    return `<span>${swatch}${meta.label}</span>`;
+  }).join('')}</div>`;
+
+  const barsHtml = values.map((v, i) => {
+    const t = seriesVals.target ? seriesVals.target[i] : null;
+    const titleParts = [`${labels[i]}: actual ${fmt(v)}${suffix||''}`];
+    if (t != null) titleParts.push('target ' + fmt(t) + (suffix||''));
+    if (seriesVals.ly && seriesVals.ly[i] != null) titleParts.push('last year ' + fmt(seriesVals.ly[i]) + (suffix||''));
+    if (seriesVals.ly2 && seriesVals.ly2[i] != null) titleParts.push('2 years ago ' + fmt(seriesVals.ly2[i]) + (suffix||''));
+    return `<div class="lc-cell" title="${titleParts.join(' · ')}">${t != null ? `<div class="bar-rect ${cssClass}" style="height:${heightPx(t)}px;" data-value="${t}"></div>` : ''}</div>`;
+  }).join('');
+
+  // Splits a series into contiguous non-null runs (each its own <polyline>) so a gap in the data —
+  // e.g. 2-years-ago history that doesn't exist yet for the newest periods — breaks the line rather
+  // than drawing a misleading straight segment across the missing point.
+  function segmentsFor(arr) {
+    const segments = [];
+    let current = [];
+    arr.forEach((v, i) => {
+      if (v == null) { if (current.length > 1) segments.push(current); current = []; return; }
+      current.push([i + 0.5, 100 - heightPx(v)]);
+    });
+    if (current.length > 1) segments.push(current);
+    return segments;
+  }
+  const svgLines = lineKeys.map(k => {
+    const arr = seriesVals[k];
+    if (!arr) return '';
+    const style = k === 'actual' ? ` style="stroke:${lineColor};"` : '';
+    return segmentsFor(arr).map(seg =>
+      `<polyline class="lc-line ${VT_SERIES_META[k].lineClass}" vector-effect="non-scaling-stroke"${style} points="${seg.map(([x,y]) => x.toFixed(3)+','+y.toFixed(3)).join(' ')}"/>`
+    ).join('');
+  }).join('');
+
+  const dotsHtml = lineKeys.map(k => {
+    const arr = seriesVals[k];
+    if (!arr) return '';
+    const meta = VT_SERIES_META[k];
+    return arr.map((v, i) => {
+      if (v == null) return '';
+      const leftPct = ((i + 0.5) / n * 100).toFixed(3);
+      const bg = k === 'actual' ? `background:${lineColor};` : '';
+      return `<div class="lc-dot ${meta.lineClass}" data-value="${v}" style="left:${leftPct}%; bottom:${heightPx(v)}px; ${bg}" title="${meta.label}: ${fmt(v)}${suffix||''}"></div>`;
+    }).join('');
+  }).join('');
+
+  const monthLabelsHtml = labels.map(l => `<div class="lc-cell">${l}</div>`).join('');
+
+  return `${legend}<div class="bar-chart line-chart" style="height:150px;">
+    <div class="lc-plot">
+      <div class="lc-bars">${barsHtml}</div>
+      <svg class="lc-svg" viewBox="0 0 ${n} 100" preserveAspectRatio="none">${svgLines}</svg>
+      ${dotsHtml}
+    </div>
+    <div class="lc-monthrow">${monthLabelsHtml}</div>
   </div>`;
 }
 // Resolves the target figures to overlay on Volume Trends — same RSM the page is filtered to,
@@ -5238,13 +5324,16 @@ function renderVolumeTrendsPage() {
   const groupFilterFn = vtGroupFilter();
   const rsmList = uniqueVals('rsm', outlets);
 
-  // Kegs — monthly, a tight 12-month trailing window ending at the current month. Targets are
-  // set per FINANCIAL QUARTER, so each quarter's target needs splitting across its 3 months —
-  // rather than a flat one-third (which reads as "off target" every single month even when the
-  // quarter as a whole is on track, since keg volume is naturally seasonal month to month), each
-  // month's share is weighted by last year's same-month actuals for this same filter set, so the
-  // target line seasons the way keg sales actually do.
-  const kegMonths = vtMonthsBack(12, PERF_TODAY.getFullYear(), PERF_TODAY.getMonth());
+  // Kegs — monthly, a 12-month trailing window ending at the current month, extended to always
+  // include the rest of the current FY quarter even if some of those months are still in the
+  // future — targets are set at the START of a quarter, so that's exactly when you want to see
+  // the whole quarter's target on the chart, not wait for each month to actually pass first.
+  // Targets are set per FINANCIAL QUARTER, so each quarter's target needs splitting across its 3
+  // months — rather than a flat one-third (which reads as "off target" every single month even
+  // when the quarter as a whole is on track, since keg volume is naturally seasonal month to
+  // month), each month's share is weighted by last year's same-month actuals for this same filter
+  // set, so the target line seasons the way keg sales actually do.
+  const kegMonths = vtExtendToFullCurrentQuarter(vtMonthsBack(12, PERF_TODAY.getFullYear(), PERF_TODAY.getMonth()));
   const kegLabels = kegMonths.map(({y,m}) => vtMonthLabelOf(y,m));
   const kegVol = [], kegListings = [], kegVpl = [];
   const kegVolTargets = [], kegListingsTargets = [], kegVplTargets = [];
@@ -5566,6 +5655,29 @@ function veePeriodRanges(granularity, count) {
   return out.reverse();
 }
 
+// Extends a trailing month-granularity period list (as returned by veePeriodRanges('month', ...))
+// so it always includes every month of "today"'s current FY quarter, even ones still in the
+// future — see vtExtendToFullCurrentQuarter's comment (the equivalent for Volume Trends' own
+// {y,m} month shape) for why. A no-op once the trailing window already reaches quarter's end.
+function veeExtendToFullCurrentQuarter(periods) {
+  const today = new Date(meta.salesDataTo + 'T00:00:00');
+  const { fy, q } = fyQuarterOf(today);
+  const [qStart] = quarterBoundsOf(fy, q);
+  const qStartY = qStart.getFullYear(), qStartM = qStart.getMonth();
+  const lastKey = periods.length ? periods[periods.length-1].y * 12 + periods[periods.length-1].m : -Infinity;
+  const out = periods.slice();
+  for (let i = 0; i < 3; i++) {
+    let y = qStartY, m = qStartM + i;
+    while (m > 11) { m -= 12; y++; }
+    if (y * 12 + m > lastKey) {
+      const start = new Date(y, m, 1);
+      const endExcl = new Date(y, m + 1, 1);
+      out.push({ label: start.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' }), startDayIdx: dayIndexOf(start), endDayIdx: dayIndexOf(endExcl) - 1, y, m });
+    }
+  }
+  return out;
+}
+
 // Reconstructs a period's exact date range shifted back `yearsBack` financial/calendar years —
 // used to fetch "the same period last year" / "the same period two years ago" actuals for a
 // trailing-window chart, so every point on the x-axis can show a direct year-over-year
@@ -5594,6 +5706,32 @@ function veePeriodShiftedYears(period, granularity, yearsBack) {
 
 function veeGroupFilter(selectedGids) {
   return selectedGids && selectedGids.length ? (gid) => selectedGids.includes(gid) : null;
+}
+
+// Weights each month within its FY quarter by that month's own share of last year's actual
+// volume, rather than a flat one-third each. Volume is naturally seasonal month to month, so a
+// flat split reads as "off target" every single month even when the quarter as a whole is on
+// track. This is the same technique Volume Trends already uses for its keg target (see
+// kegSeasonalWeight there); this generic version works on plain period/value arrays so Total
+// Volume and National Accounts' monthly targets can use it too. `periods` must carry {y, m} (as
+// produced by veePeriodRanges('month', ...)); `lyVals` is the same-length array of each period's
+// own last-year actual (null treated as 0, i.e. no history to weight by). Falls back to an even
+// split across the quarter's visible months when there's no history at all for that quarter
+// (sum <= 0).
+function veeMonthlySeasonalWeights(periods, lyVals) {
+  const groups = {};
+  periods.forEach((p, i) => {
+    const { fy, q } = fyQuarterOf(new Date(p.y, p.m, 15));
+    const qk = quarterKeyOf(fy, q);
+    (groups[qk] = groups[qk] || []).push(i);
+  });
+  return periods.map((p, i) => {
+    const { fy, q } = fyQuarterOf(new Date(p.y, p.m, 15));
+    const qk = quarterKeyOf(fy, q);
+    const group = groups[qk];
+    const sum = group.reduce((s, j) => s + (lyVals[j] || 0), 0);
+    return sum > 0 ? (lyVals[i] || 0) / sum : 1 / group.length;
+  });
 }
 
 // One bucket's (KEGS or CARTONS) unit-volume series across a set of periods — reuses the same
@@ -5779,7 +5917,7 @@ function naDefaultPeriodCount(granularity) {
 // match the chart's chosen granularity — same even-split-by-3/direct/sum-of-quarters approach as
 // tvTargetForPeriod. Converted from litres (how it's stored) to carton units, matching the actual/
 // ly/ly2 series on this chart.
-function naTargetForPeriod(period, granularity) {
+function naTargetForPeriod(period, granularity, monthWeight) {
   function qTargetUnits(fy, q) {
     const t = naTargetFor(quarterKeyOf(fy, q));
     return t.cartonVolumeTarget != null ? t.cartonVolumeTarget / CARTON_UNIT_LITRES : null;
@@ -5787,7 +5925,8 @@ function naTargetForPeriod(period, granularity) {
   if (granularity === 'month') {
     const { fy, q } = fyQuarterOf(new Date(period.y, period.m, 15));
     const qt = qTargetUnits(fy, q);
-    return qt != null ? qt / 3 : null;
+    if (qt == null) return null;
+    return monthWeight != null ? qt * monthWeight : qt / 3;
   }
   if (granularity === 'quarter') return qTargetUnits(period.fy, period.q);
   // year
@@ -5803,9 +5942,14 @@ function renderNationalAccountsPage() {
   const outletFilterFn = naOwnerOutletFilter();
   const skuSelected = naSkuMsel ? naSkuMsel.getValues() : [];
   const groupFilterFn = veeGroupFilter(skuSelected);
-  const periods = veePeriodRanges(granularity, naDefaultPeriodCount(granularity));
+  // At month granularity, always show the rest of the current FY quarter even if some of those
+  // months are still in the future — targets are set at the start of a quarter, which is exactly
+  // when you want the whole quarter visible, not just the months that have already happened.
+  let periods = veePeriodRanges(granularity, naDefaultPeriodCount(granularity));
+  if (granularity === 'month') periods = veeExtendToFullCurrentQuarter(periods);
   const cartonSeries = veeUnitSeries('CARTONS', periods, granularity, outletFilterFn, groupFilterFn);
-  const targetSeries = periods.map(p => naTargetForPeriod(p, granularity));
+  const monthWeights = granularity === 'month' ? veeMonthlySeasonalWeights(periods, cartonSeries.map(p => p.ly)) : null;
+  const targetSeries = periods.map((p, i) => naTargetForPeriod(p, granularity, monthWeights ? monthWeights[i] : null));
 
   veeRenderVolumeChart('na_cartons', cartonSeries.map(p => p.label), cartonSeries.map(p => p.units), 'cartons', granularity, 'Carton volume', 'units', '', null,
     { ly: cartonSeries.map(p => p.ly), ly2: cartonSeries.map(p => p.ly2), target: targetSeries });
@@ -5878,15 +6022,18 @@ function tvTargetForQuarter(quarterKey, bucketFilterVal, streamsSelected) {
   return total;
 }
 // Distributes/aggregates the quarterly target above to match the chart's chosen granularity: a
-// month gets an even third of its quarter's target (a simpler, coarser split than Volume Trends'
-// seasonal weighting — appropriate here since this is a sense-check tool spanning up to several
-// volume streams and every SKU, not a precise month-by-month tracker), a quarter uses its own
-// target directly, and a year sums whichever of its 4 quarters have one set.
-function tvTargetForPeriod(period, granularity, bucketFilterVal, streamsSelected) {
+// month gets its quarter's target weighted by `monthWeight` (see veeMonthlySeasonalWeights —
+// renderTotalVolumePage passes each month's share of last year's actual volume within its
+// quarter, so a naturally busy month gets a bigger slice of the target than a naturally quiet
+// one) or, if no weight is supplied — e.g. a direct call with no surrounding period series to
+// weight against — a flat even third; a quarter uses its own target directly; a year sums
+// whichever of its 4 quarters have one set.
+function tvTargetForPeriod(period, granularity, bucketFilterVal, streamsSelected, monthWeight) {
   if (granularity === 'month') {
     const { fy, q } = fyQuarterOf(new Date(period.y, period.m, 15));
     const qt = tvTargetForQuarter(quarterKeyOf(fy, q), bucketFilterVal, streamsSelected);
-    return qt != null ? qt / 3 : null;
+    if (qt == null) return null;
+    return monthWeight != null ? qt * monthWeight : qt / 3;
   }
   if (granularity === 'quarter') {
     return tvTargetForQuarter(quarterKeyOf(period.fy, period.q), bucketFilterVal, streamsSelected);
@@ -5952,13 +6099,19 @@ function tvPieChartHtml(breakdown) {
 }
 // Repopulates the pie-chart period picker to match the periods currently on the volume chart
 // (which change with the granularity selector), preserving the user's chosen period by label
-// where it still exists, defaulting to the most recent period otherwise.
+// where it still exists, defaulting otherwise to the most recent period that has actually started
+// — not simply the last one in the list, since the trend chart above may now extend into genuinely
+// future months of the current quarter (see veeExtendToFullCurrentQuarter) that have no data at
+// all yet, which would make the SKU/split pies default to an empty "no volume" state.
 function populateTvPiePeriodSelect(periods) {
   const el = document.getElementById('tv_pie_period');
   const prevLabel = el.value;
   const display = periods.slice().reverse(); // most recent first
   el.innerHTML = display.map(p => `<option value="${escapeHtml(p.label)}">${escapeHtml(p.label)}</option>`).join('');
-  el.value = display.some(p => p.label === prevLabel) ? prevLabel : display[0].label;
+  if (display.some(p => p.label === prevLabel)) { el.value = prevLabel; return; }
+  const todayDayIdx = dayIndexOf(new Date(meta.salesDataTo + 'T00:00:00'));
+  const started = display.find(p => p.startDayIdx <= todayDayIdx);
+  el.value = (started || display[0]).label;
 }
 function tvSelectedPieIndex(periods) {
   const idx = periods.findIndex(p => p.label === document.getElementById('tv_pie_period').value);
@@ -5979,15 +6132,24 @@ function renderTotalVolumePage() {
   const outletFilterFn = tvStreamOutletFilter();
   const skuSelected = tvSkuMsel ? tvSkuMsel.getValues() : [];
   const groupFilterFn = veeGroupFilter(skuSelected);
-  const periods = veePeriodRanges(granularity, tvDefaultPeriodCount(granularity));
+  // At month granularity, always show the rest of the current FY quarter even if some of those
+  // months are still in the future — targets are set at the start of a quarter, which is exactly
+  // when you want the whole quarter visible, not just the months that have already happened.
+  let periods = veePeriodRanges(granularity, tvDefaultPeriodCount(granularity));
+  if (granularity === 'month') periods = veeExtendToFullCurrentQuarter(periods);
   const litresSeries = tvLitresSeries(bucketFilterVal, periods, granularity, outletFilterFn, groupFilterFn);
 
   // Target line: the combined Sales Team RSM targets + National Accounts target (see
   // tvTargetForQuarter), respecting whichever Volume Streams and Kegs/Cartons bucket are
   // currently selected — the only "total company volume target" this app can build, since RSM
-  // targets alone only ever covered Sales Team.
+  // targets alone only ever covered Sales Team. At month granularity, split each quarter's target
+  // across its months by that month's own share of last year's actual volume (same technique
+  // Volume Trends already uses for its keg target) rather than a flat one-third each — otherwise
+  // a naturally quiet month reads as "off target" and a naturally busy one reads as "way ahead"
+  // even when the quarter as a whole is exactly on track.
   const streamsSelected = tvStreamMsel ? tvStreamMsel.getValues() : [];
-  const targetSeries = periods.map(p => tvTargetForPeriod(p, granularity, bucketFilterVal, streamsSelected));
+  const monthWeights = granularity === 'month' ? veeMonthlySeasonalWeights(periods, litresSeries.map(p => p.ly)) : null;
+  const targetSeries = periods.map((p, i) => tvTargetForPeriod(p, granularity, bucketFilterVal, streamsSelected, monthWeights ? monthWeights[i] : null));
 
   const cssClass = bucketFilterVal === 'KEGS' ? 'kegs' : bucketFilterVal === 'CARTONS' ? 'cartons' : 'combo';
   veeRenderVolumeChart('tv_volume', litresSeries.map(p => p.label), litresSeries.map(p => p.litres), cssClass, granularity, 'Volume', 'litres', ' L', null,
