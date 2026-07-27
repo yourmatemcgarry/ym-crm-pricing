@@ -65,7 +65,11 @@
   .listing-trio .lt-lbl { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.3px; margin-top:2px; }
   .bar-chart { display:flex; align-items:flex-end; gap:6px; height:150px; padding-top:10px; }
   .bar-chart .bar-col { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
-  .bar-chart .bar-val { font-size:10.5px; color:var(--muted); margin-bottom:3px; }
+  /* Multi-series columns (2yrs ago/last year/actual/target stacked side by side) get a fixed
+     min-width instead of shrinking to fit — otherwise the value labels overlap and run into each
+     other. The chart is already wrapped in a horizontal-scroll container, so widening is safe. */
+  .bar-chart .bar-col.multi { flex:0 0 auto; min-width:150px; }
+  .bar-chart .bar-val { font-size:10px; color:var(--muted); margin-bottom:3px; white-space:nowrap; }
   .bar-chart .bar-sub { font-size:9px; color:var(--muted); opacity:.75; margin-bottom:3px; white-space:nowrap; }
   .bar-chart .bar-rect { width:100%; max-width:34px; background:var(--blue); border-radius:3px 3px 0 0; min-height:2px; }
   .bar-chart .bar-rect.kegs { background:var(--keg); }
@@ -78,10 +82,16 @@
   .bar-legend .bl-line { display:inline-block; width:12px; height:0; border-top:2px dashed var(--navy); margin-right:4px; vertical-align:3px; }
   .bar-legend .bl-swatch.target-swatch { opacity:.42; box-shadow: inset 0 0 0 1px var(--navy); }
   .bar-pair { display:flex; align-items:flex-end; justify-content:center; gap:4px; width:100%; height:100%; }
-  .bar-subcol { display:flex; flex-direction:column; align-items:center; flex:1; min-width:0; height:100%; justify-content:flex-end; }
+  .bar-subcol { display:flex; flex-direction:column; align-items:center; flex:1 1 34px; min-width:34px; height:100%; justify-content:flex-end; }
   .bar-chart .bar-rect.paired { max-width:18px; }
   .bar-chart .bar-rect.target-bar { opacity:.42; box-shadow: inset 0 0 0 2px var(--navy); }
   .bar-chart .bar-val-target { color:var(--navy); }
+  .bar-chart .bar-rect.ly-bar { opacity:.55; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+  .bar-chart .bar-rect.ly2-bar { opacity:.28; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+  .bar-chart .bar-val-ly { color:var(--muted); opacity:.9; }
+  .bar-chart .bar-val-ly2 { color:var(--muted); opacity:.7; }
+  .bar-legend .bl-swatch.ly-swatch { opacity:.55; }
+  .bar-legend .bl-swatch.ly2-swatch { opacity:.28; }
   .delivery-details-box { background:var(--gold-bg,#fbf3e3); border:1px solid var(--gold); border-radius:6px; padding:6px 9px; margin-top:6px; }
   .delivery-details-box .ddb-title { font-size:9.5px; text-transform:uppercase; letter-spacing:.3px; color:var(--gold-dark); font-weight:700; margin-bottom:2px; }
   .delivery-details-box .ddb-line { font-size:11.5px; color:var(--text); margin-top:2px; }
@@ -818,6 +828,7 @@
         </table>
       </div>
     </div>
+    <div class="panel no-print" id="tg_na_target" style="margin-top:14px;"></div>
     <div id="tg_calc"></div>
   </div>
 
@@ -898,8 +909,6 @@
       </div>
     </div>
 
-    <div class="cards" id="na_summary"></div>
-
     <div id="na_cartons"></div>
 
     <div class="panel no-print">
@@ -957,13 +966,10 @@
       </div>
     </div>
 
-    <div class="cards" id="tv_summary"></div>
-    <div class="panel"><h2 style="margin:0 0 4px;">Keg / Carton Split <span class="muted" style="font-weight:400; font-size:11px;">(litres, combined volume regardless of the filter above)</span></h2><div id="tv_split"></div></div>
-
     <div id="tv_volume"></div>
 
     <div class="panel no-print">
-      <h2 style="margin:0 0 4px;">Volume by SKU</h2>
+      <h2 style="margin:0 0 4px;">Breakdown by Period</h2>
       <div class="rowflex" style="margin-top:6px; gap:14px; flex-wrap:wrap; align-items:flex-end;">
         <div class="fld" style="margin:0;">
           <label>Period</label>
@@ -971,7 +977,10 @@
         </div>
       </div>
     </div>
-    <div id="tv_pie"></div>
+    <div class="rowflex" style="gap:16px; align-items:flex-start; flex-wrap:wrap;">
+      <div class="panel" style="flex:1; min-width:280px;"><h2 style="margin:0 0 4px;">Volume by SKU</h2><div id="tv_pie"></div></div>
+      <div class="panel" style="flex:1; min-width:280px;"><h2 style="margin:0 0 4px;">Keg / Carton Split <span class="muted" style="font-weight:400; font-size:11px;">(litres, combined volume regardless of the filter above)</span></h2><div id="tv_split"></div></div>
+    </div>
   </div>
 
   <!-- ================= CUSTOMER EXPLORER ================= -->
@@ -1419,6 +1428,26 @@ let vipContacts = []; // [ {id, name, company, role, email, phone, source, notes
 let rsmZoneOverrides = {}; // { [zone]: rsmName } — shared; lets the user immediately reassign which RSM owns a zone, without waiting for the next Ontap-driven data refresh
 let zoneBakedRsm = {}; // { [zone]: {counts:{rsmName:n}, dominant:rsmName} } — the ORIGINAL (pre-override) Ontap RSM assignment per zone, recomputed by applyRsmZoneOverrides() every time data loads, from the immutable originalOutletRsm snapshot above (never from outlets[id].rsm directly)
 let rsmRosterBaked = []; // sorted list of every RSM name currently known (from the baked outlet data, plus any override values already saved) — the options offered on the RSM Zones page's reassignment dropdown
+let naTargets = {}; // { quarterKey: {cartonVolumeTarget, updatedBy, updatedAt} } — shared; National Accounts (Coles & Woolworths) sits outside the RSM-based Sales Team targets, so it gets its own small target collection, set from the Set Targets page and used by the Total Volume page to build a combined company-wide target line
+function naTargetFor(quarterKey) { return naTargets[quarterKey] || {}; }
+function updateNaTarget(quarterKey, val) {
+  const existing = naTargets[quarterKey] || {};
+  const trimmed = (val||'').trim();
+  let value;
+  if (trimmed === '') {
+    const updated = { ...existing };
+    delete updated.cartonVolumeTarget;
+    naTargets[quarterKey] = { ...updated, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+    value = null;
+  } else {
+    const num = parseFloat(trimmed);
+    if (isNaN(num) || num < 0) { toast('Enter a valid target, or leave blank.'); renderTargetsPage(); return; }
+    naTargets[quarterKey] = { ...existing, cartonVolumeTarget: num, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+    value = num;
+  }
+  renderTargetsPage();
+  callServer('saveNaTarget', [quarterKey, value, currentUserEmail], () => toast('National Accounts target saved.'));
+}
 
 // Recomputes zoneBakedRsm/rsmRosterBaked from the pristine originalOutletRsm snapshot, then
 // applies any active rsmZoneOverrides on top of it — mutating outlets[id].rsm so every other page
@@ -1723,6 +1752,7 @@ function buildServerPayload(fnName, args) {
     case 'saveVipContact':    return { contact: args[0] };
     case 'deleteVipContact':  return { id: args[0] };
     case 'saveRsmZoneOverride': return { zone: args[0], rsm: args[1], updatedBy: args[2] };
+    case 'saveNaTarget': return { quarterKey: args[0], cartonVolumeTarget: args[1], updatedBy: args[2] };
     default: return {};
   }
 }
@@ -4832,6 +4862,9 @@ function onTargetsCellChange(rsm, quarterKey, field, val) {
   updateRsmTarget(rsm, quarterKey, field, val);
   renderTargetsPage();
 }
+function onNaTargetCellChange(quarterKey, val) {
+  updateNaTarget(quarterKey, val);
+}
 function renderTargetsPage() {
   const { fy, q } = targetsQuarter;
   const qKey = quarterKeyOf(fy, q);
@@ -4854,6 +4887,13 @@ function renderTargetsPage() {
   const totalsRow = `<tr style="font-weight:600;"><td>Sales Team (total)</td><td class="mono">${totalsTotalVol!=null?fmtNum(totalsTotalVol):'—'}</td>${totalCells}</tr>`;
 
   document.getElementById('tg_body').innerHTML = (rsmList.length ? rows : `<tr><td colspan="9"><div class="empty">No RSMs found.</div></td></tr>`) + totalsRow;
+
+  const nt = naTargetFor(qKey);
+  document.getElementById('tg_na_target').innerHTML = `
+    <h3 style="margin:0;">National Accounts — Carton Volume Target <span class="muted" style="font-weight:400; font-size:11px;">(litres, ${escapeHtml(quarterLabelOf(fy, q))})</span></h3>
+    <div class="hint" style="margin-top:4px;">National Accounts (Coles & Woolworths) sits outside the RSM-based Sales Team targets above — set its quarterly carton volume target here so the Total Volume page can build a combined company-wide target line to sense-check against the last two years.</div>
+    <input type="number" step="1" min="0" value="${nt.cartonVolumeTarget!=null?nt.cartonVolumeTarget:''}" placeholder="—" style="width:160px; margin-top:8px;" onchange="onNaTargetCellChange('${qKey}', this.value)">
+  `;
 
   renderTgCalculator();
 }
@@ -5128,32 +5168,58 @@ function vtGroupFilter() {
 }
 // Bar chart matching the visual style used elsewhere on the Team Dashboard. `decimals` lets the
 // VPL charts show one decimal place instead of the usual rounded-to-whole-number formatting.
-// `targets` (optional, same length as values, entries may be null) renders the target as its own
-// labelled bar next to the actual bar for that month/quarter, rather than a line overlay — the
-// scale accounts for target values too, so a target bar is never clipped off the top of the
-// chart even when it's taller than every actual bar.
-function vtBarChartHtml(labels, values, cssClass, suffix, decimals, targets) {
-  const scaleVals = targets ? values.concat(targets.filter(t => t != null)) : values;
-  const max = Math.max(1, ...scaleVals);
+// `extraSeries` (optional) is any subset of { ly, ly2, target } — each a same-length array as
+// `values`, entries may be null — rendered as extra narrower bars grouped next to the actual bar
+// for that period, rather than a line overlay. This lets a single chart show, at every point on
+// its x-axis, "this period vs the same period last year vs the same period two years ago vs
+// target" all at once — a direct sense-check against history, not just the trailing trend. A
+// series that's entirely null across the whole chart (e.g. ly2 when the data doesn't go back that
+// far, or target when nothing's been set) is dropped rather than rendered as a wall of dashes; an
+// individual missing data point within an otherwise-present series still renders as "—". The
+// scale accounts for every visible series so no bar is ever clipped off the top of the chart.
+const VT_SERIES_META = {
+  ly2:    { label: '2 years ago',   swatchClass: 'ly2-swatch',    barClass: 'ly2-bar',    valClass: 'bar-val-ly2' },
+  ly:     { label: 'Last year',     swatchClass: 'ly-swatch',     barClass: 'ly-bar',     valClass: 'bar-val-ly' },
+  actual: { label: 'Actual',        swatchClass: '',              barClass: '',           valClass: '' },
+  target: { label: 'Target',        swatchClass: 'target-swatch', barClass: 'target-bar', valClass: 'bar-val-target' },
+};
+// Bars within each period's group run earliest actual data to most recent — 2 years ago, last
+// year, then this period's own actual — with the target pinned to the far right, since it's a
+// goal rather than a point in time and reads more naturally as the thing everything else is
+// being measured against, not another step along the timeline.
+function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries) {
+  const activeExtra = ['ly2', 'ly', 'target'].filter(k => extraSeries && extraSeries[k] && extraSeries[k].some(v => v != null));
+  const colKeys = activeExtra.filter(k => k !== 'target').concat(['actual']).concat(activeExtra.includes('target') ? ['target'] : []);
   const fmt = v => decimals != null ? v.toFixed(decimals) : fmtNum(v);
-  const swatchStyle = `background:var(${cssClass==='kegs'?'--keg':'--pack'});`;
-  const legend = targets ? `<div class="bar-legend"><span><span class="bl-swatch" style="${swatchStyle}"></span>Actual</span><span><span class="bl-swatch target-swatch" style="${swatchStyle}"></span>Target</span></div>` : '';
+  const scaleVals = values.concat(...activeExtra.map(k => extraSeries[k].filter(v => v != null)));
+  const max = Math.max(1, ...scaleVals);
+  const swatchStyle = `background:var(${cssClass==='kegs'?'--keg':cssClass==='cartons'?'--pack':'--blue'});`;
+  const legend = activeExtra.length
+    ? `<div class="bar-legend">${colKeys.map(k => `<span><span class="bl-swatch ${VT_SERIES_META[k].swatchClass}" style="${swatchStyle}"></span>${VT_SERIES_META[k].label}</span>`).join('')}</div>`
+    : '';
   return `${legend}<div class="bar-chart" style="height:150px;">
     ${values.map((v,i) => {
-      const h = Math.max(2, Math.round((v/max)*100));
-      const t = targets ? targets[i] : null;
-      const tH = (t != null) ? Math.max(2, Math.round((t/max)*100)) : 0;
-      const titleTarget = t != null ? ` · target ${fmt(t)}${suffix||''}` : (targets ? ' · no target set' : '');
-      return `<div class="bar-col" title="${labels[i]}: ${fmt(v)}${suffix||''}${titleTarget}">
+      let titleExtra = '';
+      const subcols = colKeys.map(k => {
+        const t = k === 'actual' ? v : extraSeries[k][i];
+        const meta = VT_SERIES_META[k];
+        const tH = (t != null) ? Math.max(2, Math.round((t/max)*100)) : 0;
+        if (k !== 'actual') titleExtra += t != null ? ` · ${meta.label.toLowerCase()} ${fmt(t)}${suffix||''}` : ` · no ${meta.label.toLowerCase()} data`;
+        const rectClass = ['bar-rect', cssClass, colKeys.length>1?'paired':'', meta.barClass].filter(Boolean).join(' ');
+        const valClass = ['bar-val', meta.valClass].filter(Boolean).join(' ');
+        return `<div class="bar-subcol">
+          <div class="${valClass}">${t!=null?fmt(t):'—'}</div>
+          <div class="bar-track"><div class="${rectClass}" style="height:${t!=null?tH:0}px;"></div></div>
+        </div>`;
+      });
+      // "multi" gives the column a fixed min-width instead of shrinking to fit — with up to 4
+      // value labels stacked side by side (2yrs ago/last year/actual/target), letting the column
+      // shrink below its content width is what was causing the labels to overlap and run into
+      // each other; the chart is already wrapped in a horizontal-scroll container (veeScrollChart)
+      // so there's no downside to letting multi-series columns claim the width they need.
+      return `<div class="bar-col${colKeys.length>1?' multi':''}" title="${labels[i]}: ${fmt(v)}${suffix||''}${titleExtra}">
         <div class="bar-pair">
-          <div class="bar-subcol">
-            <div class="bar-val">${fmt(v)}</div>
-            <div class="bar-track"><div class="bar-rect ${cssClass}${targets?' paired':''}" style="height:${h}px;"></div></div>
-          </div>
-          ${targets ? `<div class="bar-subcol">
-            <div class="bar-val bar-val-target">${t!=null?fmt(t):'—'}</div>
-            <div class="bar-track"><div class="bar-rect ${cssClass} paired target-bar" style="height:${t!=null?tH:0}px;"></div></div>
-          </div>` : ''}
+          ${subcols.join('')}
         </div>
         <div class="bar-wk">${labels[i]}</div>
       </div>`;
@@ -5172,23 +5238,24 @@ function renderVolumeTrendsPage() {
   const groupFilterFn = vtGroupFilter();
   const rsmList = uniqueVals('rsm', outlets);
 
-  // Kegs — monthly, 12 months of trailing history, extended through the END of the CURRENT
-  // quarter even if some of those months are still in the future (e.g. viewing in the first
-  // month of a quarter still shows all 3 months) — so a full quarter's target can be seen as a
-  // trend across every month it covers, not just the ones with actuals so far. Targets are set
-  // per FINANCIAL QUARTER, so each quarter's target needs splitting across its 3 months —
+  // Kegs — monthly, a tight 12-month trailing window ending at the current month. Targets are
+  // set per FINANCIAL QUARTER, so each quarter's target needs splitting across its 3 months —
   // rather than a flat one-third (which reads as "off target" every single month even when the
   // quarter as a whole is on track, since keg volume is naturally seasonal month to month), each
   // month's share is weighted by last year's same-month actuals for this same filter set, so the
   // target line seasons the way keg sales actually do.
-  const curQ = fyQuarterOf(PERF_TODAY);
-  const [curQStart] = quarterBoundsOf(curQ.fy, curQ.q);
-  const curQLastMonth = new Date(curQStart.getFullYear(), curQStart.getMonth() + 2, 1);
-  const extraFutureMonths = Math.max(0, (curQLastMonth.getFullYear() - PERF_TODAY.getFullYear()) * 12 + (curQLastMonth.getMonth() - PERF_TODAY.getMonth()));
-  const kegMonths = vtMonthsBack(12 + extraFutureMonths, curQLastMonth.getFullYear(), curQLastMonth.getMonth());
+  const kegMonths = vtMonthsBack(12, PERF_TODAY.getFullYear(), PERF_TODAY.getMonth());
   const kegLabels = kegMonths.map(({y,m}) => vtMonthLabelOf(y,m));
   const kegVol = [], kegListings = [], kegVpl = [];
   const kegVolTargets = [], kegListingsTargets = [], kegVplTargets = [];
+  // Same-calendar-month actuals from 1 and 2 years earlier, so each month's bar group can show
+  // "this month vs the same month last year vs the same month two years ago vs target" all at
+  // once — a direct sense-check against real history, not just this window's own trailing trend.
+  // Null (not 0) when the shifted month falls entirely before the sales data began (dayIndexOf < 0
+  // means the day genuinely predates EPOCH_DATE — no data exists there at all, as distinct from a
+  // real month with zero sales).
+  const kegVolLy = [], kegListingsLy = [], kegVplLy = [];
+  const kegVolLy2 = [], kegListingsLy2 = [], kegVplLy2 = [];
 
   const kegHistLitres = [], kegHistListings = [], kegMonthQk = [], kegMonthFq = [];
   kegMonths.forEach(({y,m}) => {
@@ -5237,6 +5304,26 @@ function renderVolumeTrendsPage() {
     // 4x too high against the (correctly weekly) target bar next to it.
     kegVpl.push(stats.listingsCount > 0 ? (stats.totalLitres / stats.listingsCount) / weeksInMonth / KEG_UNIT_LITRES : 0);
 
+    // LY reuses the y-1 stats already computed above for seasonal weighting — no need to query
+    // trendRangeStats a second time for the same range. Recompute the LY month's own week count
+    // (not this year's) since a leap-year February can differ by a day between the two years.
+    const lyStart = new Date(y-1, m, 1), lyEndIncl = new Date(y-1, m+1, 0);
+    const lyEndDayIdx = dayIndexOf(lyEndIncl);
+    const lyHasData = lyEndDayIdx >= 0;
+    const lyWeeks = (lyEndDayIdx - dayIndexOf(lyStart) + 1) / 7;
+    kegVolLy.push(lyHasData ? kegHistLitres[i] : null);
+    kegListingsLy.push(lyHasData ? kegHistListings[i] : null);
+    kegVplLy.push((lyHasData && kegHistListings[i] > 0) ? (kegHistLitres[i] / kegHistListings[i]) / lyWeeks / KEG_UNIT_LITRES : null);
+
+    const ly2Start = new Date(y-2, m, 1), ly2EndIncl = new Date(y-2, m+1, 0);
+    const ly2EndDayIdx = dayIndexOf(ly2EndIncl);
+    const ly2HasData = ly2EndDayIdx >= 0;
+    const ly2Weeks = (ly2EndDayIdx - dayIndexOf(ly2Start) + 1) / 7;
+    const ly2Stats = ly2HasData ? trendRangeStats('KEGS', dayIndexOf(ly2Start), ly2EndDayIdx, outletFilterFn, groupFilterFn) : null;
+    kegVolLy2.push(ly2Stats ? ly2Stats.totalLitres : null);
+    kegListingsLy2.push(ly2Stats ? ly2Stats.listingsCount : null);
+    kegVplLy2.push((ly2Stats && ly2Stats.listingsCount > 0) ? (ly2Stats.totalLitres / ly2Stats.listingsCount) / ly2Weeks / KEG_UNIT_LITRES : null);
+
     const t = vtTargetFor(kegMonthQk[i], rsmList);
     const volWeight = kegSeasonalWeight(i, kegHistLitres);
     kegVolTargets.push(t.kegVolumeTarget != null ? t.kegVolumeTarget * volWeight : null);
@@ -5258,14 +5345,19 @@ function renderVolumeTrendsPage() {
     kegVplTargets.push((t.kegVolumeTarget != null && t.kegListingsTarget != null) ? tgHistoricalMonthlyVpl(y, m, outletFilterFn) : null);
   });
 
-  // Cartons — quarterly, last 8 quarters (2 years). Targets line up exactly (both are per-quarter).
+  // Cartons — quarterly, last 4 quarters (12 months, matching the keg window). Targets line up
+  // exactly (both are per-quarter).
   const cartonQuarters = [];
   let cq = PERF_CURRENT_Q;
-  for (let i = 0; i < 8; i++) { cartonQuarters.push(cq); cq = shiftQuarter(cq.fy, cq.q, -1); }
+  for (let i = 0; i < 4; i++) { cartonQuarters.push(cq); cq = shiftQuarter(cq.fy, cq.q, -1); }
   cartonQuarters.reverse();
   const cartonLabels = cartonQuarters.map(({fy,q}) => quarterKeyOf(fy,q));
   const cartonVol = [], cartonListings = [], cartonVpl = [];
   const cartonVolTargets = [], cartonListingsTargets = [], cartonVplTargets = [];
+  // Same-quarter actuals from 1 and 2 financial years earlier — see the equivalent keg comment
+  // above for why (direct year-over-year sense-check at every point on the x-axis).
+  const cartonVolLy = [], cartonListingsLy = [], cartonVplLy = [];
+  const cartonVolLy2 = [], cartonListingsLy2 = [], cartonVplLy2 = [];
   cartonQuarters.forEach(({fy,q}) => {
     const [qStart, qEndExcl] = quarterBoundsOf(fy, q);
     const qEndIncl = new Date(qEndExcl.getTime() - 86400000);
@@ -5275,6 +5367,22 @@ function renderVolumeTrendsPage() {
     cartonListings.push(stats.listingsCount);
     // Same per-listing-per-WEEK fix as kegs above — was missing the /weeksInQuarter division.
     cartonVpl.push(stats.listingsCount > 0 ? (stats.totalLitres / stats.listingsCount) / weeksInQuarter / CARTON_UNIT_LITRES : 0);
+
+    [1, 2].forEach(yearsBack => {
+      const lyFy = fy - yearsBack;
+      const [lyStart, lyEndExcl] = quarterBoundsOf(lyFy, q);
+      const lyEndIncl = new Date(lyEndExcl.getTime() - 86400000);
+      const lyEndDayIdx = dayIndexOf(lyEndIncl);
+      const hasData = lyEndDayIdx >= 0;
+      const lyStats = hasData ? trendRangeStats('CARTONS', dayIndexOf(lyStart), lyEndDayIdx, outletFilterFn, groupFilterFn) : null;
+      const lyWeeks = hasData ? (lyEndDayIdx - dayIndexOf(lyStart) + 1) / 7 : null;
+      const volArr = yearsBack === 1 ? cartonVolLy : cartonVolLy2;
+      const listingsArr = yearsBack === 1 ? cartonListingsLy : cartonListingsLy2;
+      const vplArr = yearsBack === 1 ? cartonVplLy : cartonVplLy2;
+      volArr.push(lyStats ? lyStats.totalLitres : null);
+      listingsArr.push(lyStats ? lyStats.listingsCount : null);
+      vplArr.push((lyStats && lyStats.listingsCount > 0) ? (lyStats.totalLitres / lyStats.listingsCount) / lyWeeks / CARTON_UNIT_LITRES : null);
+    });
 
     const t = vtTargetFor(quarterKeyOf(fy, q), rsmList);
     cartonVolTargets.push(t.cartonVolumeTarget != null ? t.cartonVolumeTarget : null);
@@ -5286,14 +5394,14 @@ function renderVolumeTrendsPage() {
   });
 
   document.getElementById('vt_kegs').innerHTML = `
-    <div class="panel"><h3>Keg Volume per month <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${vtBarChartHtml(kegLabels, kegVol, 'kegs', ' L', null, kegVolTargets)}</div>
-    <div class="panel"><h3>Keg Listings per month</h3>${vtBarChartHtml(kegLabels, kegListings, 'kegs', '', null, kegListingsTargets)}</div>
-    <div class="panel"><h3>Keg Volume per Listing per Week <span class="muted" style="font-weight:400; font-size:11px;">(kegs, 50L/keg — shown monthly)</span></h3>${vtBarChartHtml(kegLabels, kegVpl, 'kegs', ' kegs', 1, kegVplTargets)}</div>
+    <div class="panel"><h3>Keg Volume per month <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegVol, 'kegs', ' L', null, {ly: kegVolLy, ly2: kegVolLy2, target: kegVolTargets}))}</div>
+    <div class="panel"><h3>Keg Listings per month</h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegListings, 'kegs', '', null, {ly: kegListingsLy, ly2: kegListingsLy2, target: kegListingsTargets}))}</div>
+    <div class="panel"><h3>Keg Volume per Listing per Week <span class="muted" style="font-weight:400; font-size:11px;">(kegs, 50L/keg — shown monthly)</span></h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegVpl, 'kegs', ' kegs', 1, {ly: kegVplLy, ly2: kegVplLy2, target: kegVplTargets}))}</div>
   `;
   document.getElementById('vt_cartons').innerHTML = `
-    <div class="panel"><h3>Carton Volume per quarter <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${vtBarChartHtml(cartonLabels, cartonVol, 'cartons', ' L', null, cartonVolTargets)}</div>
-    <div class="panel"><h3>Carton Listings per quarter</h3>${vtBarChartHtml(cartonLabels, cartonListings, 'cartons', '', null, cartonListingsTargets)}</div>
-    <div class="panel"><h3>Carton Volume per Listing per Week <span class="muted" style="font-weight:400; font-size:11px;">(cartons, 6L/carton — shown quarterly)</span></h3>${vtBarChartHtml(cartonLabels, cartonVpl, 'cartons', ' ctns', 1, cartonVplTargets)}</div>
+    <div class="panel"><h3>Carton Volume per quarter <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonVol, 'cartons', ' L', null, {ly: cartonVolLy, ly2: cartonVolLy2, target: cartonVolTargets}))}</div>
+    <div class="panel"><h3>Carton Listings per quarter</h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonListings, 'cartons', '', null, {ly: cartonListingsLy, ly2: cartonListingsLy2, target: cartonListingsTargets}))}</div>
+    <div class="panel"><h3>Carton Volume per Listing per Week <span class="muted" style="font-weight:400; font-size:11px;">(cartons, 6L/carton — shown quarterly)</span></h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonVpl, 'cartons', ' ctns', 1, {ly: cartonVplLy, ly2: cartonVplLy2, target: cartonVplTargets}))}</div>
   `;
 }
 
@@ -5434,14 +5542,16 @@ function veePeriodRanges(granularity, count) {
     for (let i = 0; i < count; i++) {
       const start = new Date(y, m, 1);
       const endExcl = new Date(y, m + 1, 1);
-      out.push({ label: start.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' }), startDayIdx: dayIndexOf(start), endDayIdx: dayIndexOf(endExcl) - 1 });
+      // y/m carried on each period so veePeriodShiftedYears() (and any target-distribution logic)
+      // can reconstruct the exact same calendar period N years earlier without re-parsing the label.
+      out.push({ label: start.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' }), startDayIdx: dayIndexOf(start), endDayIdx: dayIndexOf(endExcl) - 1, y, m });
       m--; if (m < 0) { m = 11; y--; }
     }
   } else if (granularity === 'quarter') {
     let { fy, q } = fyQuarterOf(today);
     for (let i = 0; i < count; i++) {
       const [start, endExcl] = quarterBoundsOf(fy, q);
-      out.push({ label: `FY${String(fy).slice(-2)} Q${q}`, startDayIdx: dayIndexOf(start), endDayIdx: dayIndexOf(endExcl) - 1 });
+      out.push({ label: `FY${String(fy).slice(-2)} Q${q}`, startDayIdx: dayIndexOf(start), endDayIdx: dayIndexOf(endExcl) - 1, fy, q });
       q--; if (q < 1) { q = 4; fy--; }
     }
   } else {
@@ -5449,11 +5559,37 @@ function veePeriodRanges(granularity, count) {
     for (let i = 0; i < count; i++) {
       const [start] = quarterBoundsOf(fy, 1);
       const [, endExcl] = quarterBoundsOf(fy, 4);
-      out.push({ label: `FY${String(fy).slice(-2)}`, startDayIdx: dayIndexOf(start), endDayIdx: dayIndexOf(endExcl) - 1 });
+      out.push({ label: `FY${String(fy).slice(-2)}`, startDayIdx: dayIndexOf(start), endDayIdx: dayIndexOf(endExcl) - 1, fy });
       fy--;
     }
   }
   return out.reverse();
+}
+
+// Reconstructs a period's exact date range shifted back `yearsBack` financial/calendar years —
+// used to fetch "the same period last year" / "the same period two years ago" actuals for a
+// trailing-window chart, so every point on the x-axis can show a direct year-over-year
+// comparison rather than requiring the user to scroll back through a much longer trailing window
+// to find the equivalent past period. Returns null if the period's own metadata is missing
+// (shouldn't happen for periods produced by veePeriodRanges above).
+function veePeriodShiftedYears(period, granularity, yearsBack) {
+  if (granularity === 'month') {
+    if (period.y == null || period.m == null) return null;
+    const y = period.y - yearsBack, m = period.m;
+    const start = new Date(y, m, 1), endExcl = new Date(y, m + 1, 1);
+    return { startDayIdx: dayIndexOf(start), endDayIdx: dayIndexOf(endExcl) - 1 };
+  }
+  if (granularity === 'quarter') {
+    if (period.fy == null || period.q == null) return null;
+    const [start, endExcl] = quarterBoundsOf(period.fy - yearsBack, period.q);
+    return { startDayIdx: dayIndexOf(start), endDayIdx: dayIndexOf(endExcl) - 1 };
+  }
+  // year
+  if (period.fy == null) return null;
+  const fy = period.fy - yearsBack;
+  const [start] = quarterBoundsOf(fy, 1);
+  const [, endExcl] = quarterBoundsOf(fy, 4);
+  return { startDayIdx: dayIndexOf(start), endDayIdx: dayIndexOf(endExcl) - 1 };
 }
 
 function veeGroupFilter(selectedGids) {
@@ -5463,12 +5599,26 @@ function veeGroupFilter(selectedGids) {
 // One bucket's (KEGS or CARTONS) unit-volume series across a set of periods — reuses the same
 // trendRangeStats() primitive Volume Trends is built on, which is already generic over any
 // outlet-filter function, including one built against allOutlets instead of the Sales-Team-only
-// `outlets`.
-function veeUnitSeries(bucket, periods, outletFilterFn, groupFilterFn) {
+// `outlets`. Also returns the same-period actuals from 1 and 2 years earlier (via
+// veePeriodShiftedYears), matching the same "this period vs last year vs two years ago" pattern
+// used by Volume Trends and Total Volume — null when the shifted period predates the sales data,
+// as opposed to a genuine 0.
+function veeUnitSeries(bucket, periods, granularity, outletFilterFn, groupFilterFn) {
   const unitLitres = bucket === 'KEGS' ? KEG_UNIT_LITRES : CARTON_UNIT_LITRES;
+  function unitsFor(startDayIdx, endDayIdx) {
+    return trendRangeStats(bucket, startDayIdx, endDayIdx, outletFilterFn, groupFilterFn).totalLitres / unitLitres;
+  }
   return periods.map(p => {
     const stats = trendRangeStats(bucket, p.startDayIdx, p.endDayIdx, outletFilterFn, groupFilterFn);
-    return { label: p.label, units: stats.totalLitres / unitLitres, listingsCount: stats.listingsCount };
+    const ly1 = veePeriodShiftedYears(p, granularity, 1);
+    const ly2 = veePeriodShiftedYears(p, granularity, 2);
+    return {
+      label: p.label,
+      units: stats.totalLitres / unitLitres,
+      listingsCount: stats.listingsCount,
+      ly: (ly1 && ly1.endDayIdx >= 0) ? unitsFor(ly1.startDayIdx, ly1.endDayIdx) : null,
+      ly2: (ly2 && ly2.endDayIdx >= 0) ? unitsFor(ly2.startDayIdx, ly2.endDayIdx) : null,
+    };
   });
 }
 
@@ -5492,11 +5642,11 @@ function veeScrollChart(html) {
 // One volume-only chart (no listings) — shared by both tabs below, which each show a single
 // combined series (cartons only for Coles & Woolworths; keg+carton litres, optionally filtered to
 // just one bucket, for Total Volume) rather than a separate keg/carton pair.
-function veeRenderVolumeChart(elId, labels, values, cssClass, granularity, titlePrefix, unitLabel, tooltipSuffix, decimals) {
+function veeRenderVolumeChart(elId, labels, values, cssClass, granularity, titlePrefix, unitLabel, tooltipSuffix, decimals, extraSeries) {
   const gLabel = veeGranularityLabel(granularity);
   const unitTag = unitLabel ? `<span class="muted" style="font-weight:400; font-size:11px;">(${unitLabel})</span>` : '';
   document.getElementById(elId).innerHTML = `
-    <div class="panel"><h3>${titlePrefix} by ${gLabel} ${unitTag}</h3>${veeScrollChart(vtBarChartHtml(labels, values, cssClass, tooltipSuffix || '', decimals != null ? decimals : null, null))}</div>
+    <div class="panel"><h3>${titlePrefix} by ${gLabel} ${unitTag}</h3>${veeScrollChart(vtBarChartHtml(labels, values, cssClass, tooltipSuffix || '', decimals != null ? decimals : null, extraSeries || null))}</div>
   `;
 }
 
@@ -5616,18 +5766,49 @@ function naUpspwChartHtml(quarters, ownerSelected, gidsSelected, outletFilterFn)
     }).join('')}
   </div>`);
 }
+// National Accounts intentionally shows the same tight 12-month trailing window as Volume Trends
+// and Total Volume (mirrors tvDefaultPeriodCount) — every visible period now carries its own
+// last-year / 2-years-ago / target comparison bars, so a long multi-year trailing chart isn't
+// needed to see year-over-year context.
+function naDefaultPeriodCount(granularity) {
+  if (granularity === 'month') return 12;
+  if (granularity === 'quarter') return 4;
+  return 1; // year
+}
+// Distributes/aggregates the National Accounts carton target (set per FY quarter, carton-only) to
+// match the chart's chosen granularity — same even-split-by-3/direct/sum-of-quarters approach as
+// tvTargetForPeriod. Converted from litres (how it's stored) to carton units, matching the actual/
+// ly/ly2 series on this chart.
+function naTargetForPeriod(period, granularity) {
+  function qTargetUnits(fy, q) {
+    const t = naTargetFor(quarterKeyOf(fy, q));
+    return t.cartonVolumeTarget != null ? t.cartonVolumeTarget / CARTON_UNIT_LITRES : null;
+  }
+  if (granularity === 'month') {
+    const { fy, q } = fyQuarterOf(new Date(period.y, period.m, 15));
+    const qt = qTargetUnits(fy, q);
+    return qt != null ? qt / 3 : null;
+  }
+  if (granularity === 'quarter') return qTargetUnits(period.fy, period.q);
+  // year
+  let total = null;
+  for (let q = 1; q <= 4; q++) {
+    const qt = qTargetUnits(period.fy, q);
+    if (qt != null) total = (total||0) + qt;
+  }
+  return total;
+}
 function renderNationalAccountsPage() {
   const granularity = document.getElementById('na_granularity').value;
   const outletFilterFn = naOwnerOutletFilter();
   const skuSelected = naSkuMsel ? naSkuMsel.getValues() : [];
   const groupFilterFn = veeGroupFilter(skuSelected);
-  const periods = veePeriodRanges(granularity, veeDefaultPeriodCount(granularity));
-  const cartonSeries = veeUnitSeries('CARTONS', periods, outletFilterFn, groupFilterFn);
-  const outletCount = Object.keys(allOutlets).filter(outletFilterFn).length;
-  const totalCartons = cartonSeries.reduce((s, p) => s + p.units, 0);
+  const periods = veePeriodRanges(granularity, naDefaultPeriodCount(granularity));
+  const cartonSeries = veeUnitSeries('CARTONS', periods, granularity, outletFilterFn, groupFilterFn);
+  const targetSeries = periods.map(p => naTargetForPeriod(p, granularity));
 
-  document.getElementById('na_summary').innerHTML = veeSummaryCardsHtml(outletCount, [{ n: fmtNum(totalCartons), l: 'Total carton units shown' }]);
-  veeRenderVolumeChart('na_cartons', cartonSeries.map(p => p.label), cartonSeries.map(p => p.units), 'cartons', granularity, 'Carton volume', 'units', '', null);
+  veeRenderVolumeChart('na_cartons', cartonSeries.map(p => p.label), cartonSeries.map(p => p.units), 'cartons', granularity, 'Carton volume', 'units', '', null,
+    { ly: cartonSeries.map(p => p.ly), ly2: cartonSeries.map(p => p.ly2), target: targetSeries });
 
   const quarterKey = document.getElementById('na_dist_quarter').value;
   document.getElementById('na_dist_table').innerHTML = naDistTableHtml(quarterKey);
@@ -5650,29 +5831,90 @@ function tvStreamOutletFilter() {
 }
 // Litres per period for the chosen bucket filter ('ALL' sums kegs+cartons, or a single bucket) —
 // litres is the only unit that lets kegs and cartons be combined on one chart, since "units" means
-// something different (50L vs 6L) for each.
-function tvLitresSeries(bucketFilterVal, periods, outletFilterFn, groupFilterFn) {
-  return periods.map(p => {
+// something different (50L vs 6L) for each. Also returns the same-period actuals from 1 and 2
+// years earlier (via veePeriodShiftedYears) so the chart can show "this period vs last year vs
+// two years ago" at every point on the x-axis, not just the latest one — null when the shifted
+// period falls entirely before the sales data began (no real data to show, as opposed to a
+// genuine 0).
+function tvLitresSeries(bucketFilterVal, periods, granularity, outletFilterFn, groupFilterFn) {
+  function litresFor(startDayIdx, endDayIdx) {
     let litres = 0;
-    if (bucketFilterVal === 'ALL' || bucketFilterVal === 'KEGS') litres += trendRangeStats('KEGS', p.startDayIdx, p.endDayIdx, outletFilterFn, groupFilterFn).totalLitres;
-    if (bucketFilterVal === 'ALL' || bucketFilterVal === 'CARTONS') litres += trendRangeStats('CARTONS', p.startDayIdx, p.endDayIdx, outletFilterFn, groupFilterFn).totalLitres;
-    return { label: p.label, litres };
+    if (bucketFilterVal === 'ALL' || bucketFilterVal === 'KEGS') litres += trendRangeStats('KEGS', startDayIdx, endDayIdx, outletFilterFn, groupFilterFn).totalLitres;
+    if (bucketFilterVal === 'ALL' || bucketFilterVal === 'CARTONS') litres += trendRangeStats('CARTONS', startDayIdx, endDayIdx, outletFilterFn, groupFilterFn).totalLitres;
+    return litres;
+  }
+  return periods.map(p => {
+    const ly1 = veePeriodShiftedYears(p, granularity, 1);
+    const ly2 = veePeriodShiftedYears(p, granularity, 2);
+    return {
+      label: p.label,
+      litres: litresFor(p.startDayIdx, p.endDayIdx),
+      ly: (ly1 && ly1.endDayIdx >= 0) ? litresFor(ly1.startDayIdx, ly1.endDayIdx) : null,
+      ly2: (ly2 && ly2.endDayIdx >= 0) ? litresFor(ly2.startDayIdx, ly2.endDayIdx) : null,
+    };
   });
 }
-function tvSplitRatioHtml(kegLitres, cartonLitres) {
+// Resolves the combined "Sales Team RSM targets + National Accounts target" volume figure for one
+// FY quarter, respecting the Kegs/Cartons bucket filter and which Volume Streams are currently in
+// scope on the page — the only way to get an apples-to-apples "total company volume target",
+// since RSM targets only ever covered Sales Team and National Accounts previously had no target
+// concept at all. Returns null if nothing applicable has been set.
+function tvTargetForQuarter(quarterKey, bucketFilterVal, streamsSelected) {
+  const includeSalesTeam = !streamsSelected.length || streamsSelected.includes('Sales Team');
+  const includeNA = !streamsSelected.length || streamsSelected.includes('National Accounts');
+  let total = null;
+  if (includeSalesTeam) {
+    const rsmList = uniqueVals('rsm', outlets);
+    const t = sumTargetsForAllRsms(quarterKey, rsmList);
+    if (bucketFilterVal !== 'CARTONS' && t.kegVolumeTarget != null) total = (total||0) + Number(t.kegVolumeTarget);
+    if (bucketFilterVal !== 'KEGS' && t.cartonVolumeTarget != null) total = (total||0) + Number(t.cartonVolumeTarget);
+  }
+  // National Accounts (Coles & Woolworths) volume is carton-only, so its target never contributes
+  // when the page is filtered to Kegs only.
+  if (includeNA && bucketFilterVal !== 'KEGS') {
+    const nt = naTargetFor(quarterKey);
+    if (nt.cartonVolumeTarget != null) total = (total||0) + Number(nt.cartonVolumeTarget);
+  }
+  return total;
+}
+// Distributes/aggregates the quarterly target above to match the chart's chosen granularity: a
+// month gets an even third of its quarter's target (a simpler, coarser split than Volume Trends'
+// seasonal weighting — appropriate here since this is a sense-check tool spanning up to several
+// volume streams and every SKU, not a precise month-by-month tracker), a quarter uses its own
+// target directly, and a year sums whichever of its 4 quarters have one set.
+function tvTargetForPeriod(period, granularity, bucketFilterVal, streamsSelected) {
+  if (granularity === 'month') {
+    const { fy, q } = fyQuarterOf(new Date(period.y, period.m, 15));
+    const qt = tvTargetForQuarter(quarterKeyOf(fy, q), bucketFilterVal, streamsSelected);
+    return qt != null ? qt / 3 : null;
+  }
+  if (granularity === 'quarter') {
+    return tvTargetForQuarter(quarterKeyOf(period.fy, period.q), bucketFilterVal, streamsSelected);
+  }
+  // year
+  let total = null;
+  for (let q = 1; q <= 4; q++) {
+    const qt = tvTargetForQuarter(quarterKeyOf(period.fy, q), bucketFilterVal, streamsSelected);
+    if (qt != null) total = (total||0) + qt;
+  }
+  return total;
+}
+// Two-slice pie (Kegs vs Cartons) for a single period — matches the same period the SKU-by-SKU
+// pie below is showing, using the same conic-gradient/pie-legend markup so the two pies read as a
+// matched pair, just with the fixed keg/carton color scheme instead of the SKU palette.
+function tvSplitPieHtml(kegLitres, cartonLitres) {
   const total = kegLitres + cartonLitres;
-  if (total <= 0) return `<div class="empty">No volume in the selected scope.</div>`;
+  if (total <= 0) return `<div class="empty">No volume for this period.</div>`;
   const kegPct = kegLitres / total * 100;
   const cartonPct = 100 - kegPct;
-  return `
-    <div class="split-ratio-bar">
-      <div class="srb-keg" style="width:${kegPct}%;" title="Kegs: ${fmtNum(kegLitres)} L (${kegPct.toFixed(0)}%)"></div>
-      <div class="srb-carton" style="width:${cartonPct}%;" title="Cartons: ${fmtNum(cartonLitres)} L (${cartonPct.toFixed(0)}%)"></div>
-    </div>
-    <div class="split-ratio-legend">
-      <span><span class="srl-swatch" style="background:var(--keg);"></span>Kegs — ${fmtNum(kegLitres)} L (${kegPct.toFixed(0)}%)</span>
-      <span><span class="srl-swatch" style="background:var(--pack);"></span>Cartons — ${fmtNum(cartonLitres)} L (${cartonPct.toFixed(0)}%)</span>
-    </div>`;
+  const gradient = `var(--keg) 0% ${kegPct.toFixed(3)}%, var(--pack) ${kegPct.toFixed(3)}% 100%`;
+  return `<div class="pie-wrap">
+    <div class="pie-donut" style="background: conic-gradient(${gradient});"></div>
+    <ul class="pie-legend">
+      <li><span class="pl-swatch" style="background:var(--keg);"></span>Kegs<span class="pl-pct">${fmtNum(kegLitres)} L · ${kegPct.toFixed(1)}%</span></li>
+      <li><span class="pl-swatch" style="background:var(--pack);"></span>Cartons<span class="pl-pct">${fmtNum(cartonLitres)} L · ${cartonPct.toFixed(1)}%</span></li>
+    </ul>
+  </div>`;
 }
 // Per-SKU litres for a single period, respecting the bucket filter (so "Kegs only" shows only keg
 // SKUs in the pie) plus the stream/SKU filters already on the page.
@@ -5722,30 +5964,47 @@ function tvSelectedPieIndex(periods) {
   const idx = periods.findIndex(p => p.label === document.getElementById('tv_pie_period').value);
   return idx >= 0 ? idx : periods.length - 1;
 }
+// Total Volume intentionally shows a tight 12-month trailing window (unlike the National Accounts
+// tab's longer multi-year default via veeDefaultPeriodCount) — every visible period already
+// carries its own last-year / 2-years-ago / target comparison bars, so a long trailing chart isn't
+// needed to see year-over-year context; it would just crowd out the current period.
+function tvDefaultPeriodCount(granularity) {
+  if (granularity === 'month') return 12;
+  if (granularity === 'quarter') return 4;
+  return 1; // year
+}
 function renderTotalVolumePage() {
   const granularity = document.getElementById('tv_granularity').value;
   const bucketFilterVal = document.getElementById('tv_bucket').value; // 'ALL' | 'KEGS' | 'CARTONS'
   const outletFilterFn = tvStreamOutletFilter();
   const skuSelected = tvSkuMsel ? tvSkuMsel.getValues() : [];
   const groupFilterFn = veeGroupFilter(skuSelected);
-  const periods = veePeriodRanges(granularity, veeDefaultPeriodCount(granularity));
-  const litresSeries = tvLitresSeries(bucketFilterVal, periods, outletFilterFn, groupFilterFn);
-  const outletCount = Object.keys(allOutlets).filter(outletFilterFn).length;
-  const totalLitresShown = litresSeries.reduce((s, p) => s + p.litres, 0);
+  const periods = veePeriodRanges(granularity, tvDefaultPeriodCount(granularity));
+  const litresSeries = tvLitresSeries(bucketFilterVal, periods, granularity, outletFilterFn, groupFilterFn);
 
-  document.getElementById('tv_summary').innerHTML = veeSummaryCardsHtml(outletCount, [{ n: fmtNum(totalLitresShown) + ' L', l: 'Total volume shown' }]);
-
-  // Split ratio is always both buckets combined (regardless of the Kegs/Cartons filter above),
-  // since a "split" of a single-bucket view would be a trivial 100/0.
-  const kegLitresTotal = periods.reduce((s, p) => s + trendRangeStats('KEGS', p.startDayIdx, p.endDayIdx, outletFilterFn, groupFilterFn).totalLitres, 0);
-  const cartonLitresTotal = periods.reduce((s, p) => s + trendRangeStats('CARTONS', p.startDayIdx, p.endDayIdx, outletFilterFn, groupFilterFn).totalLitres, 0);
-  document.getElementById('tv_split').innerHTML = tvSplitRatioHtml(kegLitresTotal, cartonLitresTotal);
+  // Target line: the combined Sales Team RSM targets + National Accounts target (see
+  // tvTargetForQuarter), respecting whichever Volume Streams and Kegs/Cartons bucket are
+  // currently selected — the only "total company volume target" this app can build, since RSM
+  // targets alone only ever covered Sales Team.
+  const streamsSelected = tvStreamMsel ? tvStreamMsel.getValues() : [];
+  const targetSeries = periods.map(p => tvTargetForPeriod(p, granularity, bucketFilterVal, streamsSelected));
 
   const cssClass = bucketFilterVal === 'KEGS' ? 'kegs' : bucketFilterVal === 'CARTONS' ? 'cartons' : 'combo';
-  veeRenderVolumeChart('tv_volume', litresSeries.map(p => p.label), litresSeries.map(p => p.litres), cssClass, granularity, 'Volume', 'litres', ' L', null);
+  veeRenderVolumeChart('tv_volume', litresSeries.map(p => p.label), litresSeries.map(p => p.litres), cssClass, granularity, 'Volume', 'litres', ' L', null,
+    { ly: litresSeries.map(p => p.ly), ly2: litresSeries.map(p => p.ly2), target: targetSeries });
 
+  // Both the SKU-by-SKU pie and the Keg/Carton split pie below now show the SAME single period —
+  // whichever one is selected in the period picker — rather than summing across every period on
+  // the trend chart above, so the two pies are always describing one consistent slice of time.
   populateTvPiePeriodSelect(periods);
   const period = periods[tvSelectedPieIndex(periods)];
+
+  // Split is always both buckets combined (regardless of the Kegs/Cartons filter above), since a
+  // "split" of a single-bucket view would be a trivial 100/0.
+  const kegLitresPeriod = trendRangeStats('KEGS', period.startDayIdx, period.endDayIdx, outletFilterFn, groupFilterFn).totalLitres;
+  const cartonLitresPeriod = trendRangeStats('CARTONS', period.startDayIdx, period.endDayIdx, outletFilterFn, groupFilterFn).totalLitres;
+  document.getElementById('tv_split').innerHTML = tvSplitPieHtml(kegLitresPeriod, cartonLitresPeriod);
+
   const breakdown = tvSkuBreakdown(period, outletFilterFn, groupFilterFn, bucketFilterVal);
   document.getElementById('tv_pie').innerHTML = tvPieChartHtml(breakdown);
 }
@@ -7916,6 +8175,7 @@ function onInitialDataLoaded(data) {
   naDistributions = data.naDistributions || {};
   vipContacts = data.vipContacts || [];
   rsmZoneOverrides = data.rsmZoneOverrides || {};
+  naTargets = data.naTargets || {};
   applyRsmZoneOverrides();
   renderEverything();
 }
@@ -7955,6 +8215,7 @@ function refreshPricingFromServer() {
       naDistributions = data.naDistributions || {};
   vipContacts = data.vipContacts || [];
       rsmZoneOverrides = data.rsmZoneOverrides || {};
+      naTargets = data.naTargets || {};
       applyRsmZoneOverrides();
       // Pick up any customer a colleague added since our last poll — same fill-gaps-only merge
       // as the initial load, so a real record (should one now exist) is never overwritten.
