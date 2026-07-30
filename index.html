@@ -306,6 +306,21 @@
     table.datatable tr { break-inside:avoid; }
     .rank-detail { display:block !important; }
     .print-only { display:block !important; }
+    /* Bar/line charts were running off the edge of the printed page. On screen, a chart with many
+       columns (e.g. Volume Trends' 12+ month window) is wrapped by veeScrollChart in a
+       .chart-scroll div (overflow-x:auto) so it can scroll horizontally — but a printed page can't
+       scroll, so that overflow just got sliced off at the page edge. The deeper cause: flex items
+       default to a content-based minimum width (here, the widest un-wrapped label), so a chart's
+       columns refuse to shrink below that even when their container is narrower — forcing the
+       whole row wider than the page regardless of scrolling. Neutralizing the scroll wrapper and
+       letting every column's flex-basis actually shrink (min-width:0) fixes both causes at once;
+       the chart now compresses to fit the fixed print-page width instead of overflowing it. */
+    .chart-scroll { overflow:visible !important; }
+    .bar-chart .bar-col, .lc-bars .lc-cell, .lc-monthrow .lc-cell { min-width:0 !important; }
+    .bar-chart .bar-wk, .bar-chart .bar-val, .bar-chart .bar-sub, .lc-monthrow .lc-cell {
+      white-space:normal !important; font-size:6.5px !important; line-height:1.15; word-break:break-word;
+    }
+    .bar-legend { font-size:8px; }
     /* Banner Gap Report has two separate exports sharing the one tab: the normal "Export / Print
        PDF" button prints the cards+matrix (#bg_detail) and hides the SKU comparison results;
        "Export / Print PDF" on the SKU comparison tool does the opposite, via a body class toggled
@@ -357,7 +372,7 @@
   <button class="tab-btn" data-tab="customerexplorer">Customer Explorer</button>
   <button class="tab-btn" data-tab="performance">Team Dashboard</button>
   <button class="tab-btn" data-tab="targetcustomers">Target Customers</button>
-  <button class="tab-btn" data-tab="atrisk">At Risk Listings</button>
+  <button class="tab-btn" data-tab="atrisk">Listings Report</button>
   <button class="tab-btn" data-tab="bannergaps">Banner Gap Report</button>
   <button class="tab-btn" data-tab="activations">Activations</button>
   <button class="tab-btn" data-tab="targets">Set Targets</button>
@@ -4510,6 +4525,55 @@ function perfAtRiskData(bucket, outletFilterFn, nowDayIdx, priorWindow) {
   }
   return { newList, returnedList, atRiskList, currentList };
 }
+// Aggregates the At Risk list by SKU (beer + bucket) — a call-list is great for triage, but "which
+// beers are actually bleeding volume" is a different, complementary question: a SKU can dominate
+// the risk even if no single account on it is individually huge. Sorted biggest-volume-at-risk
+// first, with a totals row so the printed report carries its own bottom line.
+function arSkuSummaryHtml(rows, countLabel, volumeLabel) {
+  countLabel = countLabel || 'At-risk listings';
+  volumeLabel = volumeLabel || 'Volume at risk';
+  if (!rows.length) return '<div class="empty">No listings right now.</div>';
+  const bySku = {};
+  rows.forEach(r => {
+    const key = r.beer + '|' + r.bucket;
+    if (!bySku[key]) bySku[key] = { beer: r.beer, bucket: r.bucket, bucketLabel: r.bucketLabel, count: 0, litres: 0 };
+    bySku[key].count++;
+    bySku[key].litres += r.litres;
+  });
+  const list = Object.values(bySku).sort((a,b) => b.litres - a.litres);
+  const totalCount = rows.length;
+  const totalLitres = rows.reduce((s,r) => s + r.litres, 0);
+  return `<div class="tablewrap no-max-height">
+    <table class="datatable">
+      <thead><tr><th>SKU</th><th class="num-cell">${escapeHtml(countLabel)}</th><th class="num-cell">${escapeHtml(volumeLabel)}</th></tr></thead>
+      <tbody>${list.map(s => `<tr>
+        <td>${escapeHtml(s.beer)} <span class="badge ${s.bucket==='KEGS'?'kegs':'cartons'}" style="font-size:9px;">${escapeHtml(s.bucketLabel)}</span></td>
+        <td class="num-cell mono">${fmtNum(s.count)}</td>
+        <td class="num-cell mono">${fmtNum(s.litres)} L</td>
+      </tr>`).join('')}
+      <tr style="font-weight:700;"><td>Total</td><td class="num-cell mono">${fmtNum(totalCount)}</td><td class="num-cell mono">${fmtNum(totalLitres)} L</td></tr>
+      </tbody>
+    </table>
+  </div>`;
+}
+// Top-of-page scorecard: at-a-glance total count + total volume for each of the 4 tables below,
+// before drilling into any one of them — answers "how big is each bucket" in one glance.
+function arScorecardHtml(newList, returnedList, atRiskList, currentList) {
+  const card = (label, rows) => {
+    const litres = rows.reduce((s,r) => s + r.litres, 0);
+    return `<div class="kpi-card">
+      <div class="kpi-lbl">${escapeHtml(label)}</div>
+      <div class="kpi-num">${fmtNum(rows.length)}</div>
+      <div class="kpi-target">${fmtNum(litres)} L</div>
+    </div>`;
+  };
+  return `<div class="kpi-grid" style="margin-bottom:14px;">
+    ${card('New listings', newList)}
+    ${card('Returned listings', returnedList)}
+    ${card('At risk listings', atRiskList)}
+    ${card('Current listings', currentList)}
+  </div>`;
+}
 function atRiskTableHtml(title, hint, rows, badgeCls, volumeLabel) {
   return `<div class="panel">
     <div class="rowflex" style="justify-content:space-between;">
@@ -4605,14 +4669,35 @@ function renderAtRiskPage() {
   // Shown both on screen and on the printed/PDF report — the filter panel above it is hidden
   // when printing, so this line is what tells you which RSM/package type/date the report covers.
   document.getElementById('ar_printSummary').innerHTML =
-    `<strong>At Risk Listings</strong> — ${rsmSel ? escapeHtml(rsmSel) : 'All RSMs'} · ${pkgSel ? (pkgSel==='KEGS'?'Kegs only':'Cartons only') : 'Kegs + Cartons'} · as of ${asOfLabel}`;
+    `<strong>Listings Report</strong> — ${rsmSel ? escapeHtml(rsmSel) : 'All RSMs'} · ${pkgSel ? (pkgSel==='KEGS'?'Kegs only':'Cartons only') : 'Kegs + Cartons'} · as of ${asOfLabel}`;
 
   document.getElementById('ar_detail').innerHTML = `
     ${snapshotNote ? `<div class="hint no-print" style="margin-bottom:12px; color:var(--amber);">📅 ${snapshotNote.replace(/^ — /,'')}. Reset the date above to see the current picture.</div>` : ''}
+    ${arScorecardHtml(allNew, allReturned, allAtRisk, allCurrent)}
     ${atRiskTableHtml('New listings'+titleSuffix, newHint, allNew, 'green', 'Current volume')}
+    <div class="panel">
+      <h3 style="margin:0 0 4px;">New listings by SKU <span class="badge green">${allNew.length}</span></h3>
+      <div class="hint" style="margin-bottom:8px;">Same new listings above, grouped by beer instead of by customer.</div>
+      ${arSkuSummaryHtml(allNew, 'New listings', 'Current volume')}
+    </div>
     ${atRiskTableHtml('Returned listings'+titleSuffix, returnedHint, allReturned, 'blue', 'Current volume')}
-    ${atRiskTableHtml('At risk listings'+titleSuffix, atRiskHint, allAtRisk, 'red', 'Last volume')}
+    <div class="panel">
+      <h3 style="margin:0 0 4px;">Returned listings by SKU <span class="badge blue">${allReturned.length}</span></h3>
+      <div class="hint" style="margin-bottom:8px;">Same returned listings above, grouped by beer instead of by customer.</div>
+      ${arSkuSummaryHtml(allReturned, 'Returned listings', 'Current volume')}
+    </div>
+    ${atRiskTableHtml('At Risk / Churn / Lost Listings'+titleSuffix, atRiskHint, allAtRisk, 'red', 'Last volume')}
+    <div class="panel">
+      <h3 style="margin:0 0 4px;">At risk volume by SKU <span class="badge red">${allAtRisk.length}</span></h3>
+      <div class="hint" style="margin-bottom:8px;">Same at-risk listings above, grouped by beer instead of by customer — which SKUs are actually bleeding the most volume.</div>
+      ${arSkuSummaryHtml(allAtRisk, 'At-risk listings', 'Volume at risk')}
+    </div>
     ${atRiskTableHtml('Current listings'+titleSuffix, currentHint, allCurrent, 'grey', 'Current volume')}
+    <div class="panel">
+      <h3 style="margin:0 0 4px;">Current listings by SKU <span class="badge grey">${allCurrent.length}</span></h3>
+      <div class="hint" style="margin-bottom:8px;">Same current listings above, grouped by beer instead of by customer.</div>
+      ${arSkuSummaryHtml(allCurrent, 'Current listings', 'Current volume')}
+    </div>
   `;
 }
 
@@ -5774,7 +5859,7 @@ function veeGranularityLabel(granularity) {
 // (vs. Volume Trends' fixed 8-12), which would otherwise squeeze every bar down to nothing on a
 // normal screen width.
 function veeScrollChart(html) {
-  return `<div style="overflow-x:auto;">${html}</div>`;
+  return `<div class="chart-scroll" style="overflow-x:auto;">${html}</div>`;
 }
 
 // One volume-only chart (no listings) — shared by both tabs below, which each show a single
