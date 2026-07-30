@@ -328,6 +328,28 @@
     #bg_cmp_results { display:none; }
     body.printing-bg-compare #bg_detail { display:none !important; }
     body.printing-bg-compare #bg_cmp_results { display:block !important; }
+    /* Keep small, logically-single units from splitting across a page break — a page break landing
+       mid-block leaves an orphaned header with no data (or data with no header) on either side,
+       which is unreadable. break-inside:avoid is a soft constraint: if a block genuinely doesn't
+       fit on one page (e.g. a 20-row Top 20 customer list), the browser falls back to breaking
+       inside it anyway rather than producing a broken layout — so this is safe to apply broadly. */
+    .listing-trio { break-inside:avoid; }
+    .kpi-grid { break-inside:avoid; }
+    .rank-list li { break-inside:avoid; }
+    .rowflex > .panel { break-inside:avoid; }
+    /* The Team Dashboard's RSM comparison charts (Total Volume / Keg Listings / Carton Listings by
+       RSM) and "new listings per week" charts render at a fixed on-screen height (130-150px) that's
+       mostly whitespace once printed at A4 scale — three of them stacked ate most of page 1. Each
+       bar's JS-computed pixel height is mirrored into a --bar-h custom property on just these
+       charts (marked with the dash-chart class — see netlify_part4.js) so print can shrink every
+       bar by the same proportion via calc() without flattening the chart (a flat CSS height
+       override would make every bar the same height regardless of its real value). Deliberately
+       scoped to .dash-chart only, not every .bar-chart — other bar-chart usages elsewhere (Delivery
+       Reports, National Accounts distributions) don't carry --bar-h and must stay untouched. */
+    .dash-chart { height:auto !important; padding-top:3px !important; }
+    .dash-chart .bar-col { height:auto !important; }
+    .dash-chart .bar-rect { height:calc(var(--bar-h) * 0.4) !important; min-height:1px !important; }
+    .dash-chart .bar-wk { margin-top:2px !important; }
   }
 </style>
 </head>
@@ -3918,14 +3940,14 @@ function perfBarChartHtml(counts, startDayIdx, endDayIdx, cls) {
   const vals = [];
   for (let b=0; b<numBins; b++) vals.push({ b, v: counts[b]||0 });
   const max = Math.max(1, ...vals.map(x=>x.v));
-  return `<div class="bar-chart">
+  return `<div class="bar-chart dash-chart">
     ${vals.map(x => {
       const h = Math.max(2, Math.round((x.v/max)*130));
       const binStart = new Date(EPOCH_DATE.getTime() + (startDayIdx + x.b*7)*86400000);
       const lbl = binStart.toLocaleDateString('en-AU',{day:'2-digit',month:'short'});
       return `<div class="bar-col" title="${x.v} new listing${x.v===1?'':'s'} — week of ${lbl}">
         <div class="bar-val">${x.v||''}</div>
-        <div class="bar-rect ${cls}" style="height:${h}px;"></div>
+        <div class="bar-rect ${cls}" style="--bar-h:${h}px; height:${h}px;"></div>
         <div class="bar-wk">${lbl}</div>
       </div>`;
     }).join('')}
@@ -3998,12 +4020,12 @@ function perfVolumeByRsmChart(startDayIdx, endDayIdx, rsmList) {
     return { rsm, total: keg + carton };
   }).sort((a,b) => b.total - a.total);
   const max = Math.max(1, ...data.map(d=>d.total));
-  return `<div class="bar-chart" style="height:130px;">
+  return `<div class="bar-chart dash-chart" style="height:130px;">
     ${data.map(d => {
       const h = Math.max(2, Math.round((d.total/max)*105));
       return `<div class="bar-col" title="${escapeHtml(d.rsm)}: ${fmtNum(d.total)} L">
         <div class="bar-val">${fmtNum(d.total)}</div>
-        <div class="bar-rect" style="height:${h}px; background:var(--blue);"></div>
+        <div class="bar-rect" style="--bar-h:${h}px; height:${h}px; background:var(--blue);"></div>
         <div class="bar-wk">${escapeHtml(d.rsm)}</div>
       </div>`;
     }).join('')}
@@ -4030,13 +4052,13 @@ function perfListingsByRsmChart(bucket, refEndDayIdx, cycleDays, rsmList, cssCla
     return { rsm, count: stats.listingsCount, upspw };
   }).sort((a,b) => b.count - a.count);
   const max = Math.max(1, ...data.map(d=>d.count));
-  return `<div class="bar-chart" style="height:150px;">
+  return `<div class="bar-chart dash-chart" style="height:150px;">
     ${data.map(d => {
       const h = Math.max(2, Math.round((d.count/max)*100));
       return `<div class="bar-col" title="${escapeHtml(d.rsm)}: ${fmtNum(d.count)} listings · ${d.upspw.toFixed(1)} units per store per week">
         <div class="bar-val">${fmtNum(d.count)}</div>
         <div class="bar-sub">${d.upspw.toFixed(1)}/store/wk</div>
-        <div class="bar-rect ${cssClass||''}" style="height:${h}px;"></div>
+        <div class="bar-rect ${cssClass||''}" style="--bar-h:${h}px; height:${h}px;"></div>
         <div class="bar-wk">${escapeHtml(d.rsm)}</div>
       </div>`;
     }).join('')}
