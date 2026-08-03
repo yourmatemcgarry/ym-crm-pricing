@@ -45,7 +45,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides, naTargets] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -65,6 +65,8 @@ async function readAll(s) {
     s.get('naDistributions', { type: 'json' }),
     s.get('rsmZoneOverrides', { type: 'json' }),
     s.get('naTargets', { type: 'json' }),
+    s.get('customGroups', { type: 'json' }),
+    s.get('groupMemberOverrides', { type: 'json' }),
   ]);
   // vipContacts is seeded exactly once — the first time anyone loads the app after this feature
   // ships, the blob won't exist yet (null, not just empty), so we seed it from VIP_CONTACTS_SEED
@@ -99,6 +101,8 @@ async function readAll(s) {
     vipContacts,
     rsmZoneOverrides: rsmZoneOverrides || {},
     naTargets: naTargets || {},
+    customGroups: customGroups || [],
+    groupMemberOverrides: groupMemberOverrides || {},
   };
 }
 
@@ -403,6 +407,34 @@ export default async (req) => {
       current[groupId] = { ...existing, weightKg: Number(weightKg), updatedBy, updatedAt: now };
       await s.setJSON('groupPrices', current);
       return json({ ok: true, groupPrices: current });
+    }
+
+    if (action === 'addCustomGroup') {
+      // Adds a brand-new, self-serve SKU group (either a fresh custom product or a group
+      // split off from an existing multi-member group). Upserted by id so re-saving an
+      // edited custom group (e.g. re-running a split) just replaces the prior record.
+      const { group } = payload;
+      const current = (await s.get('customGroups', { type: 'json' })) || [];
+      const idx = current.findIndex((g) => g.id === group.id);
+      if (idx >= 0) current[idx] = group; else current.push(group);
+      await s.setJSON('customGroups', current);
+      return json({ ok: true, customGroups: current });
+    }
+
+    if (action === 'splitGroupMembers') {
+      // Splits one or more member SKUs off an existing group into a brand-new group.
+      // remainingMembers trims the ORIGINAL group's member list (stored as an override,
+      // since the original group itself is baked reference data, not editable in place);
+      // newGroup is the freshly created group holding the split-off members.
+      const { originalGroupId, remainingMembers, newGroup } = payload;
+      const currentGroups = (await s.get('customGroups', { type: 'json' })) || [];
+      const idx = currentGroups.findIndex((g) => g.id === newGroup.id);
+      if (idx >= 0) currentGroups[idx] = newGroup; else currentGroups.push(newGroup);
+      await s.setJSON('customGroups', currentGroups);
+      const currentOverrides = (await s.get('groupMemberOverrides', { type: 'json' })) || {};
+      currentOverrides[originalGroupId] = remainingMembers;
+      await s.setJSON('groupMemberOverrides', currentOverrides);
+      return json({ ok: true, customGroups: currentGroups, groupMemberOverrides: currentOverrides });
     }
 
     if (action === 'saveTruck') {

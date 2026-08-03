@@ -526,6 +526,49 @@
         </div>
       </div>
       <div class="hint" style="margin-bottom:10px;">One list price per SKU group (ex GST/WET) — this is what every customer deal is calculated from, shared live with your team. Kegs are priced per keg; cartons are priced per carton. Each carton SKU has its own <strong>cans/carton</strong>, <strong>cans/multipack</strong> and <strong>can size</strong> — set these accurately, since the margin calculators use them directly (a wrong carton size will throw off every margin figure for that beer). Deal prices below are rounded up to the nearest whole dollar. Use the "Enabled" toggle to control which SKU groups appear on the Pricing Grid, temporary deals, and customer summaries.</div>
+
+      <div class="no-print" style="border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:14px; background:var(--bg);">
+        <h3 style="margin:0 0 8px;">Add a custom product</h3>
+        <div class="hint" style="margin-bottom:8px;">For a new beer/SKU that isn't in the app yet. It'll appear in this list like any other product — set its price, weight and pack details, then enable it to show it on the Pricing Grid.</div>
+        <div class="rowflex" style="align-items:flex-end;">
+          <div class="fld" style="max-width:220px;"><label>Product name</label><input id="cp_name" placeholder="e.g. Mystery Brew"></div>
+          <div class="fld" style="max-width:140px;"><label>Type</label>
+            <select id="cp_bucket" onchange="updateCpBucketFields()">
+              <option value="KEGS">Keg</option>
+              <option value="CARTONS">Carton</option>
+            </select>
+          </div>
+          <div class="fld" id="cp_kegFieldsWrap" style="max-width:140px;">
+            <label>Keg size</label>
+            <select id="cp_kegSize">
+              <option value="50">50L</option>
+              <option value="30">30L</option>
+            </select>
+          </div>
+          <div class="fld" id="cp_cartonFieldsWrap" style="max-width:140px; display:none;">
+            <label>Cans/carton</label>
+            <input id="cp_cansPerCarton" type="number" step="1" min="1" value="24">
+          </div>
+          <div class="fld" style="max-width:130px;"><label>List price (optional)</label><input id="cp_listPrice" type="number" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="fld" style="max-width:130px;"><label>Weight kg (optional)</label><input id="cp_weightKg" type="number" step="0.1" min="0" placeholder="0.0"></div>
+          <div class="fld">
+            <label class="rowflex" style="gap:6px; cursor:pointer;"><input type="checkbox" id="cp_enabledNow" checked> Show on Pricing Grid now</label>
+          </div>
+          <button class="btn" onclick="addCustomProductGroup()">Add product</button>
+        </div>
+      </div>
+
+      <div class="no-print" id="sp_panel" style="display:none; border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:14px; background:var(--amber-bg);">
+        <h3 style="margin:0 0 4px;">Split "<span id="sp_groupLabel"></span>" into separate products</h3>
+        <div class="hint" style="margin-bottom:8px;">Untick any SKU below to move it into a brand-new, separately-priced product — handy when pack sizes of the same beer are currently bundled into one row but need their own price/deal. Past sales history stays attributed to the original combined product; this only separates pricing, deals and ordering from today forward.</div>
+        <div id="sp_memberList" style="margin-bottom:10px;"></div>
+        <div class="fld" style="max-width:280px;"><label>New product name</label><input id="sp_newName" placeholder="e.g. Dave 24-pack"></div>
+        <div class="rowflex" style="margin-top:10px;">
+          <button class="btn" onclick="saveSplitGroup()">Split</button>
+          <button class="btn secondary" onclick="closeSplitPanel()">Cancel</button>
+        </div>
+      </div>
+
       <div class="tablewrap">
         <table class="datatable">
           <thead><tr><th class="center">Enabled</th><th>SKU group</th><th>Format</th><th>Pack sizes (cartons only)</th><th class="num-cell">List price</th><th class="num-cell">Weight</th><th>Deal price reference (for invoicing)</th><th>Updated</th></tr></thead>
@@ -1245,6 +1288,7 @@
         <div class="ac-results" id="ord_outletResults"></div>
         <input type="hidden" id="ord_outletId">
       </div>
+      <div id="ord_pricingStatus" style="margin-top:8px;"></div>
       <div id="ord_lines" style="margin-top:12px;"></div>
       <div id="ord_summary" style="margin-top:10px;"></div>
       <div class="fld" style="margin-top:10px; max-width:420px;"><label>Delivery notes</label><input id="ord_notes" placeholder="e.g. deliver before 10am, use side entrance"></div>
@@ -1268,7 +1312,7 @@
       </div>
       <div class="tablewrap" style="margin-top:10px;">
         <table class="datatable">
-          <thead><tr><th>Customer</th><th>RSM</th><th>Items</th><th class="num-cell">Total price</th><th class="num-cell">Weight</th><th>Status</th><th>Created</th><th class="no-print">Action</th></tr></thead>
+          <thead><tr><th>Customer</th><th>RSM</th><th>Pricing</th><th>Items</th><th class="num-cell">Total price</th><th class="num-cell">Weight</th><th>Status</th><th>Created</th><th class="no-print">Action</th></tr></thead>
           <tbody id="ord_body"></tbody>
         </table>
       </div>
@@ -2286,6 +2330,9 @@ let rsmZoneOverrides = {}; // { [zone]: rsmName } — shared; lets the user imme
 let zoneBakedRsm = {}; // { [zone]: {counts:{rsmName:n}, dominant:rsmName} } — the ORIGINAL (pre-override) Ontap RSM assignment per zone, recomputed by applyRsmZoneOverrides() every time data loads, from the immutable originalOutletRsm snapshot above (never from outlets[id].rsm directly)
 let rsmRosterBaked = []; // sorted list of every RSM name currently known (from the baked outlet data, plus any override values already saved) — the options offered on the RSM Zones page's reassignment dropdown
 let naTargets = {}; // { quarterKey: {cartonVolumeTarget, updatedBy, updatedAt} } — shared; National Accounts (Coles & Woolworths) sits outside the RSM-based Sales Team targets, so it gets its own small target collection, set from the Set Targets page and used by the Total Volume page to build a combined company-wide target line
+let customGroups = []; // [ groupRecord,... ] — shared; brand-new SKU groups added via "Add a custom product", or split off an existing group via "Split…". Merged into `groups`/`groupOrder` by applyCustomGroups() on every data load.
+let groupMemberOverrides = {}; // { groupId: [memberId,...] } — shared; set when a Split moves one or more members out of an existing group (custom or baked). Display-only (memberDescs text) — nothing else in the app reads .members.
+let sp_currentGroupId = null; // groupId currently open in the "Split product" panel on Product List Prices — not shared, purely local UI state
 function naTargetFor(quarterKey) { return naTargets[quarterKey] || {}; }
 function updateNaTarget(quarterKey, val) {
   const existing = naTargets[quarterKey] || {};
@@ -2332,6 +2379,23 @@ function applyRsmZoneOverrides() {
   Object.values(outlets).forEach(o => {
     const ov = rsmZoneOverrides[o.zone];
     o.rsm = ov || originalOutletRsm[o.id] || o.rsm;
+  });
+}
+
+// Merges customGroups (brand-new or split-off SKU groups) into the live `groups`/`groupOrder`,
+// and re-applies groupMemberOverrides on top (so a group's members reflect its latest split, even
+// across repeated calls). Idempotent — safe to call again on every data load/poll, which it is.
+function applyCustomGroups() {
+  customGroups.forEach(g => {
+    groups[g.id] = g;
+    if (!groupOrder.includes(g.id)) {
+      const afterIdx = g.insertAfter ? groupOrder.indexOf(g.insertAfter) : -1;
+      if (afterIdx >= 0) groupOrder.splice(afterIdx + 1, 0, g.id);
+      else groupOrder.push(g.id);
+    }
+  });
+  Object.entries(groupMemberOverrides).forEach(([gid, members]) => {
+    if (groups[gid]) groups[gid] = { ...groups[gid], members };
   });
 }
 
@@ -2610,6 +2674,8 @@ function buildServerPayload(fnName, args) {
     case 'deleteVipContact':  return { id: args[0] };
     case 'saveRsmZoneOverride': return { zone: args[0], rsm: args[1], updatedBy: args[2] };
     case 'saveNaTarget': return { quarterKey: args[0], cartonVolumeTarget: args[1], updatedBy: args[2] };
+    case 'addCustomGroup': return { group: args[0] };
+    case 'splitGroupMembers': return { originalGroupId: args[0], remainingMembers: args[1], newGroup: args[2] };
     default: return {};
   }
 }
@@ -3243,8 +3309,9 @@ function renderProductPrices() {
         </label>
       </td>
       <td>
-        <div>${escapeHtml(g.label)} ${g.isCore?'<span class="badge blue">Core range</span>':''}</div>
+        <div>${escapeHtml(g.label)} ${g.isCore?'<span class="badge blue">Core range</span>':''} ${g.isCustom?'<span class="badge amber">Custom</span>':''}</div>
         <div class="muted" style="font-size:11.5px; margin-top:2px;">${escapeHtml(memberDescs)}${g.packQtys&&g.packQtys.length>1?` <span class="badge amber" style="font-size:9.5px;">mixed in sales history: ${g.packQtys.join('pk, ')}pk</span>`:''}</div>
+        ${g.members && g.members.length > 1 ? `<button type="button" class="btn small secondary no-print" style="margin-top:4px;" onclick="openSplitPanel('${g.id}')">Split…</button>` : ''}
       </td>
       <td><span class="badge ${bucketOf(g).toLowerCase()}">${escapeHtml(g.formatLabel||g.format)}</span></td>
       <td>${packSizesCell}</td>
@@ -3304,6 +3371,135 @@ function updateWeightKg(groupId, val) {
   productPrices[groupId] = { ...existing, weightKg: num, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
   renderProductPrices();
   callServer('saveWeightKg', [groupId, num, currentUserEmail], () => toast('Weight saved.'));
+}
+// ===================== Custom products & splitting =====================
+function slugifyForGroupId(label) {
+  return (label || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'product';
+}
+function uniqueGroupId(label, bucket) {
+  const base = 'custom_' + slugifyForGroupId(label) + '_' + (bucket === 'KEGS' ? 'keg' : 'carton');
+  let id = base, n = 2;
+  while (groups[id]) { id = base + '_' + n; n++; }
+  return id;
+}
+function updateCpBucketFields() {
+  const bucket = document.getElementById('cp_bucket').value;
+  document.getElementById('cp_kegFieldsWrap').style.display = bucket === 'KEGS' ? '' : 'none';
+  document.getElementById('cp_cartonFieldsWrap').style.display = bucket === 'CARTONS' ? '' : 'none';
+}
+function addCustomProductGroup() {
+  const label = (document.getElementById('cp_name').value || '').trim();
+  if (!label) { toast('Enter a product name.'); return; }
+  const bucket = document.getElementById('cp_bucket').value;
+  const isKeg = bucket === 'KEGS';
+  const kegSize = document.getElementById('cp_kegSize').value;
+  const cansPerCarton = parseInt(document.getElementById('cp_cansPerCarton').value, 10) || 24;
+  const enabledNow = document.getElementById('cp_enabledNow').checked;
+  const listPriceRaw = document.getElementById('cp_listPrice').value;
+  const weightRaw = document.getElementById('cp_weightKg').value;
+  const now = new Date().toISOString();
+
+  const id = uniqueGroupId(label, bucket);
+  const g = {
+    id, subbrand: label, label,
+    format: isKeg ? (kegSize === '30' ? 'Keg30L' : 'Keg') : 'Pack',
+    formatLabel: isKeg ? (kegSize === '30' ? '30L Keg' : '50L Keg') : 'Carton',
+    bucket,
+    isCore: !!enabledNow,
+    members: [],
+    packQtys: isKeg ? [1] : [cansPerCarton],
+    refPackQty: isKeg ? 1 : cansPerCarton,
+    saleUnitLabel: isKeg ? 'keg' : `${cansPerCarton}-pack carton`,
+    kegLitres: isKeg ? (kegSize === '30' ? 30 : 50) : null,
+    isCustom: true,
+    insertAfter: null,
+    createdBy: currentUserEmail, createdAt: now,
+  };
+  customGroups.push(g);
+  applyCustomGroups();
+
+  const listPrice = parseFloat(listPriceRaw);
+  const weightKg = parseFloat(weightRaw);
+  if (!isNaN(listPrice) && listPrice >= 0) productPrices[id] = { ...(productPrices[id] || {}), listPrice, updatedBy: currentUserEmail, updatedAt: now };
+  if (!isNaN(weightKg) && weightKg >= 0) productPrices[id] = { ...(productPrices[id] || {}), weightKg, updatedBy: currentUserEmail, updatedAt: now };
+
+  renderSummaryCards();
+  renderProductPrices();
+  renderColCheckList();
+  renderGridHeader();
+  renderGrid();
+  refreshGroupSelect();
+  resetAddCustomProductForm();
+  toast(`Added "${label}" — saving…`);
+  callServer('addCustomGroup', [g], () => {
+    const afterPrice = () => {
+      if (!isNaN(weightKg) && weightKg >= 0) callServer('saveWeightKg', [id, weightKg, currentUserEmail], () => toast(`"${label}" saved.`));
+      else toast(`"${label}" saved.`);
+    };
+    if (!isNaN(listPrice) && listPrice >= 0) callServer('saveGroupPrice', [id, listPrice, currentUserEmail], afterPrice);
+    else afterPrice();
+  });
+}
+function resetAddCustomProductForm() {
+  document.getElementById('cp_name').value = '';
+  document.getElementById('cp_listPrice').value = '';
+  document.getElementById('cp_weightKg').value = '';
+  document.getElementById('cp_cansPerCarton').value = '24';
+  document.getElementById('cp_bucket').value = 'KEGS';
+  document.getElementById('cp_kegSize').value = '50';
+  document.getElementById('cp_enabledNow').checked = true;
+  updateCpBucketFields();
+}
+function openSplitPanel(groupId) {
+  const g = groups[groupId];
+  if (!g || !g.members || g.members.length < 2) return;
+  sp_currentGroupId = groupId;
+  document.getElementById('sp_groupLabel').textContent = g.label;
+  document.getElementById('sp_memberList').innerHTML = g.members.map(pid => {
+    const desc = products[pid] ? products[pid].desc : pid;
+    return `<label class="rowflex" style="gap:8px; margin-bottom:4px;"><input type="checkbox" checked data-sp-member="${escapeHtml(pid)}"> ${escapeHtml(desc)}</label>`;
+  }).join('');
+  document.getElementById('sp_newName').value = '';
+  document.getElementById('sp_panel').style.display = '';
+}
+function closeSplitPanel() {
+  sp_currentGroupId = null;
+  document.getElementById('sp_panel').style.display = 'none';
+}
+function saveSplitGroup() {
+  const groupId = sp_currentGroupId;
+  const g = groups[groupId];
+  if (!g) { closeSplitPanel(); return; }
+  const checkboxes = [...document.querySelectorAll('[data-sp-member]')];
+  const moving = checkboxes.filter(cb => !cb.checked).map(cb => cb.getAttribute('data-sp-member'));
+  if (!moving.length) { toast('Untick at least one SKU to split off.'); return; }
+  const remaining = g.members.filter(pid => !moving.includes(pid));
+  if (!remaining.length) { toast('At least one SKU must stay in the original product.'); return; }
+  const newName = (document.getElementById('sp_newName').value || '').trim() || (g.label + ' (split)');
+  const now = new Date().toISOString();
+
+  const newId = uniqueGroupId(newName, g.bucket);
+  const newGroup = {
+    id: newId, subbrand: newName, label: newName,
+    format: g.format, formatLabel: g.formatLabel, bucket: g.bucket,
+    isCore: g.isCore, members: moving,
+    packQtys: g.packQtys, refPackQty: g.refPackQty, saleUnitLabel: g.saleUnitLabel, kegLitres: g.kegLitres,
+    isCustom: true, splitFrom: groupId, insertAfter: groupId,
+    createdBy: currentUserEmail, createdAt: now,
+  };
+  customGroups.push(newGroup);
+  groupMemberOverrides[groupId] = remaining;
+  applyCustomGroups();
+
+  renderSummaryCards();
+  renderProductPrices();
+  renderColCheckList();
+  renderGridHeader();
+  renderGrid();
+  refreshGroupSelect();
+  closeSplitPanel();
+  toast(`Split "${newName}" into its own product — saving…`);
+  callServer('splitGroupMembers', [groupId, remaining, newGroup], () => toast(`"${newName}" saved.`));
 }
 function onGroupEnabledToggle(groupId, checked) {
   const existing = productPrices[groupId] || {};
@@ -7548,10 +7744,18 @@ function renderOrderForm() {
   if (!body) return;
   const outletId = orderFormOutletId;
   const o = outlets[outletId];
+  const statusEl = document.getElementById('ord_pricingStatus');
   if (!outletId || !o) {
     body.innerHTML = `<div class="empty">Pick a customer above to start an order.</div>`;
     document.getElementById('ord_summary').innerHTML = '';
+    if (statusEl) statusEl.innerHTML = '';
     return;
+  }
+  if (statusEl) {
+    const priced = flagsFor(outletId).pricingUpdated;
+    statusEl.innerHTML = priced
+      ? `<span class="badge green">&#10003; Pricing &amp; deal confirmed for ${escapeHtml(o.name)}</span>`
+      : `<span class="badge amber">&#9888; Pricing not yet confirmed for ${escapeHtml(o.name)}</span> <a href="#" onclick="document.querySelector('.tab-btn[data-tab=summary]').click(); setTimeout(()=>selectSummaryOutlet('${outletId}'),0); return false;" style="margin-left:6px;">Review pricing &rarr;</a>`;
   }
   const allGroups = marginEligibleGroupIds('ALL');
   const kegGroups = allGroups.filter(gid => bucketOf(groups[gid]) === 'KEGS');
@@ -7563,11 +7767,18 @@ function renderOrderForm() {
     const pr = resolvePricing(outletId, gid);
     const paidQty = orderLinePaidQty(line);
     const lineTotal = pr.eff!==null ? pr.eff * paidQty : 0;
+    let dealText = '<span class="muted">Nil</span>';
+    if (pr.source === 'temp') dealText = `${dealLabel(pr.dealX)} <span class="badge blue">temp</span>`;
+    else if (pr.source === 'standing') dealText = dealLabel(pr.dealX);
+    const discountPct = pr.dealX > 0 ? (100 / (Number(pr.dealX) + 1)) : 0;
     return `<tr>
       <td>${escapeHtml(g.label)} <span class="badge ${bucketOf(g)==='KEGS'?'kegs':'cartons'}" style="font-size:9px;">${escapeHtml(g.formatLabel)}</span></td>
+      <td>${dealText}</td>
+      <td class="num-cell mono">${discountPct>0?discountPct.toFixed(1)+'%':'—'}</td>
       <td class="num-cell mono">${pr.eff!==null?fmtMoney(pr.eff):'—'}</td>
       <td class="num-cell"><input type="number" step="1" min="0" style="width:64px; text-align:right;" value="${line.qty||''}" placeholder="0" onchange="orderFormOnQtyChange('${gid}',this.value)"></td>
       <td class="num-cell"><input type="number" step="1" min="0" max="${line.qty||0}" style="width:64px; text-align:right;" value="${line.freeQty||''}" placeholder="0" onchange="orderFormOnFreeQtyChange('${gid}',this.value)"></td>
+      <td class="num-cell mono">${line.qty?paidQty:'—'}</td>
       <td class="num-cell mono">${line.qty?fmtMoney(lineTotal):'—'}</td>
       <td class="num-cell mono">${line.qty?fmtNum(line.qty*weightKgFor(gid)):'—'} kg</td>
     </tr>`;
@@ -7576,14 +7787,14 @@ function renderOrderForm() {
   body.innerHTML = `
     <div class="tablewrap">
       <table class="datatable">
-        <thead><tr><th>Beer</th><th class="num-cell">Price ea (ex GST/WET)</th><th class="num-cell">Qty</th><th class="num-cell">Free qty</th><th class="num-cell">Line total</th><th class="num-cell">Weight</th></tr></thead>
+        <thead><tr><th>Beer</th><th>Deal</th><th class="num-cell">Discount %</th><th class="num-cell">Price ea (ex GST/WET)</th><th class="num-cell">Total qty (incl. bonus)</th><th class="num-cell">Bonus/free qty</th><th class="num-cell">Paid qty</th><th class="num-cell">Line total</th><th class="num-cell">Weight</th></tr></thead>
         <tbody>
           ${kegGroups.map(lineRow).join('')}
           ${cartonGroups.map(lineRow).join('')}
         </tbody>
       </table>
     </div>
-    <div class="hint" style="margin-top:4px;">Free qty must be less than or equal to Qty — e.g. 3 kegs with a free qty of 1 means 2 are paid, 1 is free stock.</div>`;
+    <div class="hint" style="margin-top:4px;"><strong>Total qty</strong> is the full amount ordered, including any bonus/free kegs earned from the deal. <strong>Bonus/free qty</strong> is the portion of that total which isn't charged for. <strong>Paid qty</strong> (Total qty minus Bonus/free qty) is what's actually invoiced. Example: a 5+1 deal with a Total qty of 6 means 5 are paid, 1 is bonus stock.</div>`;
 
   const activeLines = Object.entries(orderFormLines).filter(([gid,l]) => l.qty > 0);
   const totalPrice = activeLines.reduce((s,[gid,l]) => s + ((resolvePricing(outletId,gid).eff||0)*orderLinePaidQty(l)), 0);
@@ -7662,14 +7873,16 @@ function renderOrdersList() {
   list.sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt));
   document.getElementById('ord_count').textContent = `(${list.length})`;
   const body = document.getElementById('ord_body');
-  if (!list.length) { body.innerHTML = `<tr><td colspan="8"><div class="empty">No orders yet.</div></td></tr>`; return; }
+  if (!list.length) { body.innerHTML = `<tr><td colspan="9"><div class="empty">No orders yet.</div></td></tr>`; return; }
   const statusBadge = s => s==='pending'?'<span class="badge grey">Pending</span>':s==='allocated'?'<span class="badge blue">Allocated</span>':'<span class="badge green">Completed</span>';
+  const pricingBadge = outletId => flagsFor(outletId).pricingUpdated ? '<span class="badge green">&#10003; Set</span>' : '<span class="badge amber">Not set</span>';
   body.innerHTML = list.map(o => {
     const out = outlets[o.outletId] || {};
-    const itemsSummary = o.lines.map(l => `${l.qty}× ${groups[l.groupId]?groups[l.groupId].label:l.groupId}${l.freeQty?` (${l.freeQty} free)`:''}`).join(', ');
+    const itemsSummary = o.lines.map(l => `${l.qty}× ${groups[l.groupId]?groups[l.groupId].label:l.groupId}${l.freeQty?` (${l.freeQty} bonus)`:''}`).join(', ');
     return `<tr>
       <td>${escapeHtml(out.name||o.outletId)}</td>
       <td>${escapeHtml(out.rsm||'—')}</td>
+      <td>${pricingBadge(o.outletId)}</td>
       <td style="max-width:260px;">${escapeHtml(itemsSummary)}</td>
       <td class="num-cell mono">${fmtMoney(orderTotalPriceExGst(o))}</td>
       <td class="num-cell mono">${fmtNum(orderTotalWeightKg(o))} kg</td>
@@ -8989,6 +9202,7 @@ function renderEverything() {
   document.getElementById('pp_search').addEventListener('input', renderProductPrices);
   document.getElementById('pp_statusFilter').addEventListener('change', renderProductPrices);
   document.getElementById('pp_pkgtype').addEventListener('change', renderProductPrices);
+  updateCpBucketFields();
   document.getElementById('pp_body').addEventListener('input', (e) => {
     const input = e.target.closest('[data-listprice-input]');
     if (!input) return;
@@ -9259,6 +9473,9 @@ function renderEverything() {
 }
 
 function onInitialDataLoaded(data) {
+  customGroups = data.customGroups || [];
+  groupMemberOverrides = data.groupMemberOverrides || {};
+  applyCustomGroups();
   productPrices = data.groupPrices || {};
   customerDeals = data.customerDeals || {};
   wholesalerDeals = data.wholesalerDeals || {};
@@ -9299,6 +9516,9 @@ function refreshPricingFromServer() {
   fetch(API_URL)
     .then(r => r.json())
     .then(data => {
+      customGroups = data.customGroups || [];
+      groupMemberOverrides = data.groupMemberOverrides || {};
+      applyCustomGroups();
       productPrices = data.groupPrices || {};
       customerDeals = data.customerDeals || {};
       wholesalerDeals = data.wholesalerDeals || {};
