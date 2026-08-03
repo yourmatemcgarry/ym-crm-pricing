@@ -1105,7 +1105,20 @@
         <div class="fld" style="margin:0;"><label>Package type</label><select id="ce_pkgtype"><option value="">All</option><option value="KEGS">Kegs</option><option value="CARTONS">Cartons</option></select></div>
         <div class="fld" style="margin:0;"><label>Warehouse</label><select id="ce_whouse"><option value="">All warehouses</option></select></div>
         <div class="fld" style="margin:0;"><label>Banner group</label><select id="ce_bannerGroup"><option value="">All banner groups</option></select></div>
-        <div class="fld" style="margin:0;"><label>Beer</label><select id="ce_subbrand"><option value="">All beers</option></select></div>
+        <div class="fld" style="margin:0;">
+          <label>Zone</label>
+          <div class="msel" id="ce_zone_msel">
+            <button type="button" class="msel-btn" id="ce_zone_btn">All zones ▾</button>
+            <div class="msel-menu" id="ce_zone_menu"></div>
+          </div>
+        </div>
+        <div class="fld" style="margin:0;">
+          <label>Beer</label>
+          <div class="msel" id="ce_subbrand_msel">
+            <button type="button" class="msel-btn" id="ce_subbrand_btn">All beers ▾</button>
+            <div class="msel-menu" id="ce_subbrand_menu"></div>
+          </div>
+        </div>
       </div>
       <div class="rowflex no-print" style="margin-top:8px; gap:8px;">
         <button class="btn secondary small" onclick="exportCeCSV()">Export CSV</button>
@@ -7440,6 +7453,8 @@ function renderTotalVolumePage() {
 // length, or the same calendar period a year ago. Drill into any row to see that customer's
 // SKU-level breakdown for the period.
 let ceTypeMsel = null;
+let ceZoneMsel = null;      // multi-select for Customer Explorer "Zone" filter
+let ceSubbrandMsel = null;  // multi-select for Customer Explorer "Beer" filter
 let cePage = 1;
 const CE_PAGE_SIZE = 25;
 let ceSelectedOutletId = null;
@@ -7518,12 +7533,14 @@ function ceOutletFilter() {
   const typeSel = ceTypeMsel ? ceTypeMsel.getValues() : [];
   const bannerGroupSel = document.getElementById('ce_bannerGroup').value;
   const whouseSel = document.getElementById('ce_whouse').value;
+  const zoneSel = ceZoneMsel ? ceZoneMsel.getValues() : [];
   return oid => {
     const o = outlets[oid];
     if (!o) return false;
     if (rsmSel && o.rsm !== rsmSel) return false;
     if (typeSel.length && !typeSel.includes(o.custType)) return false;
     if (bannerGroupSel && o.majorGroup !== bannerGroupSel) return false;
+    if (zoneSel.length && !zoneSel.includes(o.zone)) return false;
     if (whouseSel) {
       const os = outletSummary[oid];
       if (!os || os.lastWhouse !== whouseSel) return false;
@@ -7533,10 +7550,10 @@ function ceOutletFilter() {
 }
 function ceGroupFilter() {
   const pkgSel = document.getElementById('ce_pkgtype').value; // '', 'KEGS', 'CARTONS'
-  const subSel = document.getElementById('ce_subbrand').value;
+  const subSel = ceSubbrandMsel ? ceSubbrandMsel.getValues() : [];
   return (gid, g) => {
     if (pkgSel && bucketOf(g) !== pkgSel) return false;
-    if (subSel && g.subbrand !== subSel) return false;
+    if (subSel.length && !subSel.includes(g.subbrand)) return false;
     return true;
   };
 }
@@ -9511,8 +9528,9 @@ function renderEverything() {
   ceTypeMsel = initMultiSelect('ce_custType', typeVals, 'types', () => { cePage = 1; renderCustomerExplorerPage(); });
   populateSelect('ce_whouse', whouseVals);
   populateSelect('ce_bannerGroup', bannerGroupVals);
-  populateSelect('ce_subbrand', uniqueVals('subbrand', groups));
-  ['ce_period','ce_compare','ce_rsm','ce_pkgtype','ce_whouse','ce_bannerGroup','ce_subbrand'].forEach(id =>
+  ceZoneMsel = initMultiSelect('ce_zone', zoneVals, 'zones', () => { cePage = 1; renderCustomerExplorerPage(); });
+  ceSubbrandMsel = initMultiSelect('ce_subbrand', uniqueVals('subbrand', groups), 'beers', () => { cePage = 1; renderCustomerExplorerPage(); });
+  ['ce_period','ce_compare','ce_rsm','ce_pkgtype','ce_whouse','ce_bannerGroup'].forEach(id =>
     document.getElementById(id).addEventListener('change', () => { cePage = 1; renderCustomerExplorerPage(); }));
   renderCustomerExplorerPage();
 
