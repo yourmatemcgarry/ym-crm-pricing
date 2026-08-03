@@ -45,7 +45,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -54,6 +54,7 @@ async function readAll(s) {
     s.get('customerGlassPricing', { type: 'json' }),
     s.get('customerPickFees', { type: 'json' }),
     s.get('customerOffPremisePricing', { type: 'json' }),
+    s.get('customerCartonDeliveryFees', { type: 'json' }),
     s.get('rsmTargets', { type: 'json' }),
     s.get('activations', { type: 'json' }),
     s.get('trucks', { type: 'json' }),
@@ -89,6 +90,7 @@ async function readAll(s) {
     customerGlassPricing: customerGlassPricing || {},
     customerPickFees: customerPickFees || {},
     customerOffPremisePricing: customerOffPremisePricing || {},
+    customerCartonDeliveryFees: customerCartonDeliveryFees || {},
     rsmTargets: rsmTargets || {},
     activations: activations || [],
     trucks: trucks || [],
@@ -282,6 +284,17 @@ export default async (req) => {
       current[outletId] = { ...existing, [unitType]: (fee === null || fee === undefined) ? null : Number(fee), updatedBy, updatedAt: now };
       await s.setJSON('customerPickFees', current);
       return json({ ok: true, customerPickFees: current });
+    }
+
+    if (action === 'saveCartonDeliveryFee') {
+      // Optional, used only by the Off Premise calculator's Wholesaler vs Direct comparison.
+      // scenario is 'wholesaler' or 'direct'; fee may be null to clear it back to "not set" (blank).
+      const { outletId, scenario, fee, updatedBy } = payload;
+      const current = (await s.get('customerCartonDeliveryFees', { type: 'json' })) || {};
+      const existing = current[outletId] || {};
+      current[outletId] = { ...existing, [scenario]: (fee === null || fee === undefined) ? null : Number(fee), updatedBy, updatedAt: now };
+      await s.setJSON('customerCartonDeliveryFees', current);
+      return json({ ok: true, customerCartonDeliveryFees: current });
     }
 
     if (action === 'saveCartonPackQty') {

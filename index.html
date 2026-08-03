@@ -268,6 +268,7 @@
   .colpanel-cols { columns:2; column-gap:14px; }
   .colpanel-section-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); margin:10px 0 4px; break-inside:avoid; }
   .colpanel-section-title:first-child { margin-top:0; }
+  tr.ord-section-row td { background:#f8f9fb; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); padding:5px 8px; border-bottom:1px solid var(--border); }
 
   /* ---------- Multi-select filter dropdown ---------- */
   .msel { position:relative; }
@@ -435,6 +436,13 @@
           </select>
         </div>
         <div><label>Wholesaler</label><select id="g_whouse"><option value="">All</option></select></div>
+        <div><label>Wholesaler deal entered</label>
+          <select id="g_wsdeal">
+            <option value="">All customers</option>
+            <option value="yes">Has a wholesaler deal</option>
+            <option value="no">No wholesaler deal</option>
+          </select>
+        </div>
         <div><label>Pricing & deal</label>
           <select id="g_pricingupdated">
             <option value="">All customers</option>
@@ -1291,7 +1299,10 @@
       <div id="ord_pricingStatus" style="margin-top:8px;"></div>
       <div id="ord_lines" style="margin-top:12px;"></div>
       <div id="ord_summary" style="margin-top:10px;"></div>
-      <div class="fld" style="margin-top:10px; max-width:420px;"><label>Delivery notes</label><input id="ord_notes" placeholder="e.g. deliver before 10am, use side entrance"></div>
+      <div class="rowflex" style="gap:10px; flex-wrap:wrap; margin-top:10px;">
+        <div class="fld" style="margin:0; max-width:420px; flex:1;"><label>Delivery notes</label><input id="ord_notes" placeholder="e.g. deliver before 10am, use side entrance"></div>
+        <div class="fld" style="margin:0; max-width:160px;"><label>Delivery fee ($)</label><input id="ord_deliveryFee" type="number" step="0.01" min="0" placeholder="0.00" onchange="orderFormOnDeliveryFeeChange(this.value)"></div>
+      </div>
       <div class="rowflex" style="margin-top:12px;">
         <button class="btn" onclick="saveOrder()">Save order</button>
         <button class="btn secondary" onclick="resetOrderForm()">Clear form</button>
@@ -1312,7 +1323,7 @@
       </div>
       <div class="tablewrap" style="margin-top:10px;">
         <table class="datatable">
-          <thead><tr><th>Customer</th><th>RSM</th><th>Pricing</th><th>Items</th><th class="num-cell">Total price</th><th class="num-cell">Weight</th><th>Status</th><th>Created</th><th class="no-print">Action</th></tr></thead>
+          <thead><tr><th>Customer</th><th>RSM</th><th>Pricing</th><th>Items</th><th class="num-cell">Total price</th><th class="num-cell">Delivery fee</th><th class="num-cell">Weight</th><th>Status</th><th>Created</th><th class="no-print">Action</th></tr></thead>
           <tbody id="ord_body"></tbody>
         </table>
       </div>
@@ -2316,6 +2327,7 @@ let customerFlags = {};   // keyed by outletId: {pricingUpdated, metWithCustomer
 let customerGlassPricing = {}; // keyed by outletId: {sizes:{pot,schooner,pint,jug: mL}, prices:{[groupId]:{pot,schooner,pint,jug: $ inc GST}}, updatedBy, updatedAt} — shared
 let customerPickFees = {}; // keyed by outletId: {keg, carton, updatedBy, updatedAt} — shared, null/absent means "not set"
 let customerOffPremisePricing = {}; // keyed by outletId: {multipackQty, prices:{groupId:{carton,multipack,single}}, updatedBy, updatedAt} — shared
+let customerCartonDeliveryFees = {}; // keyed by outletId: {wholesaler, direct, updatedBy, updatedAt} — shared; optional per-carton delivery-cost assumption used only by the Off Premise calculator's Wholesaler vs Direct comparison; null/absent means "not set"
 let rsmTargets = {}; // keyed by "rsm|quarterKey": {totalVolumeTarget, kegVolumeTarget, cartonVolumeTarget, kegListingsTarget, cartonListingsTarget, kegActivationsTarget, cartonActivationsTarget, directDeliveryTarget, updatedBy, updatedAt} — shared
 let activations = []; // [ {id, outletId, productType, activationType, start, end, dealX, groupId, tempDealId, bonusStock, pos, consumerPricing, updatedBy, updatedAt} ] — shared
 let trucks = []; // [ {id, name, maxWeightKg, updatedBy, updatedAt} ] — shared
@@ -2390,8 +2402,23 @@ function applyCustomGroups() {
     groups[g.id] = g;
     if (!groupOrder.includes(g.id)) {
       const afterIdx = g.insertAfter ? groupOrder.indexOf(g.insertAfter) : -1;
-      if (afterIdx >= 0) groupOrder.splice(afterIdx + 1, 0, g.id);
-      else groupOrder.push(g.id);
+      if (afterIdx >= 0) {
+        groupOrder.splice(afterIdx + 1, 0, g.id);
+      } else {
+        // A brand-new custom product (no insertAfter — that's only set for a Split, which always
+        // shares its original's bucket) must NOT just be pushed to the very end of groupOrder:
+        // groupOrder's baked order keeps every KEGS group before every CARTONS group, which the
+        // pricing grid's KEGS/CARTONS band header (colspan-based) and the Product List Prices row
+        // order both rely on. Insert after the last existing group of the same bucket instead.
+        const bucket = bucketOf(g);
+        let lastSameBucketIdx = -1;
+        for (let i = groupOrder.length - 1; i >= 0; i--) {
+          const og = groups[groupOrder[i]];
+          if (og && bucketOf(og) === bucket) { lastSameBucketIdx = i; break; }
+        }
+        if (lastSameBucketIdx >= 0) groupOrder.splice(lastSameBucketIdx + 1, 0, g.id);
+        else groupOrder.push(g.id);
+      }
     }
   });
   Object.entries(groupMemberOverrides).forEach(([gid, members]) => {
@@ -2649,6 +2676,7 @@ function buildServerPayload(fnName, args) {
     case 'saveGlassSize':  return { outletId: args[0], glassKey: args[1], sizeMl: args[2], updatedBy: args[3] };
     case 'saveGlassPrice': return { outletId: args[0], groupId: args[1], glassKey: args[2], price: args[3], updatedBy: args[4] };
     case 'savePickFee':    return { outletId: args[0], unitType: args[1], fee: args[2], updatedBy: args[3] };
+    case 'saveCartonDeliveryFee': return { outletId: args[0], scenario: args[1], fee: args[2], updatedBy: args[3] };
     case 'saveOffPremisePrice': return { outletId: args[0], groupId: args[1], priceType: args[2], price: args[3], updatedBy: args[4] };
     case 'saveCartonPackQty': return { groupId: args[0], cartonPackQty: args[1], updatedBy: args[2] };
     case 'saveMultipackQty':  return { groupId: args[0], multipackQty: args[1], updatedBy: args[2] };
@@ -2837,6 +2865,18 @@ function activeCutoffDate(months) {
   return end.toISOString().slice(0,10);
 }
 
+// Every outletId that has at least one entry in wholesalerDeals (any SKU) — i.e. someone has
+// actually entered a wholesaler deal for this customer in the CRM, as distinct from g_whouse's
+// "Wholesaler" filter above, which only reflects their historical lastWhouse routing and says
+// nothing about whether a deal has been recorded here. Recomputed on demand rather than cached,
+// since wholesalerDeals can change via several different tools (grid cell, bulk fill, Off Premise
+// Wholesaler vs Direct panel).
+function outletIdsWithWholesalerDeal() {
+  const set = new Set();
+  Object.keys(wholesalerDeals).forEach(key => set.add(key.split('|')[0]));
+  return set;
+}
+
 function getGridFilteredOutlets() {
   const q = (document.getElementById('g_search').value||'').trim().toLowerCase();
   const rsm = document.getElementById('g_rsm').value;
@@ -2844,6 +2884,8 @@ function getGridFilteredOutlets() {
   const zone = document.getElementById('g_zone').value;
   const state = document.getElementById('g_state').value;
   const whouse = document.getElementById('g_whouse').value;
+  const wsDealFilter = document.getElementById('g_wsdeal').value;
+  const wsDealOutletIds = wsDealFilter ? outletIdsWithWholesalerDeal() : null;
   const pricingUpdated = document.getElementById('g_pricingupdated').value;
   const contact = document.getElementById('g_contact').value;
   const activeMonths = document.getElementById('g_active').value;
@@ -2860,6 +2902,11 @@ function getGridFilteredOutlets() {
     if (zone && o.zone !== zone) return false;
     if (state && o.state !== state) return false;
     if (whouse && (outletSummary[o.id]||{}).lastWhouse !== whouse) return false;
+    if (wsDealFilter) {
+      const has = wsDealOutletIds.has(o.id);
+      if (wsDealFilter === 'yes' && !has) return false;
+      if (wsDealFilter === 'no' && has) return false;
+    }
     if (pricingUpdated) {
       const isUpdated = flagsFor(o.id).pricingUpdated;
       if (pricingUpdated === 'yes' && !isUpdated) return false;
@@ -2896,7 +2943,7 @@ function getGridFilteredOutlets() {
 
 function clearGridFilters() {
   document.getElementById('g_search').value = '';
-  ['g_rsm','g_zone','g_state','g_active','g_pkgtype','g_whouse','g_pricingupdated','g_contact'].forEach(id => document.getElementById(id).value = '');
+  ['g_rsm','g_zone','g_state','g_active','g_pkgtype','g_whouse','g_wsdeal','g_pricingupdated','g_contact'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('g_sort').value = 'name_asc';
   if (gCustTypeMsel) gCustTypeMsel.clear();
   gridPage = 1;
@@ -2912,7 +2959,8 @@ function clearGridFilters() {
 function exportCustomerPricingCSV() {
   const list = getGridFilteredOutlets();
   if (!list.length) { toast('No customers match the current filters.'); return; }
-  const header = ['Customer', 'Suburb', 'State', 'Zone', 'RSM', 'Customer type', 'Wholesaler', 'Email', 'Pricing & deal updated', 'Met with customer', 'Last sale date'];
+  const wsDealOutletIds = outletIdsWithWholesalerDeal();
+  const header = ['Customer', 'Suburb', 'State', 'Zone', 'RSM', 'Customer type', 'Wholesaler', 'Wholesaler deal entered', 'Email', 'Pricing & deal updated', 'Met with customer', 'Last sale date'];
   const lines = [header.join(',')];
   list.forEach(o => {
     const f = flagsFor(o.id);
@@ -2920,7 +2968,7 @@ function exportCustomerPricingCSV() {
     const contact = outletContactInfo(o.id);
     const row = [
       o.name || '', o.suburb || '', o.state || '', o.zone || '', o.rsm || '', o.custType || '',
-      os.lastWhouse || '', contact.email || '',
+      os.lastWhouse || '', wsDealOutletIds.has(o.id) ? 'Yes' : 'No', contact.email || '',
       f.pricingUpdated ? 'Yes' : 'No', f.metWithCustomer ? 'Yes' : 'No',
       os.lastDate ? fmtDate(os.lastDate) : '',
     ];
@@ -4015,6 +4063,35 @@ function pickFeeInputHtml(outletId, unitType, label, rerenderFnRef) {
   </div>`;
 }
 
+// ---------- Carton delivery-fee assumptions (Off Premise "Wholesaler vs Direct" comparison) ----------
+// A flat, optional $ per carton for each supply scenario — separate from the pick fee above,
+// which is a wholesaler-only fulfilment cost. Same "blank = not applied" pattern as pick fees.
+function cartonDeliveryFeeFor(outletId, scenario) {
+  const rec = customerCartonDeliveryFees[outletId];
+  return (rec && rec[scenario] != null) ? Number(rec[scenario]) : null;
+}
+function updateCartonDeliveryFee(outletId, scenario, val, rerenderFn) {
+  const trimmed = (val || '').trim();
+  let num = null;
+  if (trimmed !== '') {
+    num = parseFloat(trimmed);
+    if (isNaN(num) || num < 0) { toast('Enter a valid fee, or leave blank.'); rerenderFn(outletId); return; }
+  }
+  const current = customerCartonDeliveryFees[outletId] || {};
+  customerCartonDeliveryFees[outletId] = { ...current, [scenario]: num, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+  rerenderFn(outletId);
+  callServer('saveCartonDeliveryFee', [outletId, scenario, num, currentUserEmail]);
+}
+function cartonDeliveryFeeInputHtml(outletId, scenario, label, rerenderFnRef) {
+  const val = cartonDeliveryFeeFor(outletId, scenario);
+  return `<div class="fld">
+    <label>${escapeHtml(label)}</label>
+    <div class="rowflex" style="gap:6px;">
+      $ <input type="number" step="0.10" min="0" placeholder="Blank = not applied" style="width:110px;" value="${val===null?'':val}" onchange="updateCartonDeliveryFee('${outletId}','${scenario}',this.value,${rerenderFnRef})">
+    </div>
+  </div>`;
+}
+
 // ---------- Cost helpers ----------
 // Pick fees are added to the wholesale unit price before apportioning down to a serve, can, or
 // multipack — they represent a real fulfilment cost, not a wholesale discount.
@@ -4556,9 +4633,66 @@ function renderOffPremiseMarginPage(outletId) {
   const pickFeePanelHtml = `
     <div class="panel no-print">
       <h2>Pick fee</h2>
-      <div class="hint" style="margin-bottom:10px;">Optional. What it costs this customer to have a carton picked &amp; delivered, on top of the wholesale price — added into the cost basis below. Leave blank if not applicable. Shared with the Venues calculator for this customer.</div>
+      <div class="hint" style="margin-bottom:10px;">Optional. What it costs this customer to have a carton picked &amp; delivered <strong>through a wholesaler</strong>, on top of the wholesale price — added only into the Wholesaler cost in the comparison below (a direct order from Your Mates has no pick fee). Leave blank if not applicable. Shared with the Venues calculator for this customer.</div>
       <div class="formgrid">
         ${pickFeeInputHtml(outletId, 'carton', 'Pick fee per carton', 'renderOffPremiseMarginPage')}
+      </div>
+    </div>`;
+
+  // ---------- Wholesaler vs Direct comparison ----------
+  // Compares what this customer currently pays per carton buying through their wholesaler against
+  // what they'd pay buying direct from Your Mates, so we can quantify the $ saving of switching.
+  // Wholesaler cost = wholesaler effective price + pick fee (wholesaler-only) + wholesaler delivery fee.
+  // Direct cost = direct effective price (current standing deal) + direct delivery fee. No pick fee direct.
+  const wsName = wholesalerNameFor(outletId);
+  const wsDeliveryFee = cartonDeliveryFeeFor(outletId, 'wholesaler');
+  const directDeliveryFee = cartonDeliveryFeeFor(outletId, 'direct');
+
+  const compareRowsHtml = cartonGroups.map(gid => {
+    const g = groups[gid];
+    const listPrice = listPriceFor(gid);
+    const retailPrice = offPremisePriceIncGstFor(outletId, gid, 'carton');
+
+    const wpr = resolveWholesalerPricing(outletId, gid);
+    const wsCost = wpr.eff===null ? null : wpr.eff + (pickFeeCarton||0) + (wsDeliveryFee||0);
+    const wsM = wsCost===null ? null : unitMargin(wsCost, retailPrice);
+
+    const pr = resolvePricing(outletId, gid);
+    const directEff = pr.eff;
+    const directCost = directEff===null ? null : directEff + (directDeliveryFee||0);
+    const directM = directCost===null ? null : unitMargin(directCost, retailPrice);
+
+    const savings = (wsCost!==null && directCost!==null) ? (wsCost - directCost) : null;
+
+    return `<tr>
+      <td>${escapeHtml(g.label)} <span class="badge cartons">${escapeHtml(g.formatLabel)}</span></td>
+      <td class="num-cell mono">${retailPrice!==null?fmtMoney(retailPrice):'—'}</td>
+      <td>
+        <select onchange="onOpWholesaleDealChange('${outletId}','${gid}',this)" title="Wholesaler deal (${escapeHtml(wsName)})">
+          ${wholesalerDealOptionsHtml(wpr.dealX, 'CARTONS')}
+        </select>
+        <div class="muted" style="font-size:9.5px;">${listPrice!==null?('eff '+fmtMoney(wpr.eff)):'No list price'}</div>
+      </td>
+      <td class="num-cell" style="min-width:112px;">${marginBadgeHtml(wsM)}</td>
+      <td class="num-cell mono">${dealLabel(pr.dealX)}${listPrice!==null?` <span class="muted" style="font-size:9.5px;">(eff ${fmtMoney(directEff)})</span>`:''}</td>
+      <td class="num-cell" style="min-width:112px;">${marginBadgeHtml(directM)}</td>
+      <td class="num-cell mono" style="font-weight:700; color:${savings===null?'var(--muted)':(savings>0?'var(--green)':(savings<0?'var(--red)':'var(--muted)'))};">${savings===null?'—':fmtMoney2(savings)}</td>
+    </tr>`;
+  }).join('');
+
+  const compareHtml = `
+    <div class="panel">
+      <h2>Wholesaler vs Direct</h2>
+      <div class="hint" style="margin-bottom:10px;">Compares what ${escapeHtml(o.name)} pays per carton today through their wholesaler (<strong>${escapeHtml(wsName)}</strong>) against buying direct from Your Mates, so you can show them the $ saving of switching. Wholesaler cost includes the pick fee and wholesaler delivery fee above; direct cost never includes a pick fee. Set the wholesaler deal per SKU below — it's a separate tier to the direct deal and won't affect it.</div>
+      <div class="formgrid" style="margin-bottom:14px;">
+        ${cartonDeliveryFeeInputHtml(outletId, 'wholesaler', 'Delivery fee per carton (wholesaler)', 'renderOffPremiseMarginPage')}
+        ${cartonDeliveryFeeInputHtml(outletId, 'direct', 'Delivery fee per carton (direct)', 'renderOffPremiseMarginPage')}
+      </div>
+      <div class="tablewrap">
+        <table class="datatable">
+          <thead><tr><th>Beer</th><th class="num-cell">Retail (inc GST)</th><th>Wholesaler deal</th><th class="num-cell">Wholesaler margin</th><th class="num-cell">Direct deal</th><th class="num-cell">Direct margin</th><th class="num-cell">Saves going direct</th></tr></thead>
+          <tbody>${compareRowsHtml || '<tr><td colspan="7"><div class="empty">No products selected above — tick some to compare wholesaler vs direct margins.</div></td></tr>'}</tbody>
+        </table>
       </div>
     </div>`;
 
@@ -4582,16 +4716,19 @@ function renderOffPremiseMarginPage(outletId) {
     const multipackQty = multipackQtyFor(gid);
     const canMl = canSizeMlFor(gid);
 
+    // This table is the DIRECT tier (effForCalc comes from the direct customerDeals system via
+    // resolvePricing/opWhatIf above) — the pick fee is a wholesaler-only fulfilment cost, so it is
+    // deliberately NOT added in here (see the Wholesaler vs Direct comparison above for that).
     const cartonPrice = offPremisePriceIncGstFor(outletId, gid, 'carton');
-    const cartonCost = cartonCostExGst(effForCalc, pickFeeCarton);
+    const cartonCost = cartonCostExGst(effForCalc, 0);
     const cartonM = cartonCost===null ? null : unitMargin(cartonCost, cartonPrice);
 
     const multiPrice = offPremisePriceIncGstFor(outletId, gid, 'multipack');
-    const multiCost = multipackCostExGst(effForCalc, pickFeeCarton, cartonPackQty, multipackQty);
+    const multiCost = multipackCostExGst(effForCalc, 0, cartonPackQty, multipackQty);
     const multiM = multiCost===null ? null : unitMargin(multiCost, multiPrice);
 
     const singlePrice = offPremisePriceIncGstFor(outletId, gid, 'single');
-    const singleCost = singleCostExGst(effForCalc, pickFeeCarton, cartonPackQty);
+    const singleCost = singleCostExGst(effForCalc, 0, cartonPackQty);
     const singleM = singleCost===null ? null : unitMargin(singleCost, singlePrice);
 
     return `<tr>
@@ -4625,12 +4762,13 @@ function renderOffPremiseMarginPage(outletId) {
   document.getElementById('op_detail').innerHTML = `
     ${productPickerHtml}
     ${pickFeePanelHtml}
+    ${compareHtml}
     <div class="panel">
       <div class="rowflex" style="justify-content:space-between;">
         <h2 style="margin:0;">Margin by carton</h2>
         <button class="btn secondary no-print" onclick="window.print()">Print</button>
       </div>
-      <div class="hint" style="margin:8px 0;">Retail prices below are <strong>inc GST</strong> (what the bottleshop charges); carton list/deal prices are <strong>ex GST/WET</strong> like everywhere else in this tool — margin is calculated ex GST so it's a fair comparison. The single-can price is shared with the Venues calculator for this customer. Carton, multipack and can sizes come from the Product List Prices page — set them there if a beer's numbers look off. Change the deal to see the margin impact as a "what-if" — it won't be saved until you click <strong>Apply deal</strong>.</div>
+      <div class="hint" style="margin:8px 0;">Retail prices below are <strong>inc GST</strong> (what the bottleshop charges); carton list/deal prices are <strong>ex GST/WET</strong> like everywhere else in this tool — margin is calculated ex GST so it's a fair comparison. This table is the <strong>direct</strong> tier only (no pick fee — that's a wholesaler-only cost, see the Wholesaler vs Direct comparison above). The single-can price is shared with the Venues calculator for this customer. Carton, multipack and can sizes come from the Product List Prices page — set them there if a beer's numbers look off. Change the deal to see the margin impact as a "what-if" — it won't be saved until you click <strong>Apply deal</strong>.</div>
       <div class="tablewrap">
         <table class="datatable">
           <thead><tr><th>Beer</th><th class="num-cell">Carton size</th><th class="num-cell">List price</th><th>Deal</th><th class="num-cell">Effective / carton</th><th class="num-cell">Carton (inc GST)</th><th class="num-cell">Multipack (inc GST)</th><th class="num-cell">Single (inc GST)</th><th class="no-print"></th></tr></thead>
@@ -4672,6 +4810,17 @@ function applyOpDeal(outletId, groupId) {
   renderOffPremiseMarginPage(outletId);
   renderGrid();
   toast('Deal applied for this customer.');
+}
+
+// Sets the wholesaler-tier deal for one carton SKU from the Wholesaler vs Direct comparison panel.
+// Reuses the same setter as the per-SKU keg dropdown in the pricing grid (saveWholesalerDeal),
+// just with no cell element to swap out — we re-render the whole Off Premise page instead.
+function onOpWholesaleDealChange(outletId, groupId, sel) {
+  const dealX = parseFloat(sel.value) || 0;
+  saveWholesalerDeal(outletId, groupId, dealX, null);
+  renderOffPremiseMarginPage(outletId);
+  renderGrid();
+  toast('Wholesaler deal saved for this customer.');
 }
 
 // ===================== TEAM PERFORMANCE (RSM / Sales Team) =====================
@@ -7706,6 +7855,7 @@ function renderDriverModePage(truckId) {
 let orderFormOutletId = '';
 let orderFormLines = {}; // groupId -> {qty, freeQty}
 let orderFormEditingId = null;
+let orderFormDeliveryFee = 0;
 function orderLineWeightKg(line) { return (Number(line.qty)||0) * weightKgFor(line.groupId); }
 function orderTotalWeightKg(order) { return order.lines.reduce((s,l)=>s+orderLineWeightKg(l),0); }
 function orderLinePaidQty(line) { return Math.max(0, (Number(line.qty)||0) - (Number(line.freeQty)||0)); }
@@ -7730,13 +7880,20 @@ function orderFormOnFreeQtyChange(groupId, val) {
   line.freeQty = Math.min(clamped, line.qty);
   renderOrderForm();
 }
+function orderFormOnDeliveryFeeChange(val) {
+  const num = parseFloat(val);
+  orderFormDeliveryFee = isNaN(num) || num < 0 ? 0 : num;
+  renderOrderForm();
+}
 function resetOrderForm() {
   orderFormOutletId = '';
   orderFormLines = {};
   orderFormEditingId = null;
+  orderFormDeliveryFee = 0;
   document.getElementById('ord_outletSearch').value = '';
   document.getElementById('ord_outletId').value = '';
   document.getElementById('ord_notes').value = '';
+  document.getElementById('ord_deliveryFee').value = '';
   renderOrderForm();
 }
 function renderOrderForm() {
@@ -7758,9 +7915,11 @@ function renderOrderForm() {
       : `<span class="badge amber">&#9888; Pricing not yet confirmed for ${escapeHtml(o.name)}</span> <a href="#" onclick="document.querySelector('.tab-btn[data-tab=summary]').click(); setTimeout(()=>selectSummaryOutlet('${outletId}'),0); return false;" style="margin-left:6px;">Review pricing &rarr;</a>`;
   }
   const allGroups = marginEligibleGroupIds('ALL');
-  const kegGroups = allGroups.filter(gid => bucketOf(groups[gid]) === 'KEGS');
+  const keg50Groups = allGroups.filter(gid => bucketOf(groups[gid]) === 'KEGS' && groups[gid].format !== 'Keg30L');
+  const keg30Groups = allGroups.filter(gid => bucketOf(groups[gid]) === 'KEGS' && groups[gid].format === 'Keg30L');
   const cartonGroups = allGroups.filter(gid => bucketOf(groups[gid]) === 'CARTONS');
 
+  const sectionRow = label => `<tr class="ord-section-row"><td colspan="10">${escapeHtml(label)}</td></tr>`;
   const lineRow = gid => {
     const g = groups[gid];
     const line = orderFormLines[gid] || { qty: 0, freeQty: 0 };
@@ -7775,6 +7934,7 @@ function renderOrderForm() {
       <td>${escapeHtml(g.label)} <span class="badge ${bucketOf(g)==='KEGS'?'kegs':'cartons'}" style="font-size:9px;">${escapeHtml(g.formatLabel)}</span></td>
       <td>${dealText}</td>
       <td class="num-cell mono">${discountPct>0?discountPct.toFixed(1)+'%':'—'}</td>
+      <td class="num-cell mono">${pr.listPrice!==null?fmtMoney(pr.listPrice):'—'}</td>
       <td class="num-cell mono">${pr.eff!==null?fmtMoney(pr.eff):'—'}</td>
       <td class="num-cell"><input type="number" step="1" min="0" style="width:64px; text-align:right;" value="${line.qty||''}" placeholder="0" onchange="orderFormOnQtyChange('${gid}',this.value)"></td>
       <td class="num-cell"><input type="number" step="1" min="0" max="${line.qty||0}" style="width:64px; text-align:right;" value="${line.freeQty||''}" placeholder="0" onchange="orderFormOnFreeQtyChange('${gid}',this.value)"></td>
@@ -7787,9 +7947,13 @@ function renderOrderForm() {
   body.innerHTML = `
     <div class="tablewrap">
       <table class="datatable">
-        <thead><tr><th>Beer</th><th>Deal</th><th class="num-cell">Discount %</th><th class="num-cell">Price ea (ex GST/WET)</th><th class="num-cell">Total qty (incl. bonus)</th><th class="num-cell">Bonus/free qty</th><th class="num-cell">Paid qty</th><th class="num-cell">Line total</th><th class="num-cell">Weight</th></tr></thead>
+        <thead><tr><th>Beer</th><th>Deal</th><th class="num-cell">Discount %</th><th class="num-cell">List price</th><th class="num-cell">Price ea (ex GST/WET)</th><th class="num-cell">Total qty (incl. bonus)</th><th class="num-cell">Bonus/free qty</th><th class="num-cell">Paid qty</th><th class="num-cell">Line total</th><th class="num-cell">Weight</th></tr></thead>
         <tbody>
-          ${kegGroups.map(lineRow).join('')}
+          ${keg50Groups.length ? sectionRow('50L Kegs') : ''}
+          ${keg50Groups.map(lineRow).join('')}
+          ${keg30Groups.length ? sectionRow('30L Kegs') : ''}
+          ${keg30Groups.map(lineRow).join('')}
+          ${cartonGroups.length ? sectionRow('Cartons') : ''}
           ${cartonGroups.map(lineRow).join('')}
         </tbody>
       </table>
@@ -7800,9 +7964,12 @@ function renderOrderForm() {
   const totalPrice = activeLines.reduce((s,[gid,l]) => s + ((resolvePricing(outletId,gid).eff||0)*orderLinePaidQty(l)), 0);
   const totalWeight = activeLines.reduce((s,[gid,l]) => s + (l.qty*weightKgFor(gid)), 0);
   const totalFreeUnits = activeLines.reduce((s,[gid,l]) => s + (Number(l.freeQty)||0), 0);
+  const deliveryFee = Number(orderFormDeliveryFee) || 0;
   document.getElementById('ord_summary').innerHTML = `
     <div class="rowflex" style="gap:18px; flex-wrap:wrap;">
       <div class="fld" style="margin:0;"><label>Total price (ex GST/WET)</label><div class="kpi-num" style="font-size:18px;">${fmtMoney(totalPrice)}</div></div>
+      <div class="fld" style="margin:0;"><label>Delivery fee</label><div class="kpi-num" style="font-size:18px;">${fmtMoney(deliveryFee)}</div></div>
+      <div class="fld" style="margin:0;"><label>Order total incl. delivery</label><div class="kpi-num" style="font-size:18px;">${fmtMoney(totalPrice+deliveryFee)}</div></div>
       <div class="fld" style="margin:0;"><label>Total weight</label><div class="kpi-num" style="font-size:18px;">${fmtNum(totalWeight)} kg</div></div>
       <div class="fld" style="margin:0;"><label>Line items</label><div class="kpi-num" style="font-size:18px;">${activeLines.length}</div></div>
       <div class="fld" style="margin:0;"><label>Free units</label><div class="kpi-num" style="font-size:18px;">${totalFreeUnits}</div></div>
@@ -7814,18 +7981,19 @@ function saveOrder() {
   const lines = Object.entries(orderFormLines).filter(([gid,l]) => l.qty > 0).map(([gid,l]) => ({ groupId: gid, qty: l.qty, freeQty: Math.min(Number(l.freeQty)||0, l.qty) }));
   if (!lines.length) { toast('Enter a quantity for at least one beer.'); return; }
   const notes = document.getElementById('ord_notes').value.trim();
+  const deliveryFee = Number(orderFormDeliveryFee) || 0;
 
   if (orderFormEditingId) {
     const idx = orders.findIndex(o=>o.id===orderFormEditingId);
     if (idx < 0) return;
-    const updated = { ...orders[idx], outletId, lines, notes, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+    const updated = { ...orders[idx], outletId, lines, notes, deliveryFee, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
     orders[idx] = updated;
     renderOrdersList();
     toast('Saving…');
     callServer('saveOrder', [updated], () => toast('Order updated.'));
   } else {
     const newOrder = {
-      id: null, outletId, lines, notes, status: 'pending', runId: null,
+      id: null, outletId, lines, notes, deliveryFee, status: 'pending', runId: null,
       delivery: { status: 'pending', deliveredLines: null, emptyKegsCollected: 0, deliveredAt: null, driverNotes: '', podPhotos: [] },
       createdBy: currentUserEmail, createdAt: new Date().toISOString(), updatedBy: currentUserEmail, updatedAt: new Date().toISOString(),
     };
@@ -7846,9 +8014,11 @@ function editOrder(orderId) {
   orderFormOutletId = ord.outletId;
   orderFormLines = {};
   ord.lines.forEach(l => { orderFormLines[l.groupId] = { qty: l.qty, freeQty: l.freeQty || 0 }; });
+  orderFormDeliveryFee = Number(ord.deliveryFee) || 0;
   document.getElementById('ord_outletId').value = ord.outletId;
   document.getElementById('ord_outletSearch').value = outlets[ord.outletId] ? outletLabel(outlets[ord.outletId]) : ord.outletId;
   document.getElementById('ord_notes').value = ord.notes || '';
+  document.getElementById('ord_deliveryFee').value = orderFormDeliveryFee || '';
   renderOrderForm();
   window.scrollTo({top:0, behavior:'smooth'});
 }
@@ -7873,7 +8043,7 @@ function renderOrdersList() {
   list.sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt));
   document.getElementById('ord_count').textContent = `(${list.length})`;
   const body = document.getElementById('ord_body');
-  if (!list.length) { body.innerHTML = `<tr><td colspan="9"><div class="empty">No orders yet.</div></td></tr>`; return; }
+  if (!list.length) { body.innerHTML = `<tr><td colspan="10"><div class="empty">No orders yet.</div></td></tr>`; return; }
   const statusBadge = s => s==='pending'?'<span class="badge grey">Pending</span>':s==='allocated'?'<span class="badge blue">Allocated</span>':'<span class="badge green">Completed</span>';
   const pricingBadge = outletId => flagsFor(outletId).pricingUpdated ? '<span class="badge green">&#10003; Set</span>' : '<span class="badge amber">Not set</span>';
   body.innerHTML = list.map(o => {
@@ -7885,6 +8055,7 @@ function renderOrdersList() {
       <td>${pricingBadge(o.outletId)}</td>
       <td style="max-width:260px;">${escapeHtml(itemsSummary)}</td>
       <td class="num-cell mono">${fmtMoney(orderTotalPriceExGst(o))}</td>
+      <td class="num-cell mono">${fmtMoney(Number(o.deliveryFee)||0)}</td>
       <td class="num-cell mono">${fmtNum(orderTotalWeightKg(o))} kg</td>
       <td>${statusBadge(o.status)}</td>
       <td class="muted">${new Date(o.createdAt).toLocaleDateString('en-AU')}</td>
@@ -9192,7 +9363,7 @@ function renderEverything() {
   csTypeMsel = initMultiSelect('cs_typeFilter', typeVals, 'types', ()=>{ if (csAcRef) csAcRef.refresh(); });
 
   ['g_search'].forEach(id => document.getElementById(id).addEventListener('input', ()=>{gridPage=1;renderGrid();}));
-  ['g_rsm','g_zone','g_state','g_active','g_sort','g_whouse','g_pricingupdated','g_contact'].forEach(id => document.getElementById(id).addEventListener('change', ()=>{gridPage=1;renderGrid();}));
+  ['g_rsm','g_zone','g_state','g_active','g_sort','g_whouse','g_wsdeal','g_pricingupdated','g_contact'].forEach(id => document.getElementById(id).addEventListener('change', ()=>{gridPage=1;renderGrid();}));
   document.getElementById('g_pkgtype').addEventListener('change', ()=>{ renderGridHeader(); renderGrid(); });
 
   renderColCheckList();
@@ -9484,6 +9655,7 @@ function onInitialDataLoaded(data) {
   customerGlassPricing = data.customerGlassPricing || {};
   customerPickFees = data.customerPickFees || {};
   customerOffPremisePricing = data.customerOffPremisePricing || {};
+  customerCartonDeliveryFees = data.customerCartonDeliveryFees || {};
   rsmTargets = data.rsmTargets || {};
   activations = data.activations || [];
   trucks = data.trucks || [];
@@ -9527,6 +9699,7 @@ function refreshPricingFromServer() {
       customerGlassPricing = data.customerGlassPricing || {};
       customerPickFees = data.customerPickFees || {};
       customerOffPremisePricing = data.customerOffPremisePricing || {};
+      customerCartonDeliveryFees = data.customerCartonDeliveryFees || {};
       rsmTargets = data.rsmTargets || {};
       activations = data.activations || [];
       trucks = data.trucks || [];
