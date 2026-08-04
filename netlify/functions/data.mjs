@@ -45,7 +45,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, rsmTargetProtected, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -56,6 +56,7 @@ async function readAll(s) {
     s.get('customerOffPremisePricing', { type: 'json' }),
     s.get('customerCartonDeliveryFees', { type: 'json' }),
     s.get('rsmTargets', { type: 'json' }),
+    s.get('rsmTargetProtected', { type: 'json' }),
     s.get('activations', { type: 'json' }),
     s.get('trucks', { type: 'json' }),
     s.get('orders', { type: 'json' }),
@@ -94,6 +95,7 @@ async function readAll(s) {
     customerOffPremisePricing: customerOffPremisePricing || {},
     customerCartonDeliveryFees: customerCartonDeliveryFees || {},
     rsmTargets: rsmTargets || {},
+    rsmTargetProtected: rsmTargetProtected || {},
     activations: activations || [],
     trucks: trucks || [],
     orders: orders || [],
@@ -362,6 +364,19 @@ export default async (req) => {
       }
       await s.setJSON('rsmTargets', current);
       return json({ ok: true, rsmTargets: current });
+    }
+
+    if (action === 'saveRsmTargetProtected') {
+      // Marks (or clears) a quarter's targets as manually set via the standalone per-quarter
+      // Volume Target Calculator — see fyForecastApply() client-side, which skips writing any
+      // quarter marked protected here rather than silently overwriting a manager's deliberate
+      // figures with the FY Listing Growth Forecast's bulk cascade.
+      const { rsm, quarterKey, protectedFlag, updatedBy } = payload;
+      const current = (await s.get('rsmTargetProtected', { type: 'json' })) || {};
+      const key = rsm + '|' + quarterKey;
+      if (protectedFlag) current[key] = true; else delete current[key];
+      await s.setJSON('rsmTargetProtected', current);
+      return json({ ok: true, rsmTargetProtected: current });
     }
 
     if (action === 'saveActivation') {
