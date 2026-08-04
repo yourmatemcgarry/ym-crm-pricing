@@ -164,6 +164,8 @@
   .badge.grey { background:#eef0f3; color:var(--muted); }
   .badge.keg, .badge.kegs { background:var(--keg-bg); color:var(--keg); }
   .badge.pack, .badge.cartons { background:var(--pack-bg); color:var(--pack); }
+  td.na-sku-override { background:var(--amber-bg); }
+  td.na-sku-override input { border-color:var(--amber); }
 
   .btn { display:inline-block; padding:8px 14px; border-radius:6px; border:1px solid var(--navy); background:var(--navy); color:#fff; font-size:13px; cursor:pointer; font-weight:600; }
   .btn:hover { background:var(--navy-dark); }
@@ -1097,14 +1099,11 @@
 
     <div class="panel no-print">
       <h2 style="margin:0;">Target vs Prior Periods</h2>
-      <div class="hint" style="margin-top:6px;">A focused view of target vs actual volume, this period plus the same period from the last two years — toggle between Quarterly/Annual and Sales Team/National Accounts volume. National Accounts volume here is scoped by Coles/Woolworths ownership (matching how its target is set), not the Volume Stream filter above.</div>
+      <div class="hint" style="margin-top:6px;">Pick a financial year to see all 4 quarters' targets as entered, with actual volume plus the same quarter from the last two years alongside for comparison — toggle between Sales Team/National Accounts volume. National Accounts volume here is scoped by Coles/Woolworths ownership (matching how its target is set), not the Volume Stream filter above.</div>
       <div class="rowflex" style="margin-top:10px; gap:14px; flex-wrap:wrap; align-items:flex-end;">
         <div class="fld" style="margin:0;">
-          <label>View</label>
-          <select id="tv_tp_granularity">
-            <option value="quarter">Quarterly</option>
-            <option value="year">Annually (financial year)</option>
-          </select>
+          <label>Financial Year</label>
+          <select id="tv_tp_fy"></select>
         </div>
         <div class="fld" style="margin:0;">
           <label>Scope</label>
@@ -2408,6 +2407,7 @@ let rsmRosterBaked = []; // sorted list of every RSM name currently known (from 
 let naTargets = {}; // { quarterKey: {cartonVolumeTarget, updatedBy, updatedAt} } — shared; National Accounts (Coles & Woolworths) sits outside the RSM-based Sales Team targets, so it gets its own small target collection, set from the Set Targets page and used by the Total Volume page to build a combined company-wide target line
 let fyForecastInputs = {}; // keyed "rsm|fy": {newKegListingsPerQtr, newCartonListingsPerQtr, updatedBy, updatedAt} — shared; the manually-entered FY Listing Growth Forecast input per RSM (Set Targets page). Applying the forecast writes its derived per-quarter figures into rsmTargets via the existing updateRsmTarget() calls — this collection only stores the input, not the computed cascade.
 let naSkuTargets = {}; // keyed "groupId|fy": {annualVolumeTarget, updatedBy, updatedAt} — shared; National Accounts per-SKU annual volume target (Set Targets page), split across the 4 FY quarters client-side using each SKU's own last-FY seasonality
+let naSkuQuarterOverrides = {}; // keyed "groupId|fy|q": {value, updatedBy, updatedAt} — shared; manual override for ONE quarter of a National Accounts SKU's target, replacing the auto seasonal-split value for that quarter only — see naSkuQuarterOverrideFor()/updateNaSkuQuarterOverride()
 let customGroups = []; // [ groupRecord,... ] — shared; brand-new SKU groups added via "Add a custom product", or split off an existing group via "Split…". Merged into `groups`/`groupOrder` by applyCustomGroups() on every data load.
 let groupMemberOverrides = {}; // { groupId: [memberId,...] } — shared; set when a Split moves one or more members out of an existing group (custom or baked). Display-only (memberDescs text) — nothing else in the app reads .members.
 let sp_currentGroupId = null; // groupId currently open in the "Split product" panel on Product List Prices — not shared, purely local UI state
@@ -2475,6 +2475,33 @@ function updateNaSkuTarget(gid, fy, val) {
   }
   renderTargetsPage();
   callServer('saveNaSkuTarget', [gid, fy, value, currentUserEmail], () => toast('SKU target saved.'));
+}
+
+// Manual per-quarter override for a National Accounts SKU — server-synced version of the static
+// build's naSkuQuarterOverrideFor/updateNaSkuQuarterOverride, same key shape ("groupId|fy|q")
+// persisted via callServer('saveNaSkuQuarterOverride', ...) instead of localStorage. Lets a manager
+// type a known non-seasonal figure straight into one quarter, bypassing the annual target's
+// seasonal split for that quarter only — see naSkuQuarterTargetsFor() for how it's consumed.
+function naSkuQKey(gid, fy, q) { return gid + '|' + fy + '|' + q; }
+function naSkuQuarterOverrideFor(gid, fy, q) {
+  const r = naSkuQuarterOverrides[naSkuQKey(gid, fy, q)];
+  return r ? r.value : null;
+}
+function updateNaSkuQuarterOverride(gid, fy, q, val) {
+  const key = naSkuQKey(gid, fy, q);
+  const trimmed = (val == null ? '' : String(val)).trim();
+  let value;
+  if (trimmed === '') {
+    delete naSkuQuarterOverrides[key];
+    value = null;
+  } else {
+    const num = parseFloat(trimmed);
+    if (isNaN(num) || num < 0) { toast('Enter a valid override, or leave blank.'); renderTargetsPage(); return; }
+    naSkuQuarterOverrides[key] = { value: num, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+    value = num;
+  }
+  renderTargetsPage();
+  callServer('saveNaSkuQuarterOverride', [gid, fy, q, value, currentUserEmail], () => toast('Quarter override saved.'));
 }
 
 // Recomputes zoneBakedRsm/rsmRosterBaked from the pristine originalOutletRsm snapshot, then
@@ -2817,6 +2844,7 @@ function buildServerPayload(fnName, args) {
     case 'saveNaTarget': return { quarterKey: args[0], cartonVolumeTarget: args[1], updatedBy: args[2] };
     case 'saveFyForecastInput': return { rsm: args[0], fy: args[1], field: args[2], value: args[3], updatedBy: args[4] };
     case 'saveNaSkuTarget': return { groupId: args[0], fy: args[1], value: args[2], updatedBy: args[3] };
+    case 'saveNaSkuQuarterOverride': return { groupId: args[0], fy: args[1], q: args[2], value: args[3], updatedBy: args[4] };
     case 'addCustomGroup': return { group: args[0] };
     case 'splitGroupMembers': return { originalGroupId: args[0], remainingMembers: args[1], newGroup: args[2] };
     default: return {};
@@ -6274,6 +6302,9 @@ function onNaTargetCellChange(quarterKey, val) {
 function onNaSkuTargetChange(gid, fy, val) {
   updateNaSkuTarget(gid, fy, val);
 }
+function onNaSkuQuarterOverrideChange(gid, fy, q, val) {
+  updateNaSkuQuarterOverride(gid, fy, q, val);
+}
 function renderTargetsPage() {
   const { fy, q } = targetsQuarter;
   const qKey = quarterKeyOf(fy, q);
@@ -6304,14 +6335,26 @@ function renderTargetsPage() {
     const avgSeasBadge = r.usedAvgSeasonality
       ? ` <span class="badge blue" title="No National Accounts sales history for this SKU last FY, so the annual target is split across Q1–Q4 using the average seasonal pattern across every other carton SKU, instead of this SKU's own (nonexistent) history.">avg seasonality</span>`
       : '';
+    const qCells = [0, 1, 2, 3].map(i => {
+      const q = i + 1;
+      const isOverridden = r.overriddenFlags[i];
+      const shown = isOverridden ? r.quarterTargets[i] : (r.annualTarget ? r.quarterTargets[i] : null);
+      const title = isOverridden
+        ? 'Manually overridden — no longer follows the seasonal split for this quarter. Clear the value to hand it back to the automatic split.'
+        : 'Auto-computed from the annual target × seasonality. Type a value to override just this quarter.';
+      const clearLink = isOverridden
+        ? ` <a href="#" style="font-size:9.5px;" onclick="onNaSkuQuarterOverrideChange('${gid}',${fy},${q},''); return false;">clear</a>`
+        : '';
+      return `<td class="${isOverridden ? 'na-sku-override' : ''}">
+        <input type="number" step="1" min="0" value="${shown != null ? Math.round(shown) : ''}" placeholder="—" style="width:90px;" title="${title}" onchange="onNaSkuQuarterOverrideChange('${gid}',${fy},${q},this.value)">
+        ${isOverridden ? `<div class="muted" style="font-size:9.5px;">manual${clearLink}</div>` : ''}
+      </td>`;
+    }).join('');
     return `<tr>
       <td>${escapeHtml(g.label)} <span class="muted" style="font-weight:400;">(${escapeHtml(g.formatLabel || g.format)})</span>${avgSeasBadge}</td>
       <td class="mono">${fmtNum(r.lastFyVolume)} L</td>
       <td><input type="number" step="1" min="0" value="${r.annualTarget||''}" placeholder="—" style="width:110px;" onchange="onNaSkuTargetChange('${gid}',${fy},this.value)"></td>
-      <td class="mono">${r.annualTarget?fmtNum(r.quarterTargets[0])+' L':'—'}</td>
-      <td class="mono">${r.annualTarget?fmtNum(r.quarterTargets[1])+' L':'—'}</td>
-      <td class="mono">${r.annualTarget?fmtNum(r.quarterTargets[2])+' L':'—'}</td>
-      <td class="mono">${r.annualTarget?fmtNum(r.quarterTargets[3])+' L':'—'}</td>
+      ${qCells}
     </tr>`;
   }).join('');
   const naSkuTotals = naSkuGids.reduce((s, gid) => {
@@ -6323,7 +6366,7 @@ function renderTargetsPage() {
 
   document.getElementById('tg_na_target').innerHTML = `
     <h3 style="margin:0;">National Accounts — Per-SKU Annual Volume Target <span class="muted" style="font-weight:400; font-size:11px;">(litres, FY${fy})</span></h3>
-    <div class="hint" style="margin-top:4px;">National Accounts (Coles & Woolworths) sits outside the RSM-based Sales Team targets above. Set one annual carton volume target per SKU for the whole financial year — last FY's actual volume is shown alongside for comparison. The annual figure is automatically split across Q1–Q4 using that SKU's own seasonality last FY (a naturally busier quarter gets a bigger share), keeping the Total Volume page's combined company target line accurate quarter to quarter without any extra input. A brand-new SKU with no National Accounts history yet (marked "avg seasonality" below) instead uses the average seasonal shape across every other carton SKU, so its split is still seasonally sensible rather than an arbitrary flat 25% each quarter.</div>
+    <div class="hint" style="margin-top:4px;">National Accounts (Coles & Woolworths) sits outside the RSM-based Sales Team targets above. Set one annual carton volume target per SKU for the whole financial year — last FY's actual volume is shown alongside for comparison. The annual figure is automatically split across Q1–Q4 using that SKU's own seasonality last FY (a naturally busier quarter gets a bigger share), keeping the Total Volume page's combined company target line accurate quarter to quarter without any extra input. A brand-new SKU with no National Accounts history yet (marked "avg seasonality" below) instead uses the average seasonal shape across every other carton SKU, so its split is still seasonally sensible rather than an arbitrary flat 25% each quarter. Know a quarter won't follow the usual seasonal pattern — a promo, a one-off bulk order, a delisting? Type the real number straight into that quarter's own Q1–Q4 cell to override just that quarter (marked "manual"); the other quarters keep following the normal split. Clear a manual value to hand that quarter back to the automatic split.</div>
     <div class="tablewrap" style="margin-top:10px;">
       <table class="datatable">
         <thead><tr><th>SKU</th><th>Last FY Volume</th><th>FY${fy} Annual Target</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th></tr></thead>
@@ -7482,14 +7525,22 @@ function naSkuFyQuarterWeights(gid, fy) {
 // the seasonal weights, and the resulting Q1-Q4 litres split — everything the UI table and the
 // downstream Total Volume/National Accounts target consumers need in one call. usedAvgSeasonality
 // flags when this SKU had no history of its own and fell back to the category-average shape, so
-// the UI can surface that to the person setting the target.
+// the UI can surface that to the person setting the target. A quarter with a manual override (see
+// naSkuQuarterOverrideFor) uses that value directly instead of annualTarget x weight — the other,
+// non-overridden quarters are unaffected and keep following the normal seasonal split.
+// overriddenFlags[i] tells the UI which of Q1-Q4 (index 0-3) are manual so it can show that
+// distinctly from the auto-computed figures.
 function naSkuQuarterTargetsFor(gid, fy) {
   const input = naSkuTargetFor(gid, fy);
   const annualTarget = input.annualVolumeTarget || 0;
   const lastFyVolume = naSkuLastFyVolumeLitres(gid, fy);
   const weights = naSkuFyQuarterWeights(gid, fy);
-  const quarterTargets = weights.map(w => annualTarget * w);
-  return { gid, fy, annualTarget, lastFyVolume, weights, quarterTargets, usedAvgSeasonality: lastFyVolume === 0 };
+  const overriddenFlags = [1, 2, 3, 4].map(q => naSkuQuarterOverrideFor(gid, fy, q) != null);
+  const quarterTargets = weights.map((w, i) => {
+    const override = naSkuQuarterOverrideFor(gid, fy, i + 1);
+    return override != null ? override : annualTarget * w;
+  });
+  return { gid, fy, annualTarget, lastFyVolume, weights, quarterTargets, usedAvgSeasonality: lastFyVolume === 0, overriddenFlags };
 }
 // Sums every carton SKU's derived quarterly target for one FY quarter — the per-SKU model's
 // replacement for the old single-aggregate naTargets.cartonVolumeTarget, consumed the same way
@@ -7747,14 +7798,40 @@ function tvTargetForPeriod(period, granularity, bucketFilterVal, streamsSelected
   return total;
 }
 // ---------- Total Volume: Target vs Prior Periods (focused companion chart) ----------
-// A deliberately simpler companion to the main Total Volume trend chart above: just two toggles —
-// Quarterly/Annual and Sales Team/National Accounts — for a quick "are we on pace" read, rather
-// than configuring the full stream/SKU/bucket filter set. National Accounts actuals are scoped by
-// ownership group (naSkuAllOutletFilter), not Volume Stream, to stay consistent with how
-// naSkuTargetForQuarter's target itself is defined — a handful of Woolworths-owned outlets are
-// tagged Volume Stream = Sales Team but still belong here (see naOwnerOutletFilter's comment).
+// A deliberately simpler companion to the main Total Volume trend chart above: pick a single
+// financial year and see all 4 of its quarters side by side — the targets as entered for that whole
+// year, with actual/last-year/2-years-ago as comparison — plus a Sales Team/National Accounts scope
+// toggle. National Accounts actuals are scoped by ownership group (naSkuAllOutletFilter), not Volume
+// Stream, to stay consistent with how naSkuTargetForQuarter's target itself is defined — a handful
+// of Woolworths-owned outlets are tagged Volume Stream = Sales Team but still belong here (see
+// naOwnerOutletFilter's comment).
 function tvTpOutletFilter(scope) {
   return scope === 'na' ? naSkuAllOutletFilter() : (oid => allOutlets[oid] && allOutlets[oid].volumeStream === 'Sales Team');
+}
+// The 4 quarters (Q1-Q4) of exactly one financial year — deliberately not a rolling trailing window
+// like the rest of the app's trend charts, since the whole point of this chart is "show me the
+// targets I've set for this FY, all four quarters, compared to what actually happened."
+function tvTpFyQuarterPeriods(fy) {
+  const out = [];
+  for (let q = 1; q <= 4; q++) {
+    const [start, endExcl] = quarterBoundsOf(fy, q);
+    out.push({ label: `Q${q}`, startDayIdx: dayIndexOf(start), endDayIdx: dayIndexOf(endExcl) - 1, fy, q });
+  }
+  return out;
+}
+// Populates the Financial Year picker with every FY the sales data spans, plus one FY ahead (so a
+// target set for next FY via the Volume Target Calculator/FY Forecast is visible even before any
+// actuals exist for it) — most recent first, defaulting to the current FY.
+function populateTvTpFySelect() {
+  const el = document.getElementById('tv_tp_fy');
+  if (!el) return;
+  const startFy = fyOf(EPOCH_DATE);
+  const endFy = PERF_CURRENT_Q.fy + 1;
+  const fys = [];
+  for (let fy = endFy; fy >= startFy; fy--) fys.push(fy);
+  const prevVal = el.value;
+  el.innerHTML = fys.map(fy => `<option value="${fy}">FY${String(fy).slice(-2)}${fy === PERF_CURRENT_Q.fy ? ' (current)' : ''}</option>`).join('');
+  el.value = fys.includes(parseInt(prevVal, 10)) ? prevVal : String(PERF_CURRENT_Q.fy);
 }
 function tvTpLitresSeries(scope, periods, granularity) {
   const outletFilterFn = tvTpOutletFilter(scope);
@@ -7773,25 +7850,26 @@ function tvTpLitresSeries(scope, periods, granularity) {
     };
   });
 }
-// Renders the target-vs-actual-vs-prior-years bar+line chart for whichever Quarterly/Annual and
-// Sales Team/National Accounts toggle is currently selected. Reuses tvTargetForQuarter/
-// tvTargetForPeriod unchanged — passing a single-item streamsSelected array (['Sales Team'] or
-// ['National Accounts']) already scopes the combined target correctly, since that function was
-// built to filter by exactly this list.
+// Renders the target-vs-actual-vs-prior-years bar+line chart for whichever Financial Year and Sales
+// Team/National Accounts toggle is currently selected — always all 4 quarters of that one FY.
+// Reuses tvTargetForQuarter/tvTargetForPeriod unchanged — passing a single-item streamsSelected
+// array (['Sales Team'] or ['National Accounts']) already scopes the combined target correctly,
+// since that function was built to filter by exactly this list.
 function renderTvTargetVsPriorChart() {
   const chartEl = document.getElementById('tv_tp_chart');
-  const granEl = document.getElementById('tv_tp_granularity');
+  const fyEl = document.getElementById('tv_tp_fy');
   const scopeEl = document.getElementById('tv_tp_scope');
-  if (!chartEl || !granEl || !scopeEl) return;
-  const granularity = granEl.value; // 'quarter' | 'year'
+  if (!chartEl || !fyEl || !scopeEl) return;
+  const fy = parseInt(fyEl.value, 10);
+  if (!fy) return;
   const scope = scopeEl.value; // 'salesteam' | 'na'
-  const periods = veePeriodRanges(granularity, veeDefaultPeriodCount(granularity));
-  const litresSeries = tvTpLitresSeries(scope, periods, granularity);
+  const periods = tvTpFyQuarterPeriods(fy);
+  const litresSeries = tvTpLitresSeries(scope, periods, 'quarter');
   const streamsSelected = scope === 'na' ? ['National Accounts'] : ['Sales Team'];
-  const targetSeries = periods.map(p => tvTargetForPeriod(p, granularity, 'ALL', streamsSelected, null));
+  const targetSeries = periods.map(p => tvTargetForPeriod(p, 'quarter', 'ALL', streamsSelected, null));
   const cssClass = scope === 'na' ? 'cartons' : 'combo';
-  const titlePrefix = scope === 'na' ? 'National Accounts Volume vs Target' : 'Sales Team Volume vs Target';
-  veeRenderVolumeChart('tv_tp_chart', litresSeries.map(p => p.label), litresSeries.map(p => p.litres), cssClass, granularity, titlePrefix, 'litres', ' L', null,
+  const titlePrefix = (scope === 'na' ? 'National Accounts Volume vs Target' : 'Sales Team Volume vs Target') + ` — FY${String(fy).slice(-2)}`;
+  veeRenderVolumeChart('tv_tp_chart', litresSeries.map(p => p.label), litresSeries.map(p => p.litres), cssClass, 'quarter', titlePrefix, 'litres', ' L', null,
     { ly: litresSeries.map(p => p.ly), ly2: litresSeries.map(p => p.ly2), target: targetSeries });
 }
 // Two-slice pie (Kegs vs Cartons) for a single period — matches the same period the SKU-by-SKU
@@ -9991,7 +10069,8 @@ function renderEverything() {
   document.getElementById('tv_bucket').addEventListener('change', renderTotalVolumePage);
   document.getElementById('tv_granularity').addEventListener('change', renderTotalVolumePage);
   document.getElementById('tv_pie_period').addEventListener('change', renderTotalVolumePage);
-  document.getElementById('tv_tp_granularity').addEventListener('change', renderTvTargetVsPriorChart);
+  populateTvTpFySelect();
+  document.getElementById('tv_tp_fy').addEventListener('change', renderTvTargetVsPriorChart);
   document.getElementById('tv_tp_scope').addEventListener('change', renderTvTargetVsPriorChart);
   renderTotalVolumePage();
 
@@ -10166,6 +10245,7 @@ function onInitialDataLoaded(data) {
   naTargets = data.naTargets || {};
   fyForecastInputs = data.fyForecastInputs || {};
   naSkuTargets = data.naSkuTargets || {};
+  naSkuQuarterOverrides = data.naSkuQuarterOverrides || {};
   applyRsmZoneOverrides();
   renderEverything();
 }
@@ -10213,6 +10293,7 @@ function refreshPricingFromServer() {
       naTargets = data.naTargets || {};
       fyForecastInputs = data.fyForecastInputs || {};
       naSkuTargets = data.naSkuTargets || {};
+  naSkuQuarterOverrides = data.naSkuQuarterOverrides || {};
       applyRsmZoneOverrides();
       // Pick up any customer a colleague added since our last poll — same fill-gaps-only merge
       // as the initial load, so a real record (should one now exist) is never overwritten.

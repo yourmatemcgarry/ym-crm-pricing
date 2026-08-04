@@ -45,7 +45,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, rsmTargetProtected, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, rsmTargetProtected, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -71,6 +71,7 @@ async function readAll(s) {
     s.get('groupMemberOverrides', { type: 'json' }),
     s.get('fyForecastInputs', { type: 'json' }),
     s.get('naSkuTargets', { type: 'json' }),
+    s.get('naSkuQuarterOverrides', { type: 'json' }),
   ]);
   // vipContacts is seeded exactly once — the first time anyone loads the app after this feature
   // ships, the blob won't exist yet (null, not just empty), so we seed it from VIP_CONTACTS_SEED
@@ -111,6 +112,7 @@ async function readAll(s) {
     groupMemberOverrides: groupMemberOverrides || {},
     fyForecastInputs: fyForecastInputs || {},
     naSkuTargets: naSkuTargets || {},
+    naSkuQuarterOverrides: naSkuQuarterOverrides || {},
   };
 }
 
@@ -669,6 +671,25 @@ export default async (req) => {
       current[key] = { annualVolumeTarget: Number(value), updatedBy, updatedAt: now };
       await s.setJSON('naSkuTargets', current);
       return json({ ok: true, naSkuTargets: current });
+    }
+
+    if (action === 'saveNaSkuQuarterOverride') {
+      // Manual override for ONE quarter of a National Accounts SKU's volume target, keyed
+      // 'groupId|fy|q' — replaces the auto seasonal-split value for that quarter only, letting a
+      // manager type in a known non-seasonal figure (a promo, a one-off bulk order, a delisting)
+      // without touching the SKU's annual target or its other quarters.
+      const { groupId, fy, q, value, updatedBy } = payload;
+      const key = groupId + '|' + fy + '|' + q;
+      const current = (await s.get('naSkuQuarterOverrides', { type: 'json' })) || {};
+      if (value === null || value === undefined) {
+        const next = { ...current };
+        delete next[key];
+        await s.setJSON('naSkuQuarterOverrides', next);
+        return json({ ok: true, naSkuQuarterOverrides: next });
+      }
+      current[key] = { value: Number(value), updatedBy, updatedAt: now };
+      await s.setJSON('naSkuQuarterOverrides', current);
+      return json({ ok: true, naSkuQuarterOverrides: current });
     }
 
     return json({ error: 'Unknown action: ' + action }, 400);
