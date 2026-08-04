@@ -23,22 +23,31 @@
   }
   header.top h1 { font-size:17px; margin:0; font-weight:600; letter-spacing:.2px; }
   header.top .sub { font-size:12px; color:#c7cfe0; margin-top:2px; }
-  nav.tabs { display:flex; gap:4px; padding: 0 22px; background:var(--navy-dark); flex-wrap:wrap; align-items:center; }
-  nav.tabs button {
-    background:transparent; border:none; border-top:3px solid transparent; color:#c7cfe0; padding:11px 16px; font-size:13.5px; cursor:pointer; border-bottom:3px solid transparent; font-weight:500;
+  /* Sidebar layout: nav.tabs runs down the left as a sticky column, main fills the rest. */
+  .app-body { display:flex; align-items:flex-start; }
+  nav.tabs {
+    display:flex; flex-direction:column; gap:1px; padding:14px 10px 40px; background:var(--navy-dark);
+    flex:0 0 232px; width:232px; box-sizing:border-box; position:sticky; top:0; align-self:flex-start;
+    max-height:100vh; overflow-y:auto;
   }
-  nav.tabs button.active { color:#fff; border-bottom-color: var(--gold); }
-  nav.tabs button:hover { color:#fff; }
-  nav.tabs button[data-group="rsm"] { border-top-color: var(--grp-rsm); }
-  nav.tabs button[data-group="mgmt"] { border-top-color: var(--grp-mgmt); }
-  nav.tabs button[data-group="supply"] { border-top-color: var(--grp-supply); }
+  nav.tabs button {
+    background:transparent; border:none; border-left:3px solid transparent; color:#c7cfe0; padding:9px 12px; font-size:13px; cursor:pointer; font-weight:500;
+    text-align:left; width:100%; border-radius:0 6px 6px 0; white-space:normal; line-height:1.25;
+  }
+  nav.tabs button.active { color:#fff; background:rgba(255,255,255,.08); border-left-color: var(--gold); }
+  nav.tabs button:hover { color:#fff; background:rgba(255,255,255,.05); }
+  nav.tabs button[data-group="rsm"] { border-left-color: var(--grp-rsm); }
+  nav.tabs button[data-group="mgmt"] { border-left-color: var(--grp-mgmt); }
+  nav.tabs button[data-group="supply"] { border-left-color: var(--grp-supply); }
+  nav.tabs button.active[data-group] { border-left-color: var(--gold); }
   nav.tabs .tab-group-label {
     display:flex; align-items:center; gap:6px; color:#8b96b3; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
-    padding:0 10px 0 14px; white-space:nowrap; align-self:stretch;
+    padding:14px 12px 6px; white-space:nowrap;
   }
-  nav.tabs .tab-group-label:not(:first-child) { border-left:1px solid rgba(255,255,255,.14); margin-left:2px; }
+  nav.tabs .tab-group-label:first-child { padding-top:4px; }
+  nav.tabs .tab-group-label:not(:first-child) { border-top:1px solid rgba(255,255,255,.14); margin-top:6px; }
   nav.tabs .tab-group-label .dot { display:inline-block; width:7px; height:7px; border-radius:50%; flex:none; }
-  main { padding: 18px 22px 60px; max-width:1700px; margin:0 auto; }
+  main { flex:1 1 auto; min-width:0; padding: 18px 22px 60px; max-width:1700px; }
   .tabpage { display:none; }
   .tabpage.active { display:block; }
 
@@ -299,6 +308,7 @@
     html, body { width:100%; }
     header.top, nav.tabs, .no-print { display:none !important; }
     body { background:#fff; font-size:11px; }
+    .app-body { display:block !important; }
     /* Browsers strip background-color/background-image by default when printing or exporting to
        PDF (to save ink) unless a page opts back in — without this, every bar chart (which is
        just a colored div with no border or text of its own), badge pill, and highlighted table
@@ -391,8 +401,10 @@
   </div>
 </header>
 
+<div class="app-body">
 <nav class="tabs">
   <span class="tab-group-label"><span class="dot" style="background:var(--grp-rsm);"></span>RSM Tools</span>
+  <button class="tab-btn" data-tab="performance" data-group="rsm">Team Dashboard</button>
   <button class="tab-btn active" data-tab="grid" data-group="rsm">Customer Pricing</button>
   <button class="tab-btn" data-tab="tempdeals" data-group="rsm">Temporary Deals</button>
   <button class="tab-btn" data-tab="activetemp" data-group="rsm">Active Temp Deals</button>
@@ -401,7 +413,7 @@
   <button class="tab-btn" data-tab="familygroups" data-group="rsm">Family Groups</button>
   <button class="tab-btn" data-tab="margin" data-group="rsm">Margin Calculator - Venues (On Prem)</button>
   <button class="tab-btn" data-tab="offpremise" data-group="rsm">Margin Calculator - Bottleshops (Off Prem)</button>
-  <button class="tab-btn" data-tab="customerexplorer" data-group="rsm">Customer Explorer</button>
+  <button class="tab-btn" data-tab="customerexplorer" data-group="rsm">Customer List Explorer</button>
   <button class="tab-btn" data-tab="targetcustomers" data-group="rsm">Target Customers</button>
   <button class="tab-btn" data-tab="atrisk" data-group="rsm">Listings Report</button>
   <button class="tab-btn" data-tab="bannergaps" data-group="rsm">Banner Gap Report</button>
@@ -410,7 +422,6 @@
   <span class="tab-group-label"><span class="dot" style="background:var(--grp-mgmt);"></span>Management Tools</span>
   <button class="tab-btn" data-tab="prodprices" data-group="mgmt">Product List Prices</button>
   <button class="tab-btn" data-tab="vipcontacts" data-group="mgmt">VIP Contacts</button>
-  <button class="tab-btn" data-tab="performance" data-group="mgmt">Team Dashboard</button>
   <button class="tab-btn" data-tab="targets" data-group="mgmt">Set Targets</button>
   <button class="tab-btn" data-tab="rsmzones" data-group="mgmt">RSM Zones</button>
   <button class="tab-btn" data-tab="trends" data-group="mgmt">Volume Trends</button>
@@ -1102,7 +1113,7 @@
   <!-- ================= CUSTOMER EXPLORER ================= -->
   <div class="tabpage" id="tab-customerexplorer">
     <div class="panel no-print">
-      <h2 style="margin:0;">Customer Explorer</h2>
+      <h2 style="margin:0;">Customer List Explorer</h2>
       <div class="hint" style="margin-top:6px;">Every customer for a chosen period, compared to either the previous period or the same period last year. Click a row to see that customer's beer-by-beer breakdown.</div>
       <div class="rowflex" style="margin-top:10px; gap:14px; flex-wrap:wrap; align-items:flex-end;">
         <div class="fld" style="margin:0;">
@@ -1538,6 +1549,7 @@
   </div>
 
 </main>
+</div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -2444,7 +2456,7 @@ function updateNaSkuTarget(gid, fy, val) {
 
 // Recomputes zoneBakedRsm/rsmRosterBaked from the pristine originalOutletRsm snapshot, then
 // applies any active rsmZoneOverrides on top of it — mutating outlets[id].rsm so every other page
-// in the app (Team Dashboard, Volume Trends, Set Targets, Banner Gap Report, Customer Explorer,
+// in the app (Team Dashboard, Volume Trends, Set Targets, Banner Gap Report, Customer List Explorer,
 // the Pricing Grid...) sees the override with no further changes needed. Safe to call more than
 // once (idempotent — always resets to override-or-original, never drifts), since unlike the
 // static/Cowork build this app can go a long time between full page reloads (periodic
@@ -2505,7 +2517,7 @@ function applyCustomGroups() {
 
 // Saves (or clears, if rsmValue is falsy/matches the baked value) an RSM Zone override to the
 // server. A zone's RSM touches dozens of otherwise-untouched pages across this app (Team
-// Dashboard, Volume Trends, Set Targets, Banner Gap Report, Customer Explorer, the Pricing
+// Dashboard, Volume Trends, Set Targets, Banner Gap Report, Customer List Explorer, the Pricing
 // Grid...), and this build's existing reactive refresh (refreshPricingFromServer()) only
 // re-renders a partial set of them — so rather than extending that partial coverage, we do a full
 // reload once the save is confirmed, which re-runs onInitialDataLoaded() and applies the override
@@ -6310,34 +6322,65 @@ function tgMonthsInQuarter(fy, q) {
 }
 // VPL is always expressed as whole units — 50L kegs / 6L cartons — per listing per week, never
 // raw litres, so it reads on the same scale everywhere it appears in the app (Volume Trends,
-// Customer Explorer, and here).
+// Customer List Explorer, and here).
+// Averages the VPL across every prior year we have complete data for (not just one year back) —
+// walks back year by year until a candidate period predates the sales-data epoch, skipping any
+// year with zero listings (e.g. before the SKU existed) rather than dragging the average to 0.
+// Falls back to 0 only when NO prior year has any history at all for this period.
 function tgHistoricalMonthlyVpl(y, m, outletFilterFn) {
-  const histDate = new Date(y - 1, m, 1);
-  const [hs, heExcl] = calendarMonthBoundsOf(histDate);
-  const heIncl = new Date(heExcl.getTime() - 86400000);
-  const weeks = (dayIndexOf(heIncl) - dayIndexOf(hs) + 1) / 7;
-  const stats = perfRangeStats('KEGS', dayIndexOf(hs), dayIndexOf(heIncl), outletFilterFn);
-  return stats.listingsCount > 0 ? (stats.totalLitres / stats.listingsCount) / weeks / KEG_UNIT_LITRES : 0;
+  const vpls = [];
+  for (let back = 1; back <= 6; back++) {
+    const histDate = new Date(y - back, m, 1);
+    const [hs, heExcl] = calendarMonthBoundsOf(histDate);
+    if (dayIndexOf(hs) < 0) break; // predates EPOCH_DATE entirely — further back is pointless
+    const heIncl = new Date(heExcl.getTime() - 86400000);
+    const weeks = (dayIndexOf(heIncl) - dayIndexOf(hs) + 1) / 7;
+    const stats = perfRangeStats('KEGS', dayIndexOf(hs), dayIndexOf(heIncl), outletFilterFn);
+    if (stats.listingsCount > 0) vpls.push((stats.totalLitres / stats.listingsCount) / weeks / KEG_UNIT_LITRES);
+  }
+  return vpls.length ? vpls.reduce((s, v) => s + v, 0) / vpls.length : 0;
 }
 function tgHistoricalQuarterlyVpl(fy, q, outletFilterFn) {
-  const histQ = { fy: fy - 1, q };
-  const [hs, heExcl] = quarterBoundsOf(histQ.fy, histQ.q);
-  const heIncl = new Date(heExcl.getTime() - 86400000);
-  const weeks = (dayIndexOf(heIncl) - dayIndexOf(hs) + 1) / 7;
-  const stats = perfRangeStats('CARTONS', dayIndexOf(hs), dayIndexOf(heIncl), outletFilterFn);
-  return stats.listingsCount > 0 ? (stats.totalLitres / stats.listingsCount) / weeks / CARTON_UNIT_LITRES : 0;
+  const vpls = [];
+  for (let back = 1; back <= 6; back++) {
+    const [hs, heExcl] = quarterBoundsOf(fy - back, q);
+    if (dayIndexOf(hs) < 0) break;
+    const heIncl = new Date(heExcl.getTime() - 86400000);
+    const weeks = (dayIndexOf(heIncl) - dayIndexOf(hs) + 1) / 7;
+    const stats = perfRangeStats('CARTONS', dayIndexOf(hs), dayIndexOf(heIncl), outletFilterFn);
+    if (stats.listingsCount > 0) vpls.push((stats.totalLitres / stats.listingsCount) / weeks / CARTON_UNIT_LITRES);
+  }
+  return vpls.length ? vpls.reduce((s, v) => s + v, 0) / vpls.length : 0;
+}
+// Walks backward from the quarter immediately before (fy,q) until it finds one that has FULLY
+// elapsed (its last day is on or before today/salesDataTo) — the real-data baseline quarter for
+// tgKegStartOfQuarterListings/tgCartonStartOfQuarterListings below. Needed because quarterBoundsOf
+// returns full calendar bounds regardless of whether that quarter has actually happened yet:
+// asking about a quarter beyond the one "today" sits in (e.g. Q3 while we're still in Q1) naively
+// resolves its "previous quarter" to one that's itself partially or entirely in the future —
+// silently undercounting (or zeroing out) real listings instead of reflecting the latest quarter
+// we actually have complete data for.
+function lastElapsedQuarterBefore(fy, q) {
+  let cur = shiftQuarter(fy, q, -1);
+  const todayIdx = dayIndexOf(PERF_TODAY);
+  for (let i = 0; i < 8; i++) {
+    const [, endExcl] = quarterBoundsOf(cur.fy, cur.q);
+    if (dayIndexOf(new Date(endExcl.getTime() - 86400000)) <= todayIdx) return cur;
+    cur = shiftQuarter(cur.fy, cur.q, -1);
+  }
+  return cur;
 }
 function tgKegStartOfQuarterListings(fy, q, outletFilterFn) {
-  const prevQ = shiftQuarter(fy, q, -1);
-  const [, prevQEndExcl] = quarterBoundsOf(prevQ.fy, prevQ.q);
+  const baseQ = lastElapsedQuarterBefore(fy, q);
+  const [, prevQEndExcl] = quarterBoundsOf(baseQ.fy, baseQ.q);
   const prevQEndIncl = new Date(prevQEndExcl.getTime() - 86400000);
   const [lastMonthStart, lastMonthEndExcl] = calendarMonthBoundsOf(prevQEndIncl);
   const lastMonthEndIncl = new Date(lastMonthEndExcl.getTime() - 86400000);
   return perfRangeStats('KEGS', dayIndexOf(lastMonthStart), dayIndexOf(lastMonthEndIncl), outletFilterFn).listingsCount;
 }
 function tgCartonStartOfQuarterListings(fy, q, outletFilterFn) {
-  const prevQ = shiftQuarter(fy, q, -1);
-  const [prevQStart, prevQEndExcl] = quarterBoundsOf(prevQ.fy, prevQ.q);
+  const baseQ = lastElapsedQuarterBefore(fy, q);
+  const [prevQStart, prevQEndExcl] = quarterBoundsOf(baseQ.fy, baseQ.q);
   const prevQEndIncl = new Date(prevQEndExcl.getTime() - 86400000);
   return perfRangeStats('CARTONS', dayIndexOf(prevQStart), dayIndexOf(prevQEndIncl), outletFilterFn).listingsCount;
 }
@@ -6412,26 +6455,26 @@ function tgComputeSuggestion(rsm, fy, q) {
 }
 
 // ===================== FY LISTING GROWTH FORECAST =====================
-// One "new listings per quarter" growth number per RSM (kegs + cartons separately), entered once
-// for the whole FY. Q1 starts from the real, actual start-of-quarter listings count (same as the
+// One "new listings" growth number per RSM PER QUARTER (kegs + cartons separately, 8 inputs total
+// across the FY) — each quarter's own growth target is entered manually, rather than one number
+// reused four times. Q1 starts from the real, actual start-of-quarter listings count (same as the
 // per-quarter calculator above); Q2/Q3/Q4 then cascade — each quarter's starting listings is the
-// PREVIOUS quarter's own forecasted ending count (baseline + growth), since future quarters don't
-// have real invoice data yet. Every quarter still prices its volume at that quarter's own
-// historical Volume-per-listing-per-week (last year's same quarter/months) via
-// tgComputeQuarterFromBaseline, so the seasonality that's already baked into the per-quarter
-// calculator carries straight through the cascade — a quarter that was naturally quieter last year
-// comes out quieter in the forecast too, even though the same growth number is applied everywhere.
+// PREVIOUS quarter's own forecasted ending count (that quarter's baseline + that quarter's own
+// entered growth), since future quarters don't have real invoice data yet. Every quarter still
+// prices its volume at that quarter's own historical Volume-per-listing-per-week, averaged across
+// every prior year we have data for (see tgHistoricalMonthlyVpl/tgHistoricalQuarterlyVpl) via
+// tgComputeQuarterFromBaseline, so seasonality carries through the cascade automatically.
 function fyForecastCompute(rsm, fy) {
   const outletFilterFn = oid => outlets[oid] && outlets[oid].rsm === rsm;
   const input = fyForecastInputFor(rsm, fy);
-  const newKeg = Number(input.newKegListingsPerQtr) || 0;
-  const newCarton = Number(input.newCartonListingsPerQtr) || 0;
   let kegBaseline = tgKegStartOfQuarterListings(fy, 1, outletFilterFn);
   let cartonBaseline = tgCartonStartOfQuarterListings(fy, 1, outletFilterFn);
   const quarters = [];
   for (let q = 1; q <= 4; q++) {
+    const newKeg = Number(input['newKegListingsQ' + q]) || 0;
+    const newCarton = Number(input['newCartonListingsQ' + q]) || 0;
     const r = tgComputeQuarterFromBaseline(fy, q, kegBaseline, cartonBaseline, null, null, newKeg, newCarton, outletFilterFn);
-    quarters.push(r);
+    quarters.push({ ...r, newKeg, newCarton });
     kegBaseline = r.kegListingsTargetFinal;
     cartonBaseline = r.cartonListingsTargetFinal;
   }
@@ -6439,7 +6482,7 @@ function fyForecastCompute(rsm, fy) {
     kegVolume: s.kegVolume + r.kegTotal,
     cartonVolume: s.cartonVolume + r.cartonTotal,
   }), { kegVolume: 0, cartonVolume: 0 });
-  return { rsm, fy, newKeg, newCarton, quarters, fyTotals };
+  return { rsm, fy, quarters, fyTotals };
 }
 // Writes all 4 quarters' Listings + Volume targets into rsmTargets, exactly as if they'd been
 // entered/applied one quarter at a time via the calculator above — after this, every value is a
@@ -6484,14 +6527,19 @@ function renderFyForecastPanel() {
   const rsmList = uniqueVals('rsm', outlets);
   if (!rsmList.length) { el.innerHTML = ''; return; }
 
+  const qtyInput = (rsm, bucket, q, val) =>
+    `<input type="number" step="1" min="0" style="width:56px;" value="${val||''}" placeholder="0" title="New ${bucket} listings, Q${q}" onchange="fyForecastOnInputChange('${rsm}',${fy},'new${bucket}ListingsQ${q}',this.value)">`;
+
   const rows = rsmList.map(rsm => {
     const input = fyForecastInputFor(rsm, fy);
     const result = fyForecastCompute(rsm, fy);
     const lastQ = result.quarters[3];
+    const kegCells = [1,2,3,4].map(q => `<td>${qtyInput(rsm, 'Keg', q, input['newKegListingsQ'+q])}</td>`).join('');
+    const cartonCells = [1,2,3,4].map(q => `<td>${qtyInput(rsm, 'Carton', q, input['newCartonListingsQ'+q])}</td>`).join('');
     return `<tr>
       <td>${escapeHtml(rsm)}</td>
-      <td><input type="number" step="1" min="0" style="width:90px;" value="${input.newKegListingsPerQtr||''}" placeholder="0" onchange="fyForecastOnInputChange('${rsm}',${fy},'newKegListingsPerQtr',this.value)"></td>
-      <td><input type="number" step="1" min="0" style="width:90px;" value="${input.newCartonListingsPerQtr||''}" placeholder="0" onchange="fyForecastOnInputChange('${rsm}',${fy},'newCartonListingsPerQtr',this.value)"></td>
+      ${kegCells}
+      ${cartonCells}
       <td class="num-cell mono">${fmtNum(lastQ.kegListingsTargetFinal)}</td>
       <td class="num-cell mono">${fmtNum(lastQ.cartonListingsTargetFinal)}</td>
       <td class="num-cell mono">${fmtNum(result.fyTotals.kegVolume)} L</td>
@@ -6503,14 +6551,15 @@ function renderFyForecastPanel() {
 
   el.innerHTML = `
     <h3 style="margin:0;">FY Listing Growth Forecast <span class="muted" style="font-weight:400; font-size:11px;">(FY${fy})</span></h3>
-    <div class="hint" style="margin-top:4px;">Enter each RSM's target new listings per quarter (kegs and cartons) once for the year. Q1 starts from real current listings; each later quarter starts from the previous quarter's own forecasted ending listings, with the same growth number applied again — priced throughout at that quarter's own historical Volume per listing per week (last year's same quarter), so seasonality carries through the whole year automatically. Applying writes Q1–Q4 Listings and Volume targets into the table above, exactly as if set one quarter at a time — still fully editable afterward.</div>
+    <div class="hint" style="margin-top:4px;">Enter each RSM's target new listings for each quarter individually (kegs and cartons, Q1–Q4). Q1 starts from real current listings; each later quarter starts from the previous quarter's own forecasted ending listings (that quarter's baseline plus that quarter's own growth number) — the system calculates the resulting final listings each quarter automatically. Volume is priced at that quarter's average historical Volume per listing per week, averaged across every prior year we have data for (not just last year), so seasonality carries through the whole year without one unusual year skewing a single quarter. Applying writes Q1–Q4 Listings and Volume targets into the table above, exactly as if set one quarter at a time — still fully editable afterward.</div>
     <div class="tablewrap" style="margin-top:10px;">
       <table class="datatable">
         <thead><tr>
-          <th>RSM</th><th>New Keg Listings /qtr</th><th>New Carton Listings /qtr</th>
-          <th>Keg Listings, end of FY</th><th>Carton Listings, end of FY</th>
-          <th>FY Keg Volume</th><th>FY Carton Volume</th><th>FY Total Volume</th><th></th>
-        </tr></thead>
+          <th rowspan="2">RSM</th><th colspan="4">New Keg Listings</th><th colspan="4">New Carton Listings</th>
+          <th rowspan="2">Keg Listings,<br>end of FY</th><th rowspan="2">Carton Listings,<br>end of FY</th>
+          <th rowspan="2">FY Keg<br>Volume</th><th rowspan="2">FY Carton<br>Volume</th><th rowspan="2">FY Total<br>Volume</th><th rowspan="2"></th>
+        </tr>
+        <tr><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -7741,8 +7790,8 @@ function renderTotalVolumePage() {
 // length, or the same calendar period a year ago. Drill into any row to see that customer's
 // SKU-level breakdown for the period.
 let ceTypeMsel = null;
-let ceZoneMsel = null;      // multi-select for Customer Explorer "Zone" filter
-let ceSubbrandMsel = null;  // multi-select for Customer Explorer "Beer" filter
+let ceZoneMsel = null;      // multi-select for Customer List Explorer "Zone" filter
+let ceSubbrandMsel = null;  // multi-select for Customer List Explorer "Beer" filter
 let cePage = 1;
 const CE_PAGE_SIZE = 25;
 let ceSelectedOutletId = null;
@@ -9806,7 +9855,7 @@ function renderEverything() {
   document.getElementById('tv_pie_period').addEventListener('change', renderTotalVolumePage);
   renderTotalVolumePage();
 
-  // Customer Explorer page
+  // Customer List Explorer page
   document.getElementById('ce_period').innerHTML = CE_PERIOD_PRESETS.map(p => {
     const [s,e] = cePeriodBounds(p.key);
     return `<option value="${p.key}">${p.label} (${fmtDateObj(s)} – ${fmtDateObj(e)})</option>`;
