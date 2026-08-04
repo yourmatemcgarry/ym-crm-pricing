@@ -11,6 +11,7 @@
     --green:#1e8a5f; --green-bg:#e7f6ef; --red:#c0392b; --red-bg:#fdecea;
     --amber:#b8842a; --amber-bg:#fbf1de; --blue:#2563eb; --blue-bg:#eaf1fe;
     --keg:#7c4dab; --keg-bg:#f2eaf9; --pack:#1e7fb8; --pack-bg:#e8f3fb;
+    --grp-rsm:#4d8dff; --grp-mgmt:#a875f5; --grp-supply:#3ecf8e;
   }
   * { box-sizing: border-box; }
   body {
@@ -22,12 +23,21 @@
   }
   header.top h1 { font-size:17px; margin:0; font-weight:600; letter-spacing:.2px; }
   header.top .sub { font-size:12px; color:#c7cfe0; margin-top:2px; }
-  nav.tabs { display:flex; gap:4px; padding: 0 22px; background:var(--navy-dark); flex-wrap:wrap; }
+  nav.tabs { display:flex; gap:4px; padding: 0 22px; background:var(--navy-dark); flex-wrap:wrap; align-items:center; }
   nav.tabs button {
-    background:transparent; border:none; color:#c7cfe0; padding:11px 16px; font-size:13.5px; cursor:pointer; border-bottom:3px solid transparent; font-weight:500;
+    background:transparent; border:none; border-top:3px solid transparent; color:#c7cfe0; padding:11px 16px; font-size:13.5px; cursor:pointer; border-bottom:3px solid transparent; font-weight:500;
   }
   nav.tabs button.active { color:#fff; border-bottom-color: var(--gold); }
   nav.tabs button:hover { color:#fff; }
+  nav.tabs button[data-group="rsm"] { border-top-color: var(--grp-rsm); }
+  nav.tabs button[data-group="mgmt"] { border-top-color: var(--grp-mgmt); }
+  nav.tabs button[data-group="supply"] { border-top-color: var(--grp-supply); }
+  nav.tabs .tab-group-label {
+    display:flex; align-items:center; gap:6px; color:#8b96b3; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+    padding:0 10px 0 14px; white-space:nowrap; align-self:stretch;
+  }
+  nav.tabs .tab-group-label:not(:first-child) { border-left:1px solid rgba(255,255,255,.14); margin-left:2px; }
+  nav.tabs .tab-group-label .dot { display:inline-block; width:7px; height:7px; border-radius:50%; flex:none; }
   main { padding: 18px 22px 60px; max-width:1700px; margin:0 auto; }
   .tabpage { display:none; }
   .tabpage.active { display:block; }
@@ -382,32 +392,37 @@
 </header>
 
 <nav class="tabs">
-  <button class="tab-btn active" data-tab="grid">Customer Pricing</button>
-  <button class="tab-btn" data-tab="prodprices">Product List Prices</button>
-  <button class="tab-btn" data-tab="tempdeals">Temporary Deals</button>
-  <button class="tab-btn" data-tab="activetemp">Active Temp Deals</button>
-  <button class="tab-btn" data-tab="summary">Customer Details</button>
-  <button class="tab-btn" data-tab="newcustomers">New Customers</button>
-  <button class="tab-btn" data-tab="familygroups">Family Groups</button>
-  <button class="tab-btn" data-tab="vipcontacts">VIP Contacts</button>
-  <button class="tab-btn" data-tab="margin">Margin Calculator - Venues (On Prem)</button>
-  <button class="tab-btn" data-tab="offpremise">Margin Calculator - Bottleshops (Off Prem)</button>
-  <button class="tab-btn" data-tab="customerexplorer">Customer Explorer</button>
-  <button class="tab-btn" data-tab="performance">Team Dashboard</button>
-  <button class="tab-btn" data-tab="targetcustomers">Target Customers</button>
-  <button class="tab-btn" data-tab="atrisk">Listings Report</button>
-  <button class="tab-btn" data-tab="bannergaps">Banner Gap Report</button>
-  <button class="tab-btn" data-tab="activations">Activations</button>
-  <button class="tab-btn" data-tab="targets">Set Targets</button>
-  <button class="tab-btn" data-tab="rsmzones">RSM Zones</button>
-  <button class="tab-btn" data-tab="trends">Volume Trends</button>
-  <button class="tab-btn" data-tab="colesww">Coles &amp; Woolworths</button>
-  <button class="tab-btn" data-tab="totalvolume">Total Volume</button>
-  <button class="tab-btn" data-tab="orders">Orders</button>
-  <button class="tab-btn" data-tab="runs">Delivery Runs</button>
-  <button class="tab-btn" data-tab="deliveryreports">Delivery Reports</button>
-  <button class="tab-btn" data-tab="exportemails">Export Emails</button>
-  <button class="tab-btn" data-tab="datarefresh">Data Refresh</button>
+  <span class="tab-group-label"><span class="dot" style="background:var(--grp-rsm);"></span>RSM Tools</span>
+  <button class="tab-btn active" data-tab="grid" data-group="rsm">Customer Pricing</button>
+  <button class="tab-btn" data-tab="tempdeals" data-group="rsm">Temporary Deals</button>
+  <button class="tab-btn" data-tab="activetemp" data-group="rsm">Active Temp Deals</button>
+  <button class="tab-btn" data-tab="summary" data-group="rsm">Customer Details</button>
+  <button class="tab-btn" data-tab="newcustomers" data-group="rsm">New Customers</button>
+  <button class="tab-btn" data-tab="familygroups" data-group="rsm">Family Groups</button>
+  <button class="tab-btn" data-tab="margin" data-group="rsm">Margin Calculator - Venues (On Prem)</button>
+  <button class="tab-btn" data-tab="offpremise" data-group="rsm">Margin Calculator - Bottleshops (Off Prem)</button>
+  <button class="tab-btn" data-tab="customerexplorer" data-group="rsm">Customer Explorer</button>
+  <button class="tab-btn" data-tab="targetcustomers" data-group="rsm">Target Customers</button>
+  <button class="tab-btn" data-tab="atrisk" data-group="rsm">Listings Report</button>
+  <button class="tab-btn" data-tab="bannergaps" data-group="rsm">Banner Gap Report</button>
+  <button class="tab-btn" data-tab="activations" data-group="rsm">Activations</button>
+
+  <span class="tab-group-label"><span class="dot" style="background:var(--grp-mgmt);"></span>Management Tools</span>
+  <button class="tab-btn" data-tab="prodprices" data-group="mgmt">Product List Prices</button>
+  <button class="tab-btn" data-tab="vipcontacts" data-group="mgmt">VIP Contacts</button>
+  <button class="tab-btn" data-tab="performance" data-group="mgmt">Team Dashboard</button>
+  <button class="tab-btn" data-tab="targets" data-group="mgmt">Set Targets</button>
+  <button class="tab-btn" data-tab="rsmzones" data-group="mgmt">RSM Zones</button>
+  <button class="tab-btn" data-tab="trends" data-group="mgmt">Volume Trends</button>
+  <button class="tab-btn" data-tab="colesww" data-group="mgmt">Coles &amp; Woolworths</button>
+  <button class="tab-btn" data-tab="totalvolume" data-group="mgmt">Total Volume</button>
+  <button class="tab-btn" data-tab="exportemails" data-group="mgmt">Export Emails</button>
+  <button class="tab-btn" data-tab="datarefresh" data-group="mgmt">Data Refresh</button>
+
+  <span class="tab-group-label"><span class="dot" style="background:var(--grp-supply);"></span>Supply Chain Tools</span>
+  <button class="tab-btn" data-tab="orders" data-group="supply">Orders</button>
+  <button class="tab-btn" data-tab="runs" data-group="supply">Delivery Runs</button>
+  <button class="tab-btn" data-tab="deliveryreports" data-group="supply">Delivery Reports</button>
 </nav>
 
 <main>
@@ -6201,6 +6216,9 @@ function onTargetsCellChange(rsm, quarterKey, field, val) {
 function onNaTargetCellChange(quarterKey, val) {
   updateNaTarget(quarterKey, val);
 }
+function onNaSkuTargetChange(gid, fy, val) {
+  updateNaSkuTarget(gid, fy, val);
+}
 function renderTargetsPage() {
   const { fy, q } = targetsQuarter;
   const qKey = quarterKeyOf(fy, q);
@@ -6224,11 +6242,40 @@ function renderTargetsPage() {
 
   document.getElementById('tg_body').innerHTML = (rsmList.length ? rows : `<tr><td colspan="9"><div class="empty">No RSMs found.</div></td></tr>`) + totalsRow;
 
-  const nt = naTargetFor(qKey);
+  const naSkuGids = cartonGroupIds();
+  const naSkuRows = naSkuGids.map(gid => {
+    const g = groups[gid];
+    const r = naSkuQuarterTargetsFor(gid, fy);
+    return `<tr>
+      <td>${escapeHtml(g.label)} <span class="muted" style="font-weight:400;">(${escapeHtml(g.formatLabel || g.format)})</span></td>
+      <td class="mono">${fmtNum(r.lastFyVolume)} L</td>
+      <td><input type="number" step="1" min="0" value="${r.annualTarget||''}" placeholder="—" style="width:110px;" onchange="onNaSkuTargetChange('${gid}',${fy},this.value)"></td>
+      <td class="mono">${r.annualTarget?fmtNum(r.quarterTargets[0])+' L':'—'}</td>
+      <td class="mono">${r.annualTarget?fmtNum(r.quarterTargets[1])+' L':'—'}</td>
+      <td class="mono">${r.annualTarget?fmtNum(r.quarterTargets[2])+' L':'—'}</td>
+      <td class="mono">${r.annualTarget?fmtNum(r.quarterTargets[3])+' L':'—'}</td>
+    </tr>`;
+  }).join('');
+  const naSkuTotals = naSkuGids.reduce((s, gid) => {
+    const r = naSkuQuarterTargetsFor(gid, fy);
+    s.lastFyVolume += r.lastFyVolume; s.annualTarget += r.annualTarget;
+    r.quarterTargets.forEach((v,i) => { s.q[i] += v; });
+    return s;
+  }, { lastFyVolume: 0, annualTarget: 0, q: [0,0,0,0] });
+
   document.getElementById('tg_na_target').innerHTML = `
-    <h3 style="margin:0;">National Accounts — Carton Volume Target <span class="muted" style="font-weight:400; font-size:11px;">(litres, ${escapeHtml(quarterLabelOf(fy, q))})</span></h3>
-    <div class="hint" style="margin-top:4px;">National Accounts (Coles & Woolworths) sits outside the RSM-based Sales Team targets above — set its quarterly carton volume target here so the Total Volume page can build a combined company-wide target line to sense-check against the last two years.</div>
-    <input type="number" step="1" min="0" value="${nt.cartonVolumeTarget!=null?nt.cartonVolumeTarget:''}" placeholder="—" style="width:160px; margin-top:8px;" onchange="onNaTargetCellChange('${qKey}', this.value)">
+    <h3 style="margin:0;">National Accounts — Per-SKU Annual Volume Target <span class="muted" style="font-weight:400; font-size:11px;">(litres, FY${fy})</span></h3>
+    <div class="hint" style="margin-top:4px;">National Accounts (Coles & Woolworths) sits outside the RSM-based Sales Team targets above. Set one annual carton volume target per SKU for the whole financial year — last FY's actual volume is shown alongside for comparison. The annual figure is automatically split across Q1–Q4 using that SKU's own seasonality last FY (a naturally busier quarter gets a bigger share), keeping the Total Volume page's combined company target line accurate quarter to quarter without any extra input.</div>
+    <div class="tablewrap" style="margin-top:10px;">
+      <table class="datatable">
+        <thead><tr><th>SKU</th><th>Last FY Volume</th><th>FY${fy} Annual Target</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th></tr></thead>
+        <tbody>${naSkuRows || '<tr><td colspan="7"><div class="empty">No carton SKUs found.</div></td></tr>'}</tbody>
+        <tfoot><tr style="font-weight:600;">
+          <td>Total</td><td class="mono">${fmtNum(naSkuTotals.lastFyVolume)} L</td><td class="mono">${fmtNum(naSkuTotals.annualTarget)} L</td>
+          <td class="mono">${fmtNum(naSkuTotals.q[0])} L</td><td class="mono">${fmtNum(naSkuTotals.q[1])} L</td><td class="mono">${fmtNum(naSkuTotals.q[2])} L</td><td class="mono">${fmtNum(naSkuTotals.q[3])} L</td>
+        </tr></tfoot>
+      </table>
+    </div>
   `;
 
   renderTgCalculator();
@@ -7259,6 +7306,74 @@ function naOwnerOutletFilter() {
   };
 }
 
+// ===================== NATIONAL ACCOUNTS PER-SKU ANNUAL VOLUME TARGETS =====================
+// Filter-INDEPENDENT version of naOwnerOutletFilter() — the annual target/seasonality math below
+// must always be computed against every Coles/Woolworths outlet, never whatever owner selection
+// happens to be live on the National Accounts tab's chart filters at the moment (those are for
+// browsing, not for defining the target itself).
+function naSkuAllOutletFilter() {
+  return oid => {
+    const o = allOutlets[oid];
+    return !!o && (o.ownerGroup === 'Coles' || o.ownerGroup === 'Woolworths');
+  };
+}
+// One SKU's real carton volume (litres) in one specific FY quarter, across every National
+// Accounts outlet — the building block for both the "last FY" comparison figure and the seasonal
+// quarter-split weights below.
+function naSkuQuarterVolumeLitres(gid, fy, q) {
+  const [qStart, qEndExcl] = quarterBoundsOf(fy, q);
+  const qEndIncl = new Date(qEndExcl.getTime() - 86400000);
+  const groupFilterFn = (id) => id === gid;
+  return trendRangeStats('CARTONS', dayIndexOf(qStart), dayIndexOf(qEndIncl), naSkuAllOutletFilter(), groupFilterFn).totalLitres;
+}
+// "How much volume we did of this SKU last year" — the comparison figure shown next to the
+// annual target input, summed across that SKU's 4 quarters one FY earlier.
+function naSkuLastFyVolumeLitres(gid, fy) {
+  let total = 0;
+  for (let q = 1; q <= 4; q++) total += naSkuQuarterVolumeLitres(gid, fy - 1, q);
+  return total;
+}
+// Splits the annual target across Q1-Q4 using each quarter's own share of the SKU's LAST FY
+// actual carton volume — the exact same technique veeMonthlySeasonalWeights uses to split a
+// quarterly target across its months, just one level up (quarter-within-FY instead of
+// month-within-quarter). Falls back to an even 25% each when there's no history at all for that
+// SKU last FY (e.g. a brand-new listing), so a target can still be entered and split sensibly.
+function naSkuFyQuarterWeights(gid, fy) {
+  const lyVals = [1, 2, 3, 4].map(q => naSkuQuarterVolumeLitres(gid, fy - 1, q));
+  const sum = lyVals.reduce((s, v) => s + v, 0);
+  return lyVals.map(v => sum > 0 ? v / sum : 0.25);
+}
+// Full computation for one SKU/FY: the annual target as entered, last FY's actual for comparison,
+// the seasonal weights, and the resulting Q1-Q4 litres split — everything the UI table and the
+// downstream Total Volume/National Accounts target consumers need in one call.
+function naSkuQuarterTargetsFor(gid, fy) {
+  const input = naSkuTargetFor(gid, fy);
+  const annualTarget = input.annualVolumeTarget || 0;
+  const weights = naSkuFyQuarterWeights(gid, fy);
+  const lastFyVolume = naSkuLastFyVolumeLitres(gid, fy);
+  const quarterTargets = weights.map(w => annualTarget * w);
+  return { gid, fy, annualTarget, lastFyVolume, weights, quarterTargets };
+}
+// Sums every carton SKU's derived quarterly target for one FY quarter — the per-SKU model's
+// replacement for the old single-aggregate naTargets.cartonVolumeTarget, consumed the same way
+// (null when nothing's been set at all, as opposed to a genuine 0) by naTargetForPeriod and
+// tvTargetForQuarter below.
+function naSkuTargetForQuarter(fy, q) {
+  let total = null;
+  cartonGroupIds().forEach(gid => {
+    const v = naSkuQuarterTargetsFor(gid, fy).quarterTargets[q - 1];
+    if (v) total = (total || 0) + v;
+  });
+  return total;
+}
+// Parses the "FYxx-Qn" key format produced by quarterKeyOf() back into {fy, q} — needed wherever
+// a caller only has the string key (tvTargetForQuarter) but the per-SKU model above works in
+// fy/q, not quarterKey.
+function fyQFromQuarterKey(quarterKey) {
+  const m = /^FY(\d{2})-Q(\d)$/.exec(quarterKey || '');
+  return m ? { fy: 2000 + parseInt(m[1], 10), q: parseInt(m[2], 10) } : null;
+}
+
 // The last `count` financial quarters (oldest first, last entry = the quarter containing the
 // latest sales data) — shared by the distribution quarter-picker and the UPSPW chart, so both
 // always reflect the same window and use the same real quarterKey (quarterKeyOf's "FYxx-Qn"
@@ -7366,8 +7481,8 @@ function naDefaultPeriodCount(granularity) {
 // ly/ly2 series on this chart.
 function naTargetForPeriod(period, granularity, monthWeight) {
   function qTargetUnits(fy, q) {
-    const t = naTargetFor(quarterKeyOf(fy, q));
-    return t.cartonVolumeTarget != null ? t.cartonVolumeTarget / CARTON_UNIT_LITRES : null;
+    const litres = naSkuTargetForQuarter(fy, q);
+    return litres != null ? litres / CARTON_UNIT_LITRES : null;
   }
   if (granularity === 'month') {
     const { fy, q } = fyQuarterOf(new Date(period.y, period.m, 15));
@@ -7463,8 +7578,9 @@ function tvTargetForQuarter(quarterKey, bucketFilterVal, streamsSelected) {
   // National Accounts (Coles & Woolworths) volume is carton-only, so its target never contributes
   // when the page is filtered to Kegs only.
   if (includeNA && bucketFilterVal !== 'KEGS') {
-    const nt = naTargetFor(quarterKey);
-    if (nt.cartonVolumeTarget != null) total = (total||0) + Number(nt.cartonVolumeTarget);
+    const parsed = fyQFromQuarterKey(quarterKey);
+    const naLitres = parsed ? naSkuTargetForQuarter(parsed.fy, parsed.q) : null;
+    if (naLitres != null) total = (total||0) + naLitres;
   }
   return total;
 }
