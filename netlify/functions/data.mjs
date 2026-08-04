@@ -45,7 +45,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -68,6 +68,8 @@ async function readAll(s) {
     s.get('naTargets', { type: 'json' }),
     s.get('customGroups', { type: 'json' }),
     s.get('groupMemberOverrides', { type: 'json' }),
+    s.get('fyForecastInputs', { type: 'json' }),
+    s.get('naSkuTargets', { type: 'json' }),
   ]);
   // vipContacts is seeded exactly once — the first time anyone loads the app after this feature
   // ships, the blob won't exist yet (null, not just empty), so we seed it from VIP_CONTACTS_SEED
@@ -105,6 +107,8 @@ async function readAll(s) {
     naTargets: naTargets || {},
     customGroups: customGroups || [],
     groupMemberOverrides: groupMemberOverrides || {},
+    fyForecastInputs: fyForecastInputs || {},
+    naSkuTargets: naSkuTargets || {},
   };
 }
 
@@ -611,6 +615,45 @@ export default async (req) => {
       }
       await s.setJSON('naTargets', current);
       return json({ ok: true, naTargets: current });
+    }
+
+    if (action === 'saveFyForecastInput') {
+      // FY Listing Growth Forecast (Set Targets page) — one manually-entered new-listings-per-
+      // quarter growth number per RSM per field (kegs/cartons kept separate), keyed 'rsm|fy'.
+      // Q1's baseline is real start-of-quarter listings; Q2-Q4 cascade from the previous quarter's
+      // own forecasted ending listings (computed client-side in fyForecastCompute) — this collection
+      // only stores the manual growth inputs, not the derived quarterly figures.
+      const { rsm, fy, field, value, updatedBy } = payload;
+      const key = rsm + '|' + fy;
+      const current = (await s.get('fyForecastInputs', { type: 'json' })) || {};
+      const existing = current[key] || {};
+      if (value === null || value === undefined) {
+        const updated = { ...existing };
+        delete updated[field];
+        current[key] = { ...updated, updatedBy, updatedAt: now };
+      } else {
+        current[key] = { ...existing, [field]: Number(value), updatedBy, updatedAt: now };
+      }
+      await s.setJSON('fyForecastInputs', current);
+      return json({ ok: true, fyForecastInputs: current });
+    }
+
+    if (action === 'saveNaSkuTarget') {
+      // National Accounts per-SKU annual volume target, keyed 'groupId|fy' — the annual figure the
+      // user enters is split across the 4 FY quarters client-side using each SKU's own last-FY
+      // seasonality (mirrors how monthly targets are seasonally weighted elsewhere in the app).
+      const { groupId, fy, value, updatedBy } = payload;
+      const key = groupId + '|' + fy;
+      const current = (await s.get('naSkuTargets', { type: 'json' })) || {};
+      if (value === null || value === undefined) {
+        const next = { ...current };
+        delete next[key];
+        await s.setJSON('naSkuTargets', next);
+        return json({ ok: true, naSkuTargets: next });
+      }
+      current[key] = { annualVolumeTarget: Number(value), updatedBy, updatedAt: now };
+      await s.setJSON('naSkuTargets', current);
+      return json({ ok: true, naSkuTargets: current });
     }
 
     return json({ error: 'Unknown action: ' + action }, 400);

@@ -929,6 +929,7 @@
       </div>
     </div>
     <div class="panel no-print" id="tg_na_target" style="margin-top:14px;"></div>
+    <div class="panel no-print" id="tg_fy_forecast" style="margin-top:14px;"></div>
     <div id="tg_calc"></div>
   </div>
 
@@ -2355,6 +2356,8 @@ let rsmZoneOverrides = {}; // { [zone]: rsmName } — shared; lets the user imme
 let zoneBakedRsm = {}; // { [zone]: {counts:{rsmName:n}, dominant:rsmName} } — the ORIGINAL (pre-override) Ontap RSM assignment per zone, recomputed by applyRsmZoneOverrides() every time data loads, from the immutable originalOutletRsm snapshot above (never from outlets[id].rsm directly)
 let rsmRosterBaked = []; // sorted list of every RSM name currently known (from the baked outlet data, plus any override values already saved) — the options offered on the RSM Zones page's reassignment dropdown
 let naTargets = {}; // { quarterKey: {cartonVolumeTarget, updatedBy, updatedAt} } — shared; National Accounts (Coles & Woolworths) sits outside the RSM-based Sales Team targets, so it gets its own small target collection, set from the Set Targets page and used by the Total Volume page to build a combined company-wide target line
+let fyForecastInputs = {}; // keyed "rsm|fy": {newKegListingsPerQtr, newCartonListingsPerQtr, updatedBy, updatedAt} — shared; the manually-entered FY Listing Growth Forecast input per RSM (Set Targets page). Applying the forecast writes its derived per-quarter figures into rsmTargets via the existing updateRsmTarget() calls — this collection only stores the input, not the computed cascade.
+let naSkuTargets = {}; // keyed "groupId|fy": {annualVolumeTarget, updatedBy, updatedAt} — shared; National Accounts per-SKU annual volume target (Set Targets page), split across the 4 FY quarters client-side using each SKU's own last-FY seasonality
 let customGroups = []; // [ groupRecord,... ] — shared; brand-new SKU groups added via "Add a custom product", or split off an existing group via "Split…". Merged into `groups`/`groupOrder` by applyCustomGroups() on every data load.
 let groupMemberOverrides = {}; // { groupId: [memberId,...] } — shared; set when a Split moves one or more members out of an existing group (custom or baked). Display-only (memberDescs text) — nothing else in the app reads .members.
 let sp_currentGroupId = null; // groupId currently open in the "Split product" panel on Product List Prices — not shared, purely local UI state
@@ -2376,6 +2379,52 @@ function updateNaTarget(quarterKey, val) {
   }
   renderTargetsPage();
   callServer('saveNaTarget', [quarterKey, value, currentUserEmail], () => toast('National Accounts target saved.'));
+}
+
+// FY Listing Growth Forecast (Set Targets page) — server-synced version of the static build's
+// localStorage-backed fyForecastInputFor/updateFyForecastInput. Same key shape ("rsm|fy") and
+// field names (newKegListingsPerQtr / newCartonListingsPerQtr) as the static build, just persisted
+// via callServer('saveFyForecastInput', ...) instead of saveFyForecastInputs()/localStorage.
+function fyForecastInputFor(rsm, fy) { return fyForecastInputs[rsm + '|' + fy] || {}; }
+function updateFyForecastInput(rsm, fy, field, val) {
+  const key = rsm + '|' + fy;
+  const existing = fyForecastInputs[key] || {};
+  const trimmed = (val || '').trim();
+  let value;
+  if (trimmed === '') {
+    const updated = { ...existing };
+    delete updated[field];
+    fyForecastInputs[key] = { ...updated, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+    value = null;
+  } else {
+    const num = parseFloat(trimmed);
+    if (isNaN(num) || num < 0) { toast('Enter a valid number, or leave blank.'); renderTargetsPage(); return; }
+    fyForecastInputs[key] = { ...existing, [field]: num, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+    value = num;
+  }
+  renderTargetsPage();
+  callServer('saveFyForecastInput', [rsm, fy, field, value, currentUserEmail], () => toast('Growth target saved.'));
+}
+
+// National Accounts per-SKU annual volume target — server-synced version of the static build's
+// naSkuTargetFor/updateNaSkuTarget, same key shape ("groupId|fy") persisted via
+// callServer('saveNaSkuTarget', ...) instead of saveNaSkuTargets()/localStorage.
+function naSkuTargetFor(gid, fy) { return naSkuTargets[gid + '|' + fy] || {}; }
+function updateNaSkuTarget(gid, fy, val) {
+  const key = gid + '|' + fy;
+  const trimmed = (val || '').trim();
+  let value;
+  if (trimmed === '') {
+    delete naSkuTargets[key];
+    value = null;
+  } else {
+    const num = parseFloat(trimmed);
+    if (isNaN(num) || num < 0) { toast('Enter a valid target, or leave blank.'); renderTargetsPage(); return; }
+    naSkuTargets[key] = { annualVolumeTarget: num, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+    value = num;
+  }
+  renderTargetsPage();
+  callServer('saveNaSkuTarget', [gid, fy, value, currentUserEmail], () => toast('SKU target saved.'));
 }
 
 // Recomputes zoneBakedRsm/rsmRosterBaked from the pristine originalOutletRsm snapshot, then
@@ -2715,6 +2764,8 @@ function buildServerPayload(fnName, args) {
     case 'deleteVipContact':  return { id: args[0] };
     case 'saveRsmZoneOverride': return { zone: args[0], rsm: args[1], updatedBy: args[2] };
     case 'saveNaTarget': return { quarterKey: args[0], cartonVolumeTarget: args[1], updatedBy: args[2] };
+    case 'saveFyForecastInput': return { rsm: args[0], fy: args[1], field: args[2], value: args[3], updatedBy: args[4] };
+    case 'saveNaSkuTarget': return { groupId: args[0], fy: args[1], value: args[2], updatedBy: args[3] };
     case 'addCustomGroup': return { group: args[0] };
     case 'splitGroupMembers': return { originalGroupId: args[0], remainingMembers: args[1], newGroup: args[2] };
     default: return {};
@@ -6181,6 +6232,7 @@ function renderTargetsPage() {
   `;
 
   renderTgCalculator();
+  renderFyForecastPanel();
 }
 
 // ===================== VOLUME TARGET CALCULATOR =====================
@@ -6260,45 +6312,165 @@ function tgOverridesFor(rsm, qKey, fy, q) {
   }
   return tgCalcOverrides[key];
 }
-// Full computation for one RSM's quarter — returns every intermediate figure so the UI can show
-// its working, plus the two final suggested totals.
-function tgComputeSuggestion(rsm, fy, q) {
-  const qKey = quarterKeyOf(fy, q);
-  const outletFilterFn = oid => outlets[oid] && outlets[oid].rsm === rsm;
-  const ov = tgOverridesFor(rsm, qKey, fy, q);
-
+// Core quarter math, factored out of tgComputeSuggestion so the FY Listing Growth Forecast (below)
+// can reuse the exact same existing-listings + new-listings model with an explicit, possibly
+// forecasted (not-yet-real) starting listings count instead of always reading real invoice data —
+// needed because Q2/Q3/Q4 of a forward-looking FY forecast don't have real "start of quarter"
+// data yet; their baseline is last quarter's own forecasted ending listings count instead.
+// VPL overrides are optional (null/undefined = always use the historical figure for that
+// month/quarter, which is where the seasonality comes from — tgHistoricalMonthlyVpl/
+// tgHistoricalQuarterlyVpl always look up the matching calendar period exactly one year earlier).
+function tgComputeQuarterFromBaseline(fy, q, kegStartListings, cartonStartListings, kegVplOverrides, cartonVplOverride, newKegListings, newCartonListings, outletFilterFn) {
   // VPL (auto or overridden) is always in whole units — kegs or cartons — so every volume figure
   // below multiplies back by the unit size (50L / 6L) to get back to litres.
   const months = tgMonthsInQuarter(fy, q);
-  const kegStartListings = tgKegStartOfQuarterListings(fy, q, outletFilterFn);
   const kegMonthly = months.map((mo, i) => {
     const autoVpl = tgHistoricalMonthlyVpl(mo.y, mo.m, outletFilterFn);
-    const vpl = ov.kegVpl[i] != null ? ov.kegVpl[i] : autoVpl;
+    const vpl = (kegVplOverrides && kegVplOverrides[i] != null) ? kegVplOverrides[i] : autoVpl;
     const volume = kegStartListings * vpl * KEG_UNIT_LITRES * mo.weeks;
     return { ...mo, autoVpl, vpl, volume };
   });
   const kegExistingVolume = kegMonthly.reduce((s, mo) => s + mo.volume, 0);
   const kegWeeksTotal = months.reduce((s, mo) => s + mo.weeks, 0);
   const kegAvgVpl = kegMonthly.reduce((s, mo) => s + mo.vpl, 0) / 3;
-  const kegNewVolume = (ov.newKegListings || 0) * kegAvgVpl * KEG_UNIT_LITRES * (kegWeeksTotal + 1) / 2;
+  const kegNewVolume = (newKegListings || 0) * kegAvgVpl * KEG_UNIT_LITRES * (kegWeeksTotal + 1) / 2;
   const kegTotal = kegExistingVolume + kegNewVolume;
-  const kegListingsTargetFinal = kegStartListings + (ov.newKegListings || 0);
+  const kegListingsTargetFinal = kegStartListings + (newKegListings || 0);
 
-  const cartonStartListings = tgCartonStartOfQuarterListings(fy, q, outletFilterFn);
   const cartonAutoVpl = tgHistoricalQuarterlyVpl(fy, q, outletFilterFn);
-  const cartonVpl = ov.cartonVpl != null ? ov.cartonVpl : cartonAutoVpl;
+  const cartonVpl = cartonVplOverride != null ? cartonVplOverride : cartonAutoVpl;
   const [qStart, qEndExcl] = quarterBoundsOf(fy, q);
   const cartonWeeks = (dayIndexOf(new Date(qEndExcl.getTime() - 86400000)) - dayIndexOf(qStart) + 1) / 7;
   const cartonExistingVolume = cartonStartListings * cartonVpl * CARTON_UNIT_LITRES * cartonWeeks;
-  const cartonNewVolume = (ov.newCartonListings || 0) * cartonVpl * CARTON_UNIT_LITRES * (cartonWeeks + 1) / 2;
+  const cartonNewVolume = (newCartonListings || 0) * cartonVpl * CARTON_UNIT_LITRES * (cartonWeeks + 1) / 2;
   const cartonTotal = cartonExistingVolume + cartonNewVolume;
-  const cartonListingsTargetFinal = cartonStartListings + (ov.newCartonListings || 0);
+  const cartonListingsTargetFinal = cartonStartListings + (newCartonListings || 0);
 
   return {
-    qKey, months, kegStartListings, kegMonthly, kegExistingVolume, kegAvgVpl, kegNewVolume, kegTotal, kegListingsTargetFinal,
+    qKey: quarterKeyOf(fy, q), months, kegStartListings, kegMonthly, kegExistingVolume, kegAvgVpl, kegNewVolume, kegTotal, kegListingsTargetFinal,
     cartonStartListings, cartonAutoVpl, cartonVpl, cartonWeeks, cartonExistingVolume, cartonNewVolume, cartonTotal, cartonListingsTargetFinal,
-    overrides: ov,
   };
+}
+// Full computation for one RSM's quarter — returns every intermediate figure so the UI can show
+// its working, plus the two final suggested totals. Real "start of quarter" listings, read from
+// actual invoice data (as opposed to the FY Forecast's cascaded/forecasted baseline below).
+function tgComputeSuggestion(rsm, fy, q) {
+  const qKey = quarterKeyOf(fy, q);
+  const outletFilterFn = oid => outlets[oid] && outlets[oid].rsm === rsm;
+  const ov = tgOverridesFor(rsm, qKey, fy, q);
+  const kegStartListings = tgKegStartOfQuarterListings(fy, q, outletFilterFn);
+  const cartonStartListings = tgCartonStartOfQuarterListings(fy, q, outletFilterFn);
+  const result = tgComputeQuarterFromBaseline(fy, q, kegStartListings, cartonStartListings, ov.kegVpl, ov.cartonVpl, ov.newKegListings, ov.newCartonListings, outletFilterFn);
+  return { ...result, overrides: ov };
+}
+
+// ===================== FY LISTING GROWTH FORECAST =====================
+// One "new listings per quarter" growth number per RSM (kegs + cartons separately), entered once
+// for the whole FY. Q1 starts from the real, actual start-of-quarter listings count (same as the
+// per-quarter calculator above); Q2/Q3/Q4 then cascade — each quarter's starting listings is the
+// PREVIOUS quarter's own forecasted ending count (baseline + growth), since future quarters don't
+// have real invoice data yet. Every quarter still prices its volume at that quarter's own
+// historical Volume-per-listing-per-week (last year's same quarter/months) via
+// tgComputeQuarterFromBaseline, so the seasonality that's already baked into the per-quarter
+// calculator carries straight through the cascade — a quarter that was naturally quieter last year
+// comes out quieter in the forecast too, even though the same growth number is applied everywhere.
+function fyForecastCompute(rsm, fy) {
+  const outletFilterFn = oid => outlets[oid] && outlets[oid].rsm === rsm;
+  const input = fyForecastInputFor(rsm, fy);
+  const newKeg = Number(input.newKegListingsPerQtr) || 0;
+  const newCarton = Number(input.newCartonListingsPerQtr) || 0;
+  let kegBaseline = tgKegStartOfQuarterListings(fy, 1, outletFilterFn);
+  let cartonBaseline = tgCartonStartOfQuarterListings(fy, 1, outletFilterFn);
+  const quarters = [];
+  for (let q = 1; q <= 4; q++) {
+    const r = tgComputeQuarterFromBaseline(fy, q, kegBaseline, cartonBaseline, null, null, newKeg, newCarton, outletFilterFn);
+    quarters.push(r);
+    kegBaseline = r.kegListingsTargetFinal;
+    cartonBaseline = r.cartonListingsTargetFinal;
+  }
+  const fyTotals = quarters.reduce((s, r) => ({
+    kegVolume: s.kegVolume + r.kegTotal,
+    cartonVolume: s.cartonVolume + r.cartonTotal,
+  }), { kegVolume: 0, cartonVolume: 0 });
+  return { rsm, fy, newKeg, newCarton, quarters, fyTotals };
+}
+// Writes all 4 quarters' Listings + Volume targets into rsmTargets, exactly as if they'd been
+// entered/applied one quarter at a time via the calculator above — after this, every value is a
+// normal, independently-editable rsmTarget (per the "auto-fill, stays editable" design), not a
+// live-linked forecast that would silently drift if someone later tweaks a single quarter.
+function fyForecastApply(rsm, fy) {
+  const result = fyForecastCompute(rsm, fy);
+  result.quarters.forEach(r => {
+    updateRsmTarget(rsm, r.qKey, 'kegListingsTarget', String(Math.round(r.kegListingsTargetFinal)));
+    updateRsmTarget(rsm, r.qKey, 'cartonListingsTarget', String(Math.round(r.cartonListingsTargetFinal)));
+    updateRsmTarget(rsm, r.qKey, 'kegVolumeTarget', String(Math.round(r.kegTotal)));
+    updateRsmTarget(rsm, r.qKey, 'cartonVolumeTarget', String(Math.round(r.cartonTotal)));
+  });
+  return result;
+}
+function fyForecastOnInputChange(rsm, fy, field, val) {
+  updateFyForecastInput(rsm, fy, field, val);
+  renderTargetsPage();
+}
+function fyForecastOnApply(rsm, fy) {
+  if (!confirm(`This will set/overwrite Q1–Q4 Listings and Volume targets for ${rsm} in FY${fy}. Continue?`)) return;
+  fyForecastApply(rsm, fy);
+  toast(`FY${fy} forecast applied for ${rsm}.`);
+  renderTargetsPage();
+}
+function fyForecastOnApplyAll(fy) {
+  const rsmList = uniqueVals('rsm', outlets);
+  if (!rsmList.length) return;
+  if (!confirm(`This will set/overwrite Q1–Q4 Listings and Volume targets for ALL ${rsmList.length} RSMs in FY${fy}. Continue?`)) return;
+  rsmList.forEach(rsm => fyForecastApply(rsm, fy));
+  toast(`FY${fy} forecast applied for all RSMs.`);
+  renderTargetsPage();
+}
+// Standalone panel on the Set Targets page — lets a manager set one "new listings per quarter"
+// growth number per RSM for the whole FY (kegs + cartons), see the resulting FY-total forecast
+// live, then apply it to Q1-Q4 of the RSM quarterly table above in one click. See
+// fyForecastCompute()/fyForecastApply() for the cascading math.
+function renderFyForecastPanel() {
+  const el = document.getElementById('tg_fy_forecast');
+  if (!el) return;
+  const { fy } = targetsQuarter;
+  const rsmList = uniqueVals('rsm', outlets);
+  if (!rsmList.length) { el.innerHTML = ''; return; }
+
+  const rows = rsmList.map(rsm => {
+    const input = fyForecastInputFor(rsm, fy);
+    const result = fyForecastCompute(rsm, fy);
+    const lastQ = result.quarters[3];
+    return `<tr>
+      <td>${escapeHtml(rsm)}</td>
+      <td><input type="number" step="1" min="0" style="width:90px;" value="${input.newKegListingsPerQtr||''}" placeholder="0" onchange="fyForecastOnInputChange('${rsm}',${fy},'newKegListingsPerQtr',this.value)"></td>
+      <td><input type="number" step="1" min="0" style="width:90px;" value="${input.newCartonListingsPerQtr||''}" placeholder="0" onchange="fyForecastOnInputChange('${rsm}',${fy},'newCartonListingsPerQtr',this.value)"></td>
+      <td class="num-cell mono">${fmtNum(lastQ.kegListingsTargetFinal)}</td>
+      <td class="num-cell mono">${fmtNum(lastQ.cartonListingsTargetFinal)}</td>
+      <td class="num-cell mono">${fmtNum(result.fyTotals.kegVolume)} L</td>
+      <td class="num-cell mono">${fmtNum(result.fyTotals.cartonVolume)} L</td>
+      <td class="num-cell mono" style="font-weight:600;">${fmtNum(result.fyTotals.kegVolume + result.fyTotals.cartonVolume)} L</td>
+      <td><button class="btn small" onclick="fyForecastOnApply('${rsm}',${fy})">Apply Q1–Q4</button></td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <h3 style="margin:0;">FY Listing Growth Forecast <span class="muted" style="font-weight:400; font-size:11px;">(FY${fy})</span></h3>
+    <div class="hint" style="margin-top:4px;">Enter each RSM's target new listings per quarter (kegs and cartons) once for the year. Q1 starts from real current listings; each later quarter starts from the previous quarter's own forecasted ending listings, with the same growth number applied again — priced throughout at that quarter's own historical Volume per listing per week (last year's same quarter), so seasonality carries through the whole year automatically. Applying writes Q1–Q4 Listings and Volume targets into the table above, exactly as if set one quarter at a time — still fully editable afterward.</div>
+    <div class="tablewrap" style="margin-top:10px;">
+      <table class="datatable">
+        <thead><tr>
+          <th>RSM</th><th>New Keg Listings /qtr</th><th>New Carton Listings /qtr</th>
+          <th>Keg Listings, end of FY</th><th>Carton Listings, end of FY</th>
+          <th>FY Keg Volume</th><th>FY Carton Volume</th><th>FY Total Volume</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="rowflex" style="margin-top:10px;">
+      <button class="btn secondary" onclick="fyForecastOnApplyAll(${fy})">Apply Q1–Q4 for all RSMs</button>
+    </div>
+  `;
 }
 function tgSetKegVplOverride(rsm, qKey, idx, val) {
   const ov = tgOverridesFor(rsm, qKey);
@@ -9686,6 +9858,8 @@ function onInitialDataLoaded(data) {
   vipContacts = data.vipContacts || [];
   rsmZoneOverrides = data.rsmZoneOverrides || {};
   naTargets = data.naTargets || {};
+  fyForecastInputs = data.fyForecastInputs || {};
+  naSkuTargets = data.naSkuTargets || {};
   applyRsmZoneOverrides();
   renderEverything();
 }
@@ -9730,6 +9904,8 @@ function refreshPricingFromServer() {
   vipContacts = data.vipContacts || [];
       rsmZoneOverrides = data.rsmZoneOverrides || {};
       naTargets = data.naTargets || {};
+      fyForecastInputs = data.fyForecastInputs || {};
+      naSkuTargets = data.naSkuTargets || {};
       applyRsmZoneOverrides();
       // Pick up any customer a colleague added since our last poll — same fill-gaps-only merge
       // as the initial load, so a real record (should one now exist) is never overwritten.
