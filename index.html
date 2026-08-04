@@ -958,6 +958,7 @@
     </div>
     <div class="panel no-print" id="tg_na_target" style="margin-top:14px;"></div>
     <div class="panel no-print" id="tg_fy_forecast" style="margin-top:14px;"></div>
+    <div class="panel no-print" id="tg_buildup" style="margin-top:14px;"></div>
     <div id="tg_calc"></div>
   </div>
 
@@ -6381,6 +6382,7 @@ function renderTargetsPage() {
 
   renderTgCalculator();
   renderFyForecastPanel();
+  renderTgTargetBuildup();
 }
 
 // ===================== VOLUME TARGET CALCULATOR =====================
@@ -6440,6 +6442,49 @@ function tgHistoricalQuarterlyVpl(fy, q, outletFilterFn) {
     if (stats.listingsCount > 0) vpls.push((stats.totalLitres / stats.listingsCount) / weeks / CARTON_UNIT_LITRES);
   }
   return vpls.length ? vpls.reduce((s, v) => s + v, 0) / vpls.length : 0;
+}
+// Same lookups as the two functions above, but the single most recent prior year ONLY (no
+// multi-year averaging) — used purely for transparency (the Target Build-Up panel below), so a
+// rep can see how the multi-year average VPL the model actually prices volume at compares to what
+// was achieved last year specifically. A target that reads low against last year is very often
+// just the average sitting below an unusually strong prior year, not a mistake in the model.
+// Returns null (not 0) when last year's matching period predates the sales data entirely.
+function tgLastYearMonthlyVpl(y, m, outletFilterFn) {
+  const histDate = new Date(y - 1, m, 1);
+  const [hs, heExcl] = calendarMonthBoundsOf(histDate);
+  if (dayIndexOf(hs) < 0) return null;
+  const heIncl = new Date(heExcl.getTime() - 86400000);
+  const weeks = (dayIndexOf(heIncl) - dayIndexOf(hs) + 1) / 7;
+  const stats = perfRangeStats('KEGS', dayIndexOf(hs), dayIndexOf(heIncl), outletFilterFn);
+  return stats.listingsCount > 0 ? (stats.totalLitres / stats.listingsCount) / weeks / KEG_UNIT_LITRES : null;
+}
+// Averages tgLastYearMonthlyVpl across a quarter's 3 months, mirroring how kegAvgVpl is derived
+// inside tgComputeQuarterFromBaseline, so the two numbers are directly comparable side by side.
+function tgLastYearQuarterlyKegVplAvg(fy, q, outletFilterFn) {
+  const months = tgMonthsInQuarter(fy, q);
+  const vals = months.map(mo => tgLastYearMonthlyVpl(mo.y, mo.m, outletFilterFn)).filter(v => v != null);
+  return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+}
+function tgLastYearQuarterlyVpl(fy, q, outletFilterFn) {
+  const [hs, heExcl] = quarterBoundsOf(fy - 1, q);
+  if (dayIndexOf(hs) < 0) return null;
+  const heIncl = new Date(heExcl.getTime() - 86400000);
+  const weeks = (dayIndexOf(heIncl) - dayIndexOf(hs) + 1) / 7;
+  const stats = perfRangeStats('CARTONS', dayIndexOf(hs), dayIndexOf(heIncl), outletFilterFn);
+  return stats.listingsCount > 0 ? (stats.totalLitres / stats.listingsCount) / weeks / CARTON_UNIT_LITRES : null;
+}
+// Actual kegs+cartons litres for one FY quarter under an arbitrary outlet filter — the same
+// kegs+cartons-combined-into-litres pattern used by the Total Volume page's own charts (see
+// tvLitresSeries/tvTpLitresSeries), reused here so the Target Build-Up panel's "same quarter last
+// year" figures are directly comparable to targets. Null (not 0) when the quarter predates the
+// sales data entirely, same convention as the rest of the app's YoY comparisons.
+function tgQuarterActualLitres(outletFilterFn, fy, q) {
+  const [start, endExcl] = quarterBoundsOf(fy, q);
+  const startDayIdx = dayIndexOf(start);
+  if (startDayIdx < 0) return null;
+  const endDayIdx = dayIndexOf(endExcl) - 1;
+  return trendRangeStats('KEGS', startDayIdx, endDayIdx, outletFilterFn, null).totalLitres
+    + trendRangeStats('CARTONS', startDayIdx, endDayIdx, outletFilterFn, null).totalLitres;
 }
 // Walks backward from the quarter immediately before (fy,q) until it finds one that has FULLY
 // elapsed (its last day is on or before today/salesDataTo) — the real-data baseline quarter for
@@ -6589,6 +6634,108 @@ function fyForecastApply(rsm, fy) {
   });
   return { ...result, skippedQKeys };
 }
+
+// ---------- Set Targets: Sales Team Target Build-Up (transparency panel) ----------
+// Answers "why does this quarter's target look low against last year?" without a rep having to
+// reverse-engineer the RSM table by hand. Two layers: a Sales Team-wide summary — saved target vs
+// the same quarter last year, and how many RSMs actually have a number entered at all (by far the
+// most common reason a quarter looks artificially low is that not every RSM's target has been set
+// or applied yet, not anything wrong with the model) — and, per RSM, the FY Forecast model's own
+// components for that quarter: new listings assumed, and the historical average
+// Volume-per-Listing-per-Week it priced volume at, set directly against last year's ACTUAL VPL
+// alone (not averaged), so a below-average target can be told apart from "the multi-year average
+// sits below an unusually strong prior year" at a glance.
+function tgTargetBuildupQuarterRow(fy, q, rsmList) {
+  const qKey = quarterKeyOf(fy, q);
+  const totals = sumTargetsForAllRsms(qKey, rsmList);
+  const savedTotal = totalVolumeTargetOf(totals);
+  const lyActual = tgQuarterActualLitres(tvTpOutletFilter('salesteam'), fy - 1, q);
+  const missing = rsmList.filter(rsm => {
+    const t = rsmTargetFor(rsm, qKey);
+    return t.kegVolumeTarget == null && t.cartonVolumeTarget == null;
+  });
+  const setCount = rsmList.length - missing.length;
+  const vsLy = (savedTotal != null && lyActual) ? (savedTotal - lyActual) / lyActual : null;
+  return { fy, q, qKey, savedTotal, lyActual, setCount, total: rsmList.length, missing, vsLy };
+}
+function renderTgTargetBuildup() {
+  const el = document.getElementById('tg_buildup');
+  if (!el) return;
+  const { fy } = targetsQuarter;
+  const rsmList = uniqueVals('rsm', outlets);
+  if (!rsmList.length) { el.innerHTML = ''; return; }
+
+  const qRows = [1, 2, 3, 4].map(q => tgTargetBuildupQuarterRow(fy, q, rsmList));
+  const summaryRows = qRows.map(r => {
+    const vsLyHtml = r.vsLy != null
+      ? `<span style="color:${r.vsLy < 0 ? 'var(--red)' : 'var(--green)'}; font-weight:600;">${r.vsLy >= 0 ? '+' : ''}${(r.vsLy * 100).toFixed(1)}%</span>`
+      : '<span class="muted">—</span>';
+    const coverageTitle = r.missing.length ? `Not set for: ${r.missing.join(', ')}` : 'Every RSM has a target set for this quarter';
+    const coverageHtml = r.total
+      ? `<span title="${escapeHtml(coverageTitle)}" style="${r.setCount < r.total ? 'color:var(--red); font-weight:600;' : ''}">${r.setCount}/${r.total} RSMs set</span>`
+      : '—';
+    return `<tr>
+      <td>Q${r.q}</td>
+      <td class="mono">${r.savedTotal != null ? fmtNum(r.savedTotal) + ' L' : '—'}</td>
+      <td class="mono">${r.lyActual != null ? fmtNum(r.lyActual) + ' L' : '<span class="muted">no data</span>'}</td>
+      <td class="mono">${vsLyHtml}</td>
+      <td>${coverageHtml}</td>
+    </tr>`;
+  }).join('');
+
+  const rsmDetails = rsmList.map(rsm => {
+    const model = fyForecastCompute(rsm, fy);
+    const rsmFilterFn = oid => outlets[oid] && outlets[oid].rsm === rsm;
+    const qCells = [1, 2, 3, 4].map(q => {
+      const qKey = quarterKeyOf(fy, q);
+      const t = rsmTargetFor(rsm, qKey);
+      const saved = totalVolumeTargetOf(t);
+      const isSet = t.kegVolumeTarget != null || t.cartonVolumeTarget != null;
+      const isProtected = isRsmTargetProtected(rsm, qKey);
+      const mq = model.quarters[q - 1];
+      const lyVplKeg = tgLastYearQuarterlyKegVplAvg(fy, q, rsmFilterFn);
+      const lyVplCarton = tgLastYearQuarterlyVpl(fy, q, rsmFilterFn);
+      const lyActual = tgQuarterActualLitres(rsmFilterFn, fy - 1, q);
+      const statusBadge = !isSet
+        ? '<span class="badge grey" title="No target entered for this RSM/quarter yet.">not set</span>'
+        : isProtected
+          ? '<span class="badge amber" title="Set via the standalone Volume Target Calculator and protected from being overwritten by the FY Forecast Apply button.">calculator</span>'
+          : '<span class="badge blue" title="Set via (or matches) the FY Listing Growth Forecast model shown here.">FY Forecast</span>';
+      return `<td style="vertical-align:top; border-left:1px solid var(--border);">
+        <div class="mono" style="font-weight:600;">${saved != null ? fmtNum(saved) + ' L' : '—'}</div>
+        <div style="margin-top:2px;">${statusBadge}</div>
+        <div class="muted" style="font-size:10.5px; margin-top:4px; line-height:1.5;">
+          New listings assumed: ${mq.newKeg || 0} kegs / ${mq.newCarton || 0} cartons<br>
+          Avg VPL used (model): ${mq.kegAvgVpl.toFixed(2)} kegs / ${mq.cartonVpl.toFixed(2)} cartons<br>
+          Last yr VPL (actual): ${lyVplKeg != null ? lyVplKeg.toFixed(2) : '—'} kegs / ${lyVplCarton != null ? lyVplCarton.toFixed(2) : '—'} cartons<br>
+          Last yr total volume: ${lyActual != null ? fmtNum(lyActual) + ' L' : 'no data'}
+        </div>
+      </td>`;
+    }).join('');
+    return `<details style="margin-top:8px;">
+      <summary style="cursor:pointer; font-weight:600;">${escapeHtml(rsm)}</summary>
+      <div class="tablewrap" style="margin-top:6px;">
+        <table class="datatable">
+          <thead><tr><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th></tr></thead>
+          <tbody><tr>${qCells}</tr></tbody>
+        </table>
+      </div>
+    </details>`;
+  }).join('');
+
+  el.innerHTML = `
+    <h3 style="margin:0;">Sales Team Target Build-Up <span class="muted" style="font-weight:400; font-size:11px;">(FY${fy}) — why a quarter's target looks the way it does</span></h3>
+    <div class="hint" style="margin-top:4px;">Each RSM's quarterly Keg/Carton Volume target is a plain, independently-editable number — typed in directly, generated by the standalone Volume Target Calculator, or applied in bulk from the FY Listing Growth Forecast above. The table below compares the Sales Team's saved total for each quarter to the same quarter last year, and shows how many RSMs actually have a number entered — a quarter looking low against last year is very often simply that not every RSM's target has been set or applied for it yet. Expand an RSM to see the FY Forecast model's own components for each quarter: the new listings growth assumed, the historical average Volume-per-Listing-per-Week it priced volume at (an average across every prior year with data, not just last year), and last year's actual VPL and volume set directly alongside it — a below-average target is very often just that multi-year average sitting below an unusually strong prior year, rather than a mistake in the model. This is a read-only view; edit actual targets in the table above, the Volume Target Calculator, or the FY Forecast panel.</div>
+    <div class="tablewrap" style="margin-top:10px;">
+      <table class="datatable">
+        <thead><tr><th>Quarter</th><th>Sales Team Target</th><th>Same Qtr Last Year (actual)</th><th>vs LY</th><th>RSM coverage</th></tr></thead>
+        <tbody>${summaryRows}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;">${rsmDetails}</div>
+  `;
+}
+
 function fyForecastOnInputChange(rsm, fy, field, val) {
   updateFyForecastInput(rsm, fy, field, val);
   renderTargetsPage();
