@@ -45,7 +45,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, rsmTargetProtected, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlSnapshots] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, rsmTargetProtected, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlSnapshots, hlDismissals] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -72,6 +72,7 @@ async function readAll(s) {
     s.get('naSkuTargets', { type: 'json' }),
     s.get('naSkuQuarterOverrides', { type: 'json' }),
     s.get('hlSnapshots', { type: 'json' }),
+    s.get('hlDismissals', { type: 'json' }),
   ]);
   // vipContacts is seeded exactly once — the first time anyone loads the app after this feature
   // ships, the blob won't exist yet (null, not just empty), so we seed it from VIP_CONTACTS_SEED
@@ -113,6 +114,7 @@ async function readAll(s) {
     naSkuTargets: naSkuTargets || {},
     naSkuQuarterOverrides: naSkuQuarterOverrides || {},
     hlSnapshots: hlSnapshots || {},
+    hlDismissals: hlDismissals || {},
   };
 }
 
@@ -411,6 +413,25 @@ export default async (req) => {
       return json({ ok: true, hlSnapshots: current });
     }
 
+    if (action === 'saveHlDismissal') {
+      // Closed / Using Sub Distributor — global across all 5 Hit Lists (keyed by outlet id or the
+      // synthetic "fg:gi:si" prospect key), NOT quarter-scoped. A durable fact about the customer
+      // that persists until someone explicitly undoes it via clearHlDismissal below.
+      const { key, entry } = payload;
+      const current = (await s.get('hlDismissals', { type: 'json' })) || {};
+      current[key] = entry;
+      await s.setJSON('hlDismissals', current);
+      return json({ ok: true, hlDismissals: current });
+    }
+
+    if (action === 'clearHlDismissal') {
+      const { key } = payload;
+      const current = (await s.get('hlDismissals', { type: 'json' })) || {};
+      delete current[key];
+      await s.setJSON('hlDismissals', current);
+      return json({ ok: true, hlDismissals: current });
+    }
+
     if (action === 'saveRsmTargetProtected') {
       // Marks (or clears) a quarter's targets as manually set via the standalone per-quarter
       // Volume Target Calculator — see fyForecastApply() client-side, which skips writing any
@@ -425,7 +446,7 @@ export default async (req) => {
     }
 
     if (action === 'saveActivation') {
-      const { id, outletId, productType, activationType, start, end, dealX, bonusStock, pos, consumerPricing, groupId, tempDealId, updatedBy } = payload;
+      const { id, outletId, productType, activationType, start, end, dealX, bonusStock, pos, consumerPricing, groupId, tempDealId, updatedBy, photos } = payload;
       const current = (await s.get('activations', { type: 'json' })) || [];
       const newId = id || ('act_' + Date.now() + '_' + Math.round(Math.random() * 10000));
       const idx = current.findIndex((a) => a.id === newId);
@@ -433,6 +454,9 @@ export default async (req) => {
         id: newId, outletId, productType, activationType, start, end,
         dealX: Number(dealX) || 0, bonusStock: bonusStock || '', pos: pos || '', consumerPricing: consumerPricing || '',
         groupId: groupId || null, tempDealId: tempDealId || null,
+        // Photo evidence carried through from the client (see acEditingPhotos in netlify_part4.js,
+        // which stashes photos across the delete-then-recreate edit flow so they never get wiped).
+        photos: Array.isArray(photos) ? photos : [],
         updatedBy, updatedAt: now,
       };
       if (idx >= 0) current[idx] = rec; else current.push(rec);
@@ -446,6 +470,32 @@ export default async (req) => {
       const next = current.filter((a) => a.id !== id);
       await s.setJSON('activations', next);
       return json({ ok: true, activations: next });
+    }
+
+    if (action === 'addActivationPhoto') {
+      // Adds one photo to an already-saved activation in place — used by the Activations list's
+      // inline "+ photo" control, which shouldn't have to go through the full edit-form
+      // delete-then-recreate flow just to attach a photo.
+      const { id, photo } = payload;
+      const current = (await s.get('activations', { type: 'json' })) || [];
+      const idx = current.findIndex((a) => a.id === id);
+      if (idx >= 0) {
+        if (!Array.isArray(current[idx].photos)) current[idx].photos = [];
+        current[idx].photos.push(photo);
+        await s.setJSON('activations', current);
+      }
+      return json({ ok: true, activations: current });
+    }
+
+    if (action === 'removeActivationPhoto') {
+      const { id, photoIdx } = payload;
+      const current = (await s.get('activations', { type: 'json' })) || [];
+      const idx = current.findIndex((a) => a.id === id);
+      if (idx >= 0 && Array.isArray(current[idx].photos)) {
+        current[idx].photos.splice(photoIdx, 1);
+        await s.setJSON('activations', current);
+      }
+      return json({ ok: true, activations: current });
     }
 
     if (action === 'saveWeightKg') {
