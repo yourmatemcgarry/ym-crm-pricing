@@ -6491,6 +6491,21 @@ function tgQuarterActualLitres(outletFilterFn, fy, q) {
   return trendRangeStats('KEGS', startDayIdx, endDayIdx, outletFilterFn, null).totalLitres
     + trendRangeStats('CARTONS', startDayIdx, endDayIdx, outletFilterFn, null).totalLitres;
 }
+// Sums tgQuarterActualLitres across all 4 quarters of a whole FY — used by the FY Listing Growth
+// Forecast table below to show what an RSM actually sold in whole prior financial years (this FY
+// minus 1, this FY minus 2) directly alongside the forecasted FY total, as a quick sanity check on
+// how ambitious (or not) the new forecast really is. Sums whatever quarters DO have data and only
+// returns null (not 0) when NONE of the 4 quarters have any data at all (the whole FY predates the
+// sales data entirely) — same "null means no data, not zero" convention as the rest of the app's
+// YoY comparisons.
+function fyActualVolumeForYear(outletFilterFn, fy) {
+  let total = null;
+  for (let q = 1; q <= 4; q++) {
+    const v = tgQuarterActualLitres(outletFilterFn, fy, q);
+    if (v != null) total = (total || 0) + v;
+  }
+  return total;
+}
 // Walks backward from the quarter immediately before (fy,q) until it finds one that has FULLY
 // elapsed (its last day is on or before today/salesDataTo) — the real-data baseline quarter for
 // tgKegStartOfQuarterListings/tgCartonStartOfQuarterListings below. Needed because quarterBoundsOf
@@ -6621,6 +6636,8 @@ function fyForecastCompute(rsm, fy) {
     kegVolume: s.kegVolume + r.kegTotal,
     cartonVolume: s.cartonVolume + r.cartonTotal,
   }), { kegVolume: 0, cartonVolume: 0 });
+  fyTotals.lastYearVolume = fyActualVolumeForYear(outletFilterFn, fy - 1);
+  fyTotals.twoYearsAgoVolume = fyActualVolumeForYear(outletFilterFn, fy - 2);
   return { rsm, fy, quarters, fyTotals };
 }
 // Writes all 4 quarters' Listings + Volume targets into rsmTargets, exactly as if they'd been
@@ -6836,19 +6853,23 @@ function renderFyForecastPanel() {
       <td class="num-cell mono">${fmtNum(result.fyTotals.kegVolume)} L</td>
       <td class="num-cell mono">${fmtNum(result.fyTotals.cartonVolume)} L</td>
       <td class="num-cell mono" style="font-weight:600;">${fmtNum(result.fyTotals.kegVolume + result.fyTotals.cartonVolume)} L</td>
+      <td class="num-cell mono">${result.fyTotals.lastYearVolume != null ? fmtNum(result.fyTotals.lastYearVolume) + ' L' : '<span class="muted">no data</span>'}</td>
+      <td class="num-cell mono">${result.fyTotals.twoYearsAgoVolume != null ? fmtNum(result.fyTotals.twoYearsAgoVolume) + ' L' : '<span class="muted">no data</span>'}</td>
       <td><button class="btn small" onclick="fyForecastOnApply('${rsm}',${fy})">Apply Q1–Q4</button></td>
     </tr>`;
   }).join('');
 
   el.innerHTML = `
     <h3 style="margin:0;">FY Listing Growth Forecast <span class="muted" style="font-weight:400; font-size:11px;">(FY${fy})</span></h3>
-    <div class="hint" style="margin-top:4px;">Enter each RSM's target new listings for each quarter individually (kegs and cartons, Q1–Q4). Q1 starts from real current listings; each later quarter starts from the previous quarter's own forecasted ending listings (that quarter's baseline plus that quarter's own growth number) — the system calculates the resulting final listings each quarter automatically. Volume is priced at that quarter's average historical Volume per listing per week, averaged across every prior year we have data for (not just last year), so seasonality carries through the whole year without one unusual year skewing a single quarter. Applying writes Q1–Q4 Listings and Volume targets into the table above, exactly as if set one quarter at a time — still fully editable afterward. A quarter set via the standalone Volume Target Calculator below is protected (🔒) and will be left untouched by Apply, rather than overwritten — clear the protection there if you want the forecast to take over again.</div>
+    <div class="hint" style="margin-top:4px;">Enter each RSM's target new listings for each quarter individually (kegs and cartons, Q1–Q4). Q1 starts from real current listings; each later quarter starts from the previous quarter's own forecasted ending listings (that quarter's baseline plus that quarter's own growth number) — the system calculates the resulting final listings each quarter automatically. Volume is priced at that quarter's average historical Volume per listing per week, averaged across every prior year we have data for (not just last year), so seasonality carries through the whole year without one unusual year skewing a single quarter. Applying writes Q1–Q4 Listings and Volume targets into the table above, exactly as if set one quarter at a time — still fully editable afterward. A quarter set via the standalone Volume Target Calculator below is protected (🔒) and will be left untouched by Apply, rather than overwritten — clear the protection there if you want the forecast to take over again. The FY${String(fy-1).slice(-2)} and FY${String(fy-2).slice(-2)} Actual Volume columns show what this RSM actually sold in the two full financial years before this one, for a quick sanity check against the forecast total.</div>
     <div class="tablewrap" style="margin-top:10px;">
       <table class="datatable">
         <thead><tr>
           <th rowspan="2">RSM</th><th colspan="4">New Keg Listings</th><th colspan="4">New Carton Listings</th>
           <th rowspan="2">Keg Listings,<br>end of FY</th><th rowspan="2">Carton Listings,<br>end of FY</th>
-          <th rowspan="2">FY Keg<br>Volume</th><th rowspan="2">FY Carton<br>Volume</th><th rowspan="2">FY Total<br>Volume</th><th rowspan="2"></th>
+          <th rowspan="2">FY Keg<br>Volume</th><th rowspan="2">FY Carton<br>Volume</th><th rowspan="2">FY Total<br>Volume</th>
+          <th rowspan="2">FY${String(fy-1).slice(-2)} Actual<br>Volume</th><th rowspan="2">FY${String(fy-2).slice(-2)} Actual<br>Volume</th>
+          <th rowspan="2"></th>
         </tr>
         <tr><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th></tr></thead>
         <tbody>${rows}</tbody>
