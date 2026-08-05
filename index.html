@@ -128,6 +128,7 @@
   .driver-header { background:var(--navy); color:#fff; padding:16px 18px; border-radius:10px; margin-bottom:14px; }
   .driver-header h1 { margin:0; font-size:20px; color:#fff; }
   .datatable tbody tr.row-selected { background:var(--gold-bg,#fbf3e3); }
+  .datatable tbody tr.row-wonback { background:var(--green-bg); }
   .print-only { display:none; }
   .target-form { display:grid; grid-template-columns: repeat(auto-fit, minmax(170px,1fr)); gap:12px; }
   .rank-list { list-style:none; margin:0; padding:0; }
@@ -419,6 +420,7 @@
   <button class="tab-btn" data-tab="targetcustomers" data-group="rsm">Target Customers</button>
   <button class="tab-btn" data-tab="atrisk" data-group="rsm">Listings Report</button>
   <button class="tab-btn" data-tab="bannergaps" data-group="rsm">Banner Gap Report</button>
+  <button class="tab-btn" data-tab="hitlists" data-group="rsm">Hit Lists</button>
   <button class="tab-btn" data-tab="activations" data-group="rsm">Activations</button>
 
   <span class="tab-group-label"><span class="dot" style="background:var(--grp-mgmt);"></span>Management Tools</span>
@@ -1270,6 +1272,46 @@
       </div>
     </div>
     <div id="bg_cmp_results"></div>
+  </div>
+
+  <!-- ================= HIT LISTS ================= -->
+  <div class="tabpage" id="tab-hitlists">
+    <div class="panel no-print">
+      <div class="qnav">
+        <button class="qstep" onclick="stepHlQuarter(-1)" title="Previous quarter">‹</button>
+        <div class="qlabel" id="hl_qlabel"></div>
+        <button class="qstep" onclick="stepHlQuarter(1)" title="Next quarter">›</button>
+        <button class="btn small secondary" onclick="jumpHlCurrentQuarter()">Current quarter</button>
+        <button class="btn small" id="hl_generateBtn">Generate Hit Lists</button>
+      </div>
+      <div class="hint" style="margin-top:8px;">Five prospecting worklists per RSM — Keg Active Customers, Keg Win Backs, Bottleshop Gaps, Bottleshop Win Backs, and On Prem Carton &amp; Events. Each list's membership is frozen at the start of the quarter (click Generate) so it stays stable while you work through it — nobody drops off the list the moment they place an order. Volume, last order date and status still update live, and a row turns green the moment a customer comes back onboard, a gap gets filled, or a prospect starts buying.</div>
+      <div class="rowflex" style="gap:14px; flex-wrap:wrap; align-items:flex-end; margin-top:10px;">
+        <div class="fld" style="margin:0;"><label>RSM</label><select id="hl_rsm"></select></div>
+        <div class="fld" style="margin:0;"><label>Geo tier</label>
+          <div class="msel" id="hl_geo_msel">
+            <button type="button" class="msel-btn" id="hl_geo_btn">All geo tiers ▾</button>
+            <div class="msel-menu" id="hl_geo_menu"></div>
+          </div>
+        </div>
+        <div class="fld" style="margin:0;"><label>Banner</label>
+          <div class="msel" id="hl_banner_msel">
+            <button type="button" class="msel-btn" id="hl_banner_btn">All banners ▾</button>
+            <div class="msel-menu" id="hl_banner_menu"></div>
+          </div>
+        </div>
+        <div class="fld" style="margin:0;"><label>SKU</label>
+          <div class="msel" id="hl_sku_msel">
+            <button type="button" class="msel-btn" id="hl_sku_btn">All SKUs ▾</button>
+            <div class="msel-menu" id="hl_sku_menu"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel no-print" style="margin-top:14px;">
+      <div id="hl_subtabs" class="rowflex" style="gap:8px; flex-wrap:wrap;"></div>
+      <div class="hint" style="margin-top:8px;" id="hl_count"></div>
+      <div id="hl_body" style="margin-top:8px;"></div>
+    </div>
   </div>
 
   <!-- ================= ACTIVATIONS ================= -->
@@ -2416,6 +2458,10 @@ let naSkuQuarterOverrides = {}; // keyed "groupId|fy|q": {value, updatedBy, upda
 let customGroups = []; // [ groupRecord,... ] — shared; brand-new SKU groups added via "Add a custom product", or split off an existing group via "Split…". Merged into `groups`/`groupOrder` by applyCustomGroups() on every data load.
 let groupMemberOverrides = {}; // { groupId: [memberId,...] } — shared; set when a Split moves one or more members out of an existing group (custom or baked). Display-only (memberDescs text) — nothing else in the app reads .members.
 let sp_currentGroupId = null; // groupId currently open in the "Split product" panel on Product List Prices — not shared, purely local UI state
+let hlSnapshots = {}; // { [quarterKey]: { [listId]: {outletIds:[...], prospectKeys:[...]?, baselineRanged:{...}?, generatedAt, generatedBy} } } — shared; one frozen membership snapshot per Hit List per quarter (Keg Active Customers / Keg Win Backs / Bottleshop Gaps / Bottleshop Win Backs / On Prem Carton & Events), generated once via hlGenerateSnapshot() and reused for the rest of that quarter. See netlify_part4.js.
+let hlQuarter = null; // {fy,q} — set to PERF_CURRENT_Q the first time renderHitListsPage() runs; independent of every other page's own quarter nav — not shared, purely local UI state
+let hlActiveTab = 'kegActive'; // which of the 5 Hit Lists sub-tabs is currently showing — not shared, purely local UI state
+let hlGeoMsel = null, hlBannerMsel = null, hlSkuMsel = null; // Hit Lists filter multi-selects (RSM is a plain single-select, see hl_rsm in the template) — not shared, purely local UI state
 function naTargetFor(quarterKey) { return naTargets[quarterKey] || {}; }
 function updateNaTarget(quarterKey, val) {
   const existing = naTargets[quarterKey] || {};
@@ -2853,6 +2899,7 @@ function buildServerPayload(fnName, args) {
     case 'saveNaSkuQuarterOverride': return { groupId: args[0], fy: args[1], q: args[2], value: args[3], updatedBy: args[4] };
     case 'addCustomGroup': return { group: args[0] };
     case 'splitGroupMembers': return { originalGroupId: args[0], remainingMembers: args[1], newGroup: args[2] };
+    case 'saveHlSnapshot': return { quarterKey: args[0], snapshot: args[1], updatedBy: args[2] };
     default: return {};
   }
 }
@@ -10141,6 +10188,402 @@ function exportBgComparePDF() {
   document.body.classList.remove('printing-bg-compare');
 }
 
+// ===================== HIT LISTS =====================
+// Five per-RSM prospecting worklists, each its own sub-tab within one Hit Lists page: Keg Active
+// Customers, Keg Win Backs, Bottleshop Gaps, Bottleshop Win Backs, and On Prem Carton & Events.
+// Every list's MEMBERSHIP (which outlets appear) is frozen once per financial quarter via
+// hlGenerateSnapshot() — an explicit, auditable action (like every other "Apply"/"Set" button in
+// this app) rather than something that silently recomputes on every render, so an RSM working
+// through a list all quarter doesn't have customers vanish out from under them the moment they
+// place an order. Once frozen, every LIVE figure shown for that fixed outlet set (volume, last
+// order date, core-SKU ranged/gap status) is still recomputed fresh on every render, so a
+// "Won Back ✓"/newly-ranged-SKU highlight naturally appears the moment real activity shows up,
+// without needing any separate persisted event log.
+const HL_LISTS = [
+  { id: 'kegActive',          label: 'Keg Active Customers' },
+  { id: 'kegWinBacks',        label: 'Keg Win Backs' },
+  { id: 'bottleshopGaps',     label: 'Bottleshop Gaps' },
+  { id: 'bottleshopWinBacks', label: 'Bottleshop Win Backs' },
+  { id: 'onPremWinBacks',     label: 'On Prem Carton & Events' },
+];
+const HL_WIN_BACK_TOP_N = 50;
+
+function hlCycleDays(bucket) { return bucket === 'KEGS' ? 28 : 91; }
+
+// "Off Premise" (bottleshop) or "Integrated" — the two customer types List Three (Bottleshop Gaps)
+// is scoped to. isBottleshop() (Banner Gap Report, above) only covers the former.
+function hlIsBottleshopOrIntegrated(o) {
+  if (isBottleshop(o)) return true;
+  return typeof o.custType === 'string' && o.custType.trim().toLowerCase() === 'integrated';
+}
+// The universe for List Five (On Prem Carton & Events) — everything that ISN'T an off-premise
+// bottleshop (On Premise, Integrated, Events, etc). Deliberately overlaps Bottleshop Gaps for
+// Integrated venues, which genuinely can have both an off-premise range AND on-premise business
+// worth chasing separately.
+function hlIsOnPremOrEvents(o) { return !isBottleshop(o); }
+
+function hlOutletUniverse() { return Object.values(outlets).filter(o => !o.excluded); }
+function hlCoreCartonGids() { return coreCartonGroupIds(); }
+
+// Restricts a bucket's default SKU set down to whatever the Hit Lists SKU filter currently has
+// selected (if anything) — shared by every list so the filter behaves identically everywhere: it
+// narrows both which SKUs count toward "active"/"volume"/"gap" AND which SKUs are shown, not just
+// which rows are hidden afterward.
+function hlSkuGidsForBucket(bucket) {
+  const defaultGids = bucket === 'KEGS' ? kegGroupIds() : cartonGroupIds();
+  const sel = hlSkuMsel ? hlSkuMsel.getValues() : [];
+  if (!sel.length) return defaultGids;
+  const selSet = new Set(sel);
+  return defaultGids.filter(gid => selSet.has(gid));
+}
+
+// One-pass "who's active + what's their volume/last-order-day in this window, for these SKUs"
+// lookup for every outlet at once — wraps ceComputeAllOutletStats (Customer List Explorer, above)
+// rather than re-looping dailyVolume by hand.
+function hlOutletStats(groupIds, startDayIdx, endDayIdx) {
+  const groupSet = new Set(groupIds);
+  return ceComputeAllOutletStats(startDayIdx, endDayIdx, gid => groupSet.has(gid));
+}
+// Earliest day index any outlet has EVER ordered any SKU in groupIds, for every outlet at once —
+// used to flag "New this quarter" (List 1) and to gate Win Backs membership to outlets that have
+// actually bought from us before (a never-purchased prospect belongs on Bottleshop Gaps' prospect
+// rows, not a Win Backs list).
+function hlFirstOrderDayIdxMap(groupIds) {
+  const groupSet = new Set(groupIds);
+  const map = {};
+  for (const key in dailyVolume) {
+    const sep = key.indexOf('|');
+    const oid = key.slice(0, sep), gid = key.slice(sep + 1);
+    if (!groupSet.has(gid)) continue;
+    const arr = dailyVolume[key];
+    for (let i = 0; i < arr.length; i += 2) {
+      const d = arr[i];
+      if (map[oid] === undefined || d < map[oid]) map[oid] = d;
+    }
+  }
+  return map;
+}
+function hlQuarterStartDayIdx(quarterKey) {
+  const fq = fyQFromQuarterKey(quarterKey);
+  if (!fq) return null;
+  const [start] = quarterBoundsOf(fq.fy, fq.q);
+  return dayIndexOf(start);
+}
+
+// ---------- Filters shared by every list ----------
+function hlFilteredRows(rows) {
+  const rsmSel = document.getElementById('hl_rsm') ? document.getElementById('hl_rsm').value : '';
+  const geoSel = hlGeoMsel ? hlGeoMsel.getValues() : [];
+  const bannerSel = hlBannerMsel ? hlBannerMsel.getValues() : [];
+  return rows.filter(r => {
+    if (r.isProspect && !r.onboarded) {
+      // Prospect rows with no real outlet yet have no RSM/geoTier to filter on — only show them
+      // when no RSM is selected, since we can't reliably say which RSM owns an unassigned prospect.
+      if (rsmSel) return false;
+      if (bannerSel.length && !bannerSel.includes(r.outlet.banner)) return false;
+      return true;
+    }
+    if (rsmSel && r.outlet.rsm !== rsmSel) return false;
+    if (geoSel.length && !geoSel.includes(r.outlet.geoTier)) return false;
+    if (bannerSel.length && !bannerSel.includes(r.outlet.banner)) return false;
+    return true;
+  });
+}
+
+// ---------- Membership computation (used only at snapshot-generation time) ----------
+// Shared "top N lapsed customers" ranking for every Win Backs list — active-ness and historical
+// ranking are BOTH measured as of refDayIdx (the quarter's start), so membership is a pure
+// function of the quarter, not of whenever "Generate" happens to be clicked.
+function hlComputeWinBacksOutletIds(groupIds, cycleDays, refDayIdx, outletFilterFn, topN) {
+  const activeStats = hlOutletStats(groupIds, refDayIdx - cycleDays + 1, refDayIdx);
+  const historicalStats = hlOutletStats(groupIds, 0, refDayIdx);
+  return Object.keys(historicalStats)
+    .filter(oid => outlets[oid] && !outlets[oid].excluded && outletFilterFn(outlets[oid]))
+    .filter(oid => !activeStats[oid])
+    .filter(oid => (historicalStats[oid].totalLitres || 0) > 0)
+    .sort((a, b) => historicalStats[b].totalLitres - historicalStats[a].totalLitres)
+    .slice(0, topN);
+}
+// Bottleshop Gaps membership: every off-premise/integrated outlet, plus "prospect" rows for
+// familyGroups stores that don't correspond to any real outlet yet (no sales history at all).
+// Dedup is automatic — familyGroups only carries outletId once a real sales-data match exists (see
+// familyGroupsList()), so taking the inverse (`!s.outletId`) can never double up with a real
+// outlet row. No customer records are created for these — they're reference-only rows, keyed by a
+// synthetic "fg:<groupIdx>:<storeIdx>" string rather than a real outlet id.
+function hlGenerateBottleshopGapsMembership(refDayIdx) {
+  const outletIds = hlOutletUniverse().filter(hlIsBottleshopOrIntegrated).map(o => o.id);
+  const coreGids = hlCoreCartonGids();
+  const rangedWindowStart = refDayIdx - hlCycleDays('CARTONS') + 1;
+  const baselineRanged = {};
+  coreGids.forEach(gid => {
+    const stats = hlOutletStats([gid], rangedWindowStart, refDayIdx);
+    Object.keys(stats).forEach(oid => {
+      if (!baselineRanged[oid]) baselineRanged[oid] = [];
+      baselineRanged[oid].push(gid);
+    });
+  });
+  const prospectKeys = [];
+  familyGroupsList().forEach((fg, gi) => {
+    (fg.stores || []).forEach((s, si) => { if (!s.outletId) prospectKeys.push(`fg:${gi}:${si}`); });
+  });
+  return { outletIds, prospectKeys, baselineRanged };
+}
+// Explicit, auditable "freeze this quarter's Hit Lists" action — only ever available for the
+// currently-viewed quarter (past quarters are read-only once closed; future quarters don't have a
+// start date to measure from yet). Regenerating (confirm-gated in hlOnGenerateClick) recomputes
+// every list's membership from scratch using the SAME quarter-start reference day, so it's safe to
+// re-run if underlying sales data gets corrected — it just never happens automatically, so nobody's
+// in-progress worklist reshuffles without warning.
+function hlGenerateSnapshot(quarterKey) {
+  const refDayIdx = hlQuarterStartDayIdx(quarterKey);
+  if (refDayIdx === null) return;
+  const kegGids = kegGroupIds(), cartonGids = cartonGroupIds();
+  const kegActiveIds = Object.keys(hlOutletStats(kegGids, refDayIdx - hlCycleDays('KEGS') + 1, refDayIdx))
+    .filter(oid => outlets[oid] && !outlets[oid].excluded);
+  const kegWinBackIds = hlComputeWinBacksOutletIds(kegGids, hlCycleDays('KEGS'), refDayIdx, () => true, HL_WIN_BACK_TOP_N);
+  const bsWinBackIds = hlComputeWinBacksOutletIds(cartonGids, hlCycleDays('CARTONS'), refDayIdx, isBottleshop, HL_WIN_BACK_TOP_N);
+  const opWinBackIds = hlComputeWinBacksOutletIds(cartonGids, hlCycleDays('CARTONS'), refDayIdx, hlIsOnPremOrEvents, HL_WIN_BACK_TOP_N);
+  const gaps = hlGenerateBottleshopGapsMembership(refDayIdx);
+
+  const now = new Date().toISOString();
+  const by = currentUserEmail || 'Unknown';
+  const snapshot = {
+    kegActive:         { outletIds: kegActiveIds, generatedAt: now, generatedBy: by },
+    kegWinBacks:       { outletIds: kegWinBackIds, generatedAt: now, generatedBy: by },
+    bottleshopGaps:    { outletIds: gaps.outletIds, prospectKeys: gaps.prospectKeys, baselineRanged: gaps.baselineRanged, generatedAt: now, generatedBy: by },
+    bottleshopWinBacks:{ outletIds: bsWinBackIds, generatedAt: now, generatedBy: by },
+    onPremWinBacks:    { outletIds: opWinBackIds, generatedAt: now, generatedBy: by },
+  };
+  // Optimistic local update (visible immediately), then persist to the server in one combined
+  // request — matches the round-42 saveRsmTargetsBulk pattern (one read + one write, no races) —
+  // and resyncs from the server's canonical response so a colleague's concurrent generate can't be
+  // silently clobbered.
+  hlSnapshots[quarterKey] = snapshot;
+  callServer('saveHlSnapshot', [quarterKey, snapshot, currentUserEmail], (data) => {
+    hlSnapshots = data.hlSnapshots;
+    renderHitListsPage();
+  });
+}
+
+// ---------- List builders (live figures against the frozen membership) ----------
+function hlBuildKegActive(quarterKey) {
+  const snap = hlSnapshots[quarterKey] && hlSnapshots[quarterKey].kegActive;
+  if (!snap) return null;
+  const refDayIdx = hlQuarterStartDayIdx(quarterKey);
+  const gids = hlSkuGidsForBucket('KEGS');
+  const nowDayIdx = dayIndexOf(PERF_TODAY);
+  const liveStats = hlOutletStats(gids, nowDayIdx - hlCycleDays('KEGS') + 1, nowDayIdx);
+  const firstOrderMap = hlFirstOrderDayIdxMap(gids);
+  return snap.outletIds.map(oid => {
+    const o = outlets[oid];
+    if (!o) return null;
+    const live = liveStats[oid] || { totalLitres: 0, lastInvoiceDayIdx: null };
+    const firstDay = firstOrderMap[oid];
+    const isNew = firstDay !== undefined && refDayIdx !== null && firstDay >= refDayIdx;
+    return { outlet: o, isProspect: false, totalVolume: live.totalLitres, lastOrderDayIdx: live.lastInvoiceDayIdx, status: isNew ? 'new' : 'active' };
+  }).filter(Boolean);
+}
+// Shared builder for the three simple Win Backs lists (Keg Win Backs / Bottleshop Win Backs / On
+// Prem Carton & Events) — membership is frozen, but "still lapsed" vs "won back" is recomputed
+// live every render, straight off current dailyVolume, so the colour flips the moment real
+// activity appears without needing any separate tracking log.
+function hlBuildWinBacksList(quarterKey, listId, bucket) {
+  const snap = hlSnapshots[quarterKey] && hlSnapshots[quarterKey][listId];
+  if (!snap) return null;
+  const gids = hlSkuGidsForBucket(bucket);
+  const cycleDays = hlCycleDays(bucket);
+  const nowDayIdx = dayIndexOf(PERF_TODAY);
+  const liveActiveStats = hlOutletStats(gids, nowDayIdx - cycleDays + 1, nowDayIdx);
+  const liveHistoricalStats = hlOutletStats(gids, 0, nowDayIdx);
+  return snap.outletIds.map(oid => {
+    const o = outlets[oid];
+    if (!o) return null;
+    const hist = liveHistoricalStats[oid];
+    return {
+      outlet: o, isProspect: false,
+      totalVolume: hist ? hist.totalLitres : 0,
+      lastOrderDayIdx: hist ? hist.lastInvoiceDayIdx : null,
+      status: liveActiveStats[oid] ? 'wonback' : 'lapsed',
+    };
+  }).filter(Boolean);
+}
+function hlBuildKegWinBacks(quarterKey) { return hlBuildWinBacksList(quarterKey, 'kegWinBacks', 'KEGS'); }
+function hlBuildBottleshopWinBacks(quarterKey) { return hlBuildWinBacksList(quarterKey, 'bottleshopWinBacks', 'CARTONS'); }
+function hlBuildOnPremWinBacks(quarterKey) { return hlBuildWinBacksList(quarterKey, 'onPremWinBacks', 'CARTONS'); }
+function hlBuildBottleshopGaps(quarterKey) {
+  const snap = hlSnapshots[quarterKey] && hlSnapshots[quarterKey].bottleshopGaps;
+  if (!snap) return null;
+  const coreGidsAll = hlCoreCartonGids();
+  const sel = hlSkuMsel ? hlSkuMsel.getValues() : [];
+  const coreGids = sel.length ? coreGidsAll.filter(g => sel.includes(g)) : coreGidsAll;
+  const nowDayIdx = dayIndexOf(PERF_TODAY);
+  const windowStart = nowDayIdx - hlCycleDays('CARTONS') + 1;
+  const rangedNowByGid = {};
+  coreGids.forEach(gid => { rangedNowByGid[gid] = hlOutletStats([gid], windowStart, nowDayIdx); });
+  const overallStats = hlOutletStats(coreGids, windowStart, nowDayIdx);
+
+  const realRows = snap.outletIds.map(oid => {
+    const o = outlets[oid];
+    if (!o) return null;
+    const baselineSet = new Set((snap.baselineRanged && snap.baselineRanged[oid]) || []);
+    const cols = coreGids.map(gid => {
+      const rangedLive = !!rangedNowByGid[gid][oid];
+      return { gid, ranged: rangedLive, newlyRanged: rangedLive && !baselineSet.has(gid) };
+    });
+    const stat = overallStats[oid];
+    return { outlet: o, isProspect: false, cols, gapCount: cols.filter(c => !c.ranged).length,
+      totalVolume: stat ? stat.totalLitres : 0, lastOrderDayIdx: stat ? stat.lastInvoiceDayIdx : null };
+  }).filter(Boolean);
+
+  const familyGroups = familyGroupsList();
+  const prospectRows = (snap.prospectKeys || []).map(key => {
+    const [, gi, si] = key.split(':');
+    const fg = familyGroups[Number(gi)];
+    const store = fg && fg.stores && fg.stores[Number(si)];
+    if (!store) return null;
+    // Onboarding check: if this family-group store now (live) has a matching real outlet with any
+    // core-carton sales history, it's graduated out of "no history" — keep the row visible but
+    // show it as onboarded, using its live gap columns instead of the 100%-gap placeholder.
+    if (store.outletId && outlets[store.outletId]) {
+      const o = outlets[store.outletId];
+      const cols = coreGids.map(gid => ({ gid, ranged: !!rangedNowByGid[gid][o.id], newlyRanged: false }));
+      const stat = overallStats[o.id];
+      return { outlet: o, isProspect: true, onboarded: true,
+        cols, gapCount: cols.filter(c => !c.ranged).length,
+        totalVolume: stat ? stat.totalLitres : 0, lastOrderDayIdx: stat ? stat.lastInvoiceDayIdx : null };
+    }
+    const cols = coreGids.map(gid => ({ gid, ranged: false, newlyRanged: false }));
+    return {
+      outlet: { id: key, name: store.storeName, banner: fg.banner, rsm: null, geoTier: null, suburb: store.suburb, state: store.state },
+      isProspect: true, onboarded: false, cols, gapCount: coreGids.length, totalVolume: 0, lastOrderDayIdx: null,
+    };
+  }).filter(Boolean);
+
+  return [...realRows, ...prospectRows];
+}
+
+// ---------- Rendering ----------
+function hlStatusBadge(row) {
+  if (row.status === 'new') return '<span class="badge green">New this quarter</span>';
+  if (row.status === 'wonback') return '<span class="badge green">Won back ✓</span>';
+  if (row.status === 'lapsed') return '<span class="badge red">Lapsed</span>';
+  if (row.status === 'active') return '<span class="badge blue">Active</span>';
+  return '';
+}
+function hlRowClass(row) {
+  return (row.status === 'new' || row.status === 'wonback' || row.onboarded === true) ? 'row-wonback' : '';
+}
+function hlSimpleRowHtml(row) {
+  const o = row.outlet;
+  return `<tr class="${hlRowClass(row)}">
+    <td>${escapeHtml(o.name)}<div class="muted" style="font-size:10.5px;">${escapeHtml(o.suburb||'')} ${escapeHtml(o.state||'')}</div></td>
+    <td>${escapeHtml(o.rsm||'—')}</td>
+    <td>${escapeHtml(o.banner||'—')}</td>
+    <td>${escapeHtml(o.geoTier||'—')}</td>
+    <td class="num-cell mono">${fmtNum(row.totalVolume)} L</td>
+    <td class="mono">${row.lastOrderDayIdx!=null?dayLabel(row.lastOrderDayIdx):'—'}</td>
+    <td>${hlStatusBadge(row)}</td>
+  </tr>`;
+}
+function hlSimpleTableHtml(rows, emptyMsg) {
+  if (!rows.length) return `<div class="empty">${escapeHtml(emptyMsg)}</div>`;
+  const header = `<thead><tr><th>Customer</th><th>RSM</th><th>Banner</th><th>Geo tier</th><th>Total Volume</th><th>Last Order</th><th>Status</th></tr></thead>`;
+  return `<div class="tablewrap"><table class="datatable">${header}<tbody>${rows.map(hlSimpleRowHtml).join('')}</tbody></table></div>`;
+}
+function hlGapsRowHtml(row, coreGids) {
+  const o = row.outlet;
+  const cells = coreGids.map(gid => {
+    const c = row.cols.find(c => c.gid === gid);
+    const g = groups[gid];
+    const title = escapeHtml(g ? g.label : gid);
+    if (!c || !c.ranged) return `<td class="num-cell" title="${title}"><span class="badge red" style="font-size:9.5px;">Gap</span></td>`;
+    return `<td class="num-cell" title="${title}"><span class="badge ${c.newlyRanged?'green':'blue'}" style="font-size:9.5px;">${c.newlyRanged?'New ✓':'Ranged'}</span></td>`;
+  }).join('');
+  const statusCell = row.onboarded === true ? '<span class="badge green">Onboarded ✓</span>'
+    : row.isProspect ? '<span class="badge grey">No sales history</span>' : '';
+  return `<tr class="${hlRowClass(row)}">
+    <td>${escapeHtml(o.name)}${row.isProspect && !row.onboarded ? ' <span class="badge grey" style="font-size:9px;">prospect</span>' : ''}<div class="muted" style="font-size:10.5px;">${escapeHtml(o.suburb||'')} ${escapeHtml(o.state||'')}${o.rsm?(' · '+escapeHtml(o.rsm)):''}</div></td>
+    <td>${escapeHtml(o.banner||'—')}</td>
+    <td class="num-cell mono" style="font-weight:600;">${row.gapCount}</td>
+    ${cells}
+    <td class="num-cell mono">${fmtNum(row.totalVolume)} L</td>
+    <td>${statusCell}</td>
+  </tr>`;
+}
+function hlGapsTableHtml(rows, coreGids) {
+  if (!rows.length) return `<div class="empty">No bottleshop/integrated customers match these filters.</div>`;
+  const skuHeaders = coreGids.map(gid => `<th style="writing-mode:vertical-rl; text-orientation:mixed; font-size:10px; font-weight:600;">${escapeHtml(groups[gid]?groups[gid].label:gid)}</th>`).join('');
+  const header = `<thead><tr><th>Customer</th><th>Banner</th><th>Gaps</th>${skuHeaders}<th>Volume</th><th>Status</th></tr></thead>`;
+  return `<div class="tablewrap"><table class="datatable">${header}<tbody>${rows.map(r=>hlGapsRowHtml(r,coreGids)).join('')}</tbody></table></div>`;
+}
+function setHlActiveTab(tabId) { hlActiveTab = tabId; renderHitListsPage(); }
+function stepHlQuarter(delta) { hlQuarter = shiftQuarter(hlQuarter.fy, hlQuarter.q, delta); renderHitListsPage(); }
+function jumpHlCurrentQuarter() { hlQuarter = { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q }; renderHitListsPage(); }
+function hlOnGenerateClick(quarterKey) {
+  const existing = hlSnapshots[quarterKey];
+  const msg = existing
+    ? `This will regenerate ALL 5 Hit Lists for ${quarterKey} using today's data, replacing the current worklists (previously generated ${fmtDateObj(new Date(existing.kegActive.generatedAt))} by ${existing.kegActive.generatedBy}). Anyone partway through the current lists will see them change. Continue?`
+    : `Generate all 5 Hit Lists for ${quarterKey}? This freezes each list's membership as of the start of the quarter — it won't change again until you regenerate it.`;
+  if (!confirm(msg)) return;
+  hlGenerateSnapshot(quarterKey);
+  toast(`Hit Lists generated for ${quarterKey}.`);
+  renderHitListsPage();
+}
+function renderHitListsPage() {
+  const el = document.getElementById('hl_body');
+  if (!el) return;
+  if (!hlQuarter) hlQuarter = { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q };
+  const quarterKey = quarterKeyOf(hlQuarter.fy, hlQuarter.q);
+  const isCurrentQuarter = quarterKey === quarterKeyOf(PERF_CURRENT_Q.fy, PERF_CURRENT_Q.q);
+  const qlabelEl = document.getElementById('hl_qlabel');
+  if (qlabelEl) qlabelEl.textContent = quarterKey;
+  const genBtn = document.getElementById('hl_generateBtn');
+  if (genBtn) {
+    genBtn.style.display = isCurrentQuarter ? '' : 'none';
+    genBtn.textContent = hlSnapshots[quarterKey] ? 'Regenerate Hit Lists' : `Generate Hit Lists for ${quarterKey}`;
+  }
+  document.getElementById('hl_subtabs').innerHTML = HL_LISTS.map(l =>
+    `<button class="btn small ${hlActiveTab===l.id?'':'secondary'}" onclick="setHlActiveTab('${l.id}')">${escapeHtml(l.label)}</button>`).join(' ');
+
+  const snap = hlSnapshots[quarterKey];
+  if (!snap) {
+    document.getElementById('hl_count').textContent = '';
+    el.innerHTML = isCurrentQuarter
+      ? `<div class="empty">Hit Lists for ${escapeHtml(quarterKey)} haven't been generated yet. Click "Generate Hit Lists for ${escapeHtml(quarterKey)}" above to freeze this quarter's worklists.</div>`
+      : `<div class="empty">No Hit Lists were generated for ${escapeHtml(quarterKey)} (they're only ever generated for the current quarter).</div>`;
+    return;
+  }
+
+  const genInfo = `<div class="hint" style="margin:6px 0 10px;">Generated ${fmtDateObj(new Date(snap.kegActive.generatedAt))} by ${escapeHtml(snap.kegActive.generatedBy)}. Membership is frozen for the quarter; volume, last order date and status update live.</div>`;
+  let rows, bodyHtml;
+  if (hlActiveTab === 'kegActive') {
+    rows = hlFilteredRows(hlBuildKegActive(quarterKey) || []);
+    rows.sort((a,b) => b.totalVolume - a.totalVolume);
+    bodyHtml = hlSimpleTableHtml(rows, 'No active keg customers match these filters.');
+  } else if (hlActiveTab === 'kegWinBacks') {
+    rows = hlFilteredRows(hlBuildKegWinBacks(quarterKey) || []);
+    rows.sort((a,b) => b.totalVolume - a.totalVolume);
+    bodyHtml = hlSimpleTableHtml(rows, 'No keg win-back candidates match these filters.');
+  } else if (hlActiveTab === 'bottleshopGaps') {
+    const coreGidsAll = hlCoreCartonGids();
+    const sel = hlSkuMsel ? hlSkuMsel.getValues() : [];
+    const coreGids = sel.length ? coreGidsAll.filter(g => sel.includes(g)) : coreGidsAll;
+    rows = hlFilteredRows(hlBuildBottleshopGaps(quarterKey) || []);
+    rows.sort((a,b) => b.gapCount - a.gapCount || b.totalVolume - a.totalVolume);
+    bodyHtml = hlGapsTableHtml(rows, coreGids);
+  } else if (hlActiveTab === 'bottleshopWinBacks') {
+    rows = hlFilteredRows(hlBuildBottleshopWinBacks(quarterKey) || []);
+    rows.sort((a,b) => b.totalVolume - a.totalVolume);
+    bodyHtml = hlSimpleTableHtml(rows, 'No bottleshop win-back candidates match these filters.');
+  } else {
+    rows = hlFilteredRows(hlBuildOnPremWinBacks(quarterKey) || []);
+    rows.sort((a,b) => b.totalVolume - a.totalVolume);
+    bodyHtml = hlSimpleTableHtml(rows, 'No On Prem/Events win-back candidates match these filters.');
+  }
+  document.getElementById('hl_count').textContent = `${rows.length} customer${rows.length===1?'':'s'}`;
+  el.innerHTML = genInfo + bodyHtml;
+}
+
 // ===================== Tabs =====================
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -10369,6 +10812,19 @@ function renderEverything() {
     renderBannerGapsPage();
   }
 
+  // Hit Lists page
+  {
+    hlQuarter = { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q };
+    const hlRsmSel = document.getElementById('hl_rsm');
+    hlRsmSel.innerHTML = `<option value="">All RSMs</option>` + rsmVals.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+    hlRsmSel.addEventListener('change', renderHitListsPage);
+    hlGeoMsel = initMultiSelect('hl_geo', uniqueVals('geoTier', outlets), 'geo tiers', renderHitListsPage);
+    hlBannerMsel = initMultiSelect('hl_banner', uniqueVals('banner', outlets), 'banners', renderHitListsPage);
+    hlSkuMsel = initSkuMultiSelect('hl_sku', groupOrder, renderHitListsPage);
+    document.getElementById('hl_generateBtn').addEventListener('click', () => hlOnGenerateClick(quarterKeyOf(hlQuarter.fy, hlQuarter.q)));
+    renderHitListsPage();
+  }
+
   // Activations page
   setupAutocomplete('ac_outletSearch','ac_outletResults', outletList, outletLabel, id => {
     document.getElementById('ac_outletId').value = id;
@@ -10496,6 +10952,7 @@ function onInitialDataLoaded(data) {
   fyForecastInputs = data.fyForecastInputs || {};
   naSkuTargets = data.naSkuTargets || {};
   naSkuQuarterOverrides = data.naSkuQuarterOverrides || {};
+  hlSnapshots = data.hlSnapshots || {};
   applyRsmZoneOverrides();
   renderEverything();
 }
@@ -10544,6 +11001,7 @@ function refreshPricingFromServer() {
       fyForecastInputs = data.fyForecastInputs || {};
       naSkuTargets = data.naSkuTargets || {};
   naSkuQuarterOverrides = data.naSkuQuarterOverrides || {};
+      hlSnapshots = data.hlSnapshots || {};
       applyRsmZoneOverrides();
       // Pick up any customer a colleague added since our last poll — same fill-gaps-only merge
       // as the initial load, so a real record (should one now exist) is never overwritten.
@@ -10566,6 +11024,7 @@ function refreshPricingFromServer() {
       renderDeliveryReportsPage();
       renderManualCustomersPanel();
       renderRsmZonesPage();
+      renderHitListsPage();
     })
     .catch(err => console.error('refresh failed', err));
 }

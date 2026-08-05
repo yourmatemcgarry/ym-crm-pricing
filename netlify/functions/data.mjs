@@ -45,7 +45,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, rsmTargetProtected, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, rsmTargetProtected, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlSnapshots] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -72,6 +72,7 @@ async function readAll(s) {
     s.get('fyForecastInputs', { type: 'json' }),
     s.get('naSkuTargets', { type: 'json' }),
     s.get('naSkuQuarterOverrides', { type: 'json' }),
+    s.get('hlSnapshots', { type: 'json' }),
   ]);
   // vipContacts is seeded exactly once — the first time anyone loads the app after this feature
   // ships, the blob won't exist yet (null, not just empty), so we seed it from VIP_CONTACTS_SEED
@@ -113,6 +114,7 @@ async function readAll(s) {
     fyForecastInputs: fyForecastInputs || {},
     naSkuTargets: naSkuTargets || {},
     naSkuQuarterOverrides: naSkuQuarterOverrides || {},
+    hlSnapshots: hlSnapshots || {},
   };
 }
 
@@ -394,6 +396,21 @@ export default async (req) => {
       });
       await s.setJSON('rsmTargets', current);
       return json({ ok: true, rsmTargets: current });
+    }
+
+    if (action === 'saveHlSnapshot') {
+      // Hit Lists (Keg Active Customers / Keg Win Backs / Bottleshop Gaps / Bottleshop Win Backs /
+      // On Prem Carton & Events) — one whole-quarter replace per generate/regenerate, not a
+      // field-by-field merge: the client computes all 5 lists' membership in one pass
+      // (hlGenerateSnapshot) and sends the complete {kegActive, kegWinBacks, bottleshopGaps,
+      // bottleshopWinBacks, onPremWinBacks} object for that quarter as a single unit. One read +
+      // one write, same shape as saveRsmTargetsBulk above, so two colleagues generating at close to
+      // the same time can't race each other into a half-written result.
+      const { quarterKey, snapshot } = payload;
+      const current = (await s.get('hlSnapshots', { type: 'json' })) || {};
+      current[quarterKey] = snapshot;
+      await s.setJSON('hlSnapshots', current);
+      return json({ ok: true, hlSnapshots: current });
     }
 
     if (action === 'saveRsmTargetProtected') {
