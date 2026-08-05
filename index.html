@@ -2822,6 +2822,7 @@ function buildServerPayload(fnName, args) {
     case 'saveMultipackQty':  return { groupId: args[0], multipackQty: args[1], updatedBy: args[2] };
     case 'saveCanSizeMl':     return { groupId: args[0], canSizeMl: args[1], updatedBy: args[2] };
     case 'saveRsmTarget':     return { rsm: args[0], quarterKey: args[1], field: args[2], value: args[3], updatedBy: args[4] };
+    case 'saveRsmTargetsBulk': return { entries: args[0], updatedBy: args[1] };
     case 'saveRsmTargetProtected': return { rsm: args[0], quarterKey: args[1], protectedFlag: args[2], updatedBy: args[3] };
     case 'saveActivation':    return { id: args[0], outletId: args[1], productType: args[2], activationType: args[3], start: args[4], end: args[5], dealX: args[6], bonusStock: args[7], pos: args[8], consumerPricing: args[9], groupId: args[10], tempDealId: args[11], updatedBy: args[12] };
     case 'deleteActivation':  return { id: args[0] };
@@ -6622,17 +6623,44 @@ function fyForecastCompute(rsm, fy) {
 // entered/applied one quarter at a time via the calculator above — after this, every value is a
 // normal, independently-editable rsmTarget (per the "auto-fill, stays editable" design), not a
 // live-linked forecast that would silently drift if someone later tweaks a single quarter.
+// Mutates local `rsmTargets` state directly (same shape/values updateRsmTarget would produce) and
+// collects the changed fields as `entries`, but does NOT talk to the server itself — the caller
+// (fyForecastOnApply / fyForecastOnApplyAll) is responsible for persisting every entry from the
+// whole operation in ONE combined saveRsmTargetsBulk request. Posting one saveRsmTarget request
+// PER FIELD here (up to 16 for one RSM, or dozens across every RSM for "Apply for all") used to
+// race against itself: each request did its own independent read-current-blob -> merge one field
+// -> write-whole-blob-back round trip, so several in-flight requests could each read the same
+// "before" snapshot and the last to finish writing would silently discard whatever the others had
+// just added — the UI still looked fully applied (local state updates instantly, before any
+// request resolves) until the periodic 20-second refreshPricingFromServer() poll pulled the
+// server's actual (partial) state back down a few seconds later. A single request removes the
+// race entirely, since there's nothing left to interleave with.
 function fyForecastApply(rsm, fy) {
   const result = fyForecastCompute(rsm, fy);
   const skippedQKeys = [];
+  const entries = [];
   result.quarters.forEach(r => {
     if (isRsmTargetProtected(rsm, r.qKey)) { skippedQKeys.push(r.qKey); return; }
-    updateRsmTarget(rsm, r.qKey, 'kegListingsTarget', String(Math.round(r.kegListingsTargetFinal)));
-    updateRsmTarget(rsm, r.qKey, 'cartonListingsTarget', String(Math.round(r.cartonListingsTargetFinal)));
-    updateRsmTarget(rsm, r.qKey, 'kegVolumeTarget', String(Math.round(r.kegTotal)));
-    updateRsmTarget(rsm, r.qKey, 'cartonVolumeTarget', String(Math.round(r.cartonTotal)));
+    [
+      ['kegListingsTarget', Math.round(r.kegListingsTargetFinal)],
+      ['cartonListingsTarget', Math.round(r.cartonListingsTargetFinal)],
+      ['kegVolumeTarget', Math.round(r.kegTotal)],
+      ['cartonVolumeTarget', Math.round(r.cartonTotal)],
+    ].forEach(([field, value]) => {
+      const key = targetKey(rsm, r.qKey);
+      rsmTargets[key] = { ...(rsmTargets[key] || {}), [field]: value, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+      entries.push({ rsm, quarterKey: r.qKey, field, value });
+    });
   });
-  return { ...result, skippedQKeys };
+  return { ...result, skippedQKeys, entries };
+}
+// Persists a batch of rsmTargets field changes (as collected by fyForecastApply above) in a
+// single server round trip, instead of one request per field/quarter/RSM. See fyForecastApply's
+// comment for why this matters — it's the fix for the "applied targets quietly revert a few
+// seconds later" race.
+function persistRsmTargetsBulk(entries, onSuccess) {
+  if (!entries || !entries.length) { if (onSuccess) onSuccess(); return; }
+  callServer('saveRsmTargetsBulk', [entries, currentUserEmail], onSuccess);
 }
 
 // ---------- Set Targets: Sales Team Target Build-Up (transparency panel) ----------
@@ -6749,15 +6777,24 @@ function fyForecastOnApply(rsm, fy) {
     toast(`FY${fy} forecast applied for ${rsm}.`);
   }
   renderTargetsPage();
+  persistRsmTargetsBulk(result.entries);
 }
 function fyForecastOnApplyAll(fy) {
   const rsmList = uniqueVals('rsm', outlets);
   if (!rsmList.length) return;
   if (!confirm(`This will set/overwrite Q1–Q4 Listings and Volume targets for ALL ${rsmList.length} RSMs in FY${fy}. Continue?`)) return;
   let totalSkipped = 0;
-  rsmList.forEach(rsm => { const r = fyForecastApply(rsm, fy); totalSkipped += (r.skippedQKeys ? r.skippedQKeys.length : 0); });
+  const allEntries = [];
+  rsmList.forEach(rsm => {
+    const r = fyForecastApply(rsm, fy);
+    totalSkipped += (r.skippedQKeys ? r.skippedQKeys.length : 0);
+    allEntries.push(...r.entries);
+  });
   toast(totalSkipped ? `FY${fy} forecast applied for all RSMs. Skipped ${totalSkipped} protected quarter(s) across all RSMs.` : `FY${fy} forecast applied for all RSMs.`);
   renderTargetsPage();
+  // One combined request for every RSM's changes, not one per RSM — see fyForecastApply's comment
+  // for why firing several concurrent requests here would reintroduce the same race.
+  persistRsmTargetsBulk(allEntries);
 }
 // Standalone panel on the Set Targets page — lets a manager set one "new listings per quarter"
 // growth number per RSM for the whole FY (kegs + cartons), see the resulting FY-total forecast

@@ -368,6 +368,34 @@ export default async (req) => {
       return json({ ok: true, rsmTargets: current });
     }
 
+    if (action === 'saveRsmTargetsBulk') {
+      // Bulk sibling of saveRsmTarget above, for operations that touch many fields at once (the FY
+      // Listing Growth Forecast's "Apply Q1-Q4" / "Apply Q1-Q4 for all RSMs" buttons — up to 16
+      // fields for one RSM, or dozens across every RSM). Firing one saveRsmTarget request PER FIELD
+      // for a bulk apply used to race against itself: each request did its own independent
+      // read-current-blob -> merge one field -> write-whole-blob-back round trip, so several
+      // in-flight requests could all read the same "before" snapshot and the last one to finish
+      // writing would silently discard whatever the others had just added — losing some of the
+      // applied targets a few seconds later once the client's periodic refresh pulled the
+      // (incomplete) server state back down. Doing the whole batch as ONE read + ONE write removes
+      // the race entirely, since there's nothing left to interleave with.
+      const { entries, updatedBy } = payload;
+      const current = (await s.get('rsmTargets', { type: 'json' })) || {};
+      (entries || []).forEach(({ rsm, quarterKey, field, value }) => {
+        const key = rsm + '|' + quarterKey;
+        const existing = current[key] || {};
+        if (value === null || value === undefined) {
+          const updated = { ...existing };
+          delete updated[field];
+          current[key] = { ...updated, updatedBy, updatedAt: now };
+        } else {
+          current[key] = { ...existing, [field]: Number(value), updatedBy, updatedAt: now };
+        }
+      });
+      await s.setJSON('rsmTargets', current);
+      return json({ ok: true, rsmTargets: current });
+    }
+
     if (action === 'saveRsmTargetProtected') {
       // Marks (or clears) a quarter's targets as manually set via the standalone per-quarter
       // Volume Target Calculator — see fyForecastApply() client-side, which skips writing any
