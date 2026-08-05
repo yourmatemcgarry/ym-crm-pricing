@@ -45,7 +45,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, rsmTargetProtected, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, targetCustomers, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlSnapshots] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, rsmTargetProtected, activations, trucks, orders, deliveryRuns, manualOutlets, customerDeliveryDetails, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlSnapshots] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -63,7 +63,6 @@ async function readAll(s) {
     s.get('deliveryRuns', { type: 'json' }),
     s.get('manualOutlets', { type: 'json' }),
     s.get('customerDeliveryDetails', { type: 'json' }),
-    s.get('targetCustomers', { type: 'json' }),
     s.get('naDistributions', { type: 'json' }),
     s.get('rsmZoneOverrides', { type: 'json' }),
     s.get('naTargets', { type: 'json' }),
@@ -104,7 +103,6 @@ async function readAll(s) {
     deliveryRuns: deliveryRuns || [],
     manualOutlets: manualOutlets || {},
     customerDeliveryDetails: customerDeliveryDetails || {},
-    targetCustomers: targetCustomers || [],
     naDistributions: naDistributions || {},
     vipContacts,
     rsmZoneOverrides: rsmZoneOverrides || {},
@@ -399,10 +397,10 @@ export default async (req) => {
     }
 
     if (action === 'saveHlSnapshot') {
-      // Hit Lists (Keg Active Customers / Keg Win Backs / Bottleshop Gaps / Bottleshop Win Backs /
-      // On Prem Carton & Events) — one whole-quarter replace per generate/regenerate, not a
-      // field-by-field merge: the client computes all 5 lists' membership in one pass
-      // (hlGenerateSnapshot) and sends the complete {kegActive, kegWinBacks, bottleshopGaps,
+      // Hit Lists (Keg Active Customers / Keg Win Backs / Bottleshops Never Sold To / Bottleshop
+      // Win Backs / On Prem Carton & Events) — one whole-quarter replace per generate/regenerate,
+      // not a field-by-field merge: the client computes all 5 lists' membership in one pass
+      // (hlGenerateSnapshot) and sends the complete {kegActive, kegWinBacks, bottleshopNeverSold,
       // bottleshopWinBacks, onPremWinBacks} object for that quarter as a single unit. One read +
       // one write, same shape as saveRsmTargetsBulk above, so two colleagues generating at close to
       // the same time can't race each other into a half-written result.
@@ -448,33 +446,6 @@ export default async (req) => {
       const next = current.filter((a) => a.id !== id);
       await s.setJSON('activations', next);
       return json({ ok: true, activations: next });
-    }
-
-    if (action === 'saveTargetCustomer') {
-      // The quarterly "who are we going after" list for kegs/cartons. Guard against a duplicate
-      // add server-side too (not just client-side), in case two reps race to add the same
-      // customer within the same quarter/bucket. "Onboarded" status is NOT stored — it's computed
-      // live on the client from sales data (active in the current purchase cycle), so there's
-      // nothing to persist here beyond who nominated the target and when.
-      const { outletId, rsm, quarterKey, bucket, updatedBy } = payload;
-      const current = (await s.get('targetCustomers', { type: 'json' })) || [];
-      const dup = current.find((t) => t.outletId === outletId && t.quarterKey === quarterKey && t.bucket === bucket);
-      if (dup) return json({ ok: true, id: dup.id, targetCustomers: current });
-      const newId = 'tc_' + Date.now() + '_' + Math.round(Math.random() * 10000);
-      current.push({
-        id: newId, rsm, quarterKey, bucket, outletId,
-        addedBy: updatedBy, addedAt: now,
-      });
-      await s.setJSON('targetCustomers', current);
-      return json({ ok: true, id: newId, targetCustomers: current });
-    }
-
-    if (action === 'deleteTargetCustomer') {
-      const { id } = payload;
-      const current = (await s.get('targetCustomers', { type: 'json' })) || [];
-      const next = current.filter((t) => t.id !== id);
-      await s.setJSON('targetCustomers', next);
-      return json({ ok: true, targetCustomers: next });
     }
 
     if (action === 'saveWeightKg') {

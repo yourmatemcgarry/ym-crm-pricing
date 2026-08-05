@@ -408,20 +408,16 @@
 <nav class="tabs">
   <span class="tab-group-label"><span class="dot" style="background:var(--grp-rsm);"></span>RSM Tools</span>
   <button class="tab-btn" data-tab="performance" data-group="rsm">Team Dashboard</button>
-  <button class="tab-btn active" data-tab="grid" data-group="rsm">Customer Pricing</button>
-  <button class="tab-btn" data-tab="tempdeals" data-group="rsm">Temporary Deals</button>
-  <button class="tab-btn" data-tab="activetemp" data-group="rsm">Active Temp Deals</button>
-  <button class="tab-btn" data-tab="summary" data-group="rsm">Customer Details</button>
-  <button class="tab-btn" data-tab="newcustomers" data-group="rsm">New Customers</button>
-  <button class="tab-btn" data-tab="familygroups" data-group="rsm">Family Groups</button>
-  <button class="tab-btn" data-tab="margin" data-group="rsm">Margin Calculator - Venues (On Prem)</button>
-  <button class="tab-btn" data-tab="offpremise" data-group="rsm">Margin Calculator - Bottleshops (Off Prem)</button>
-  <button class="tab-btn" data-tab="customerexplorer" data-group="rsm">Customer List Explorer</button>
-  <button class="tab-btn" data-tab="targetcustomers" data-group="rsm">Target Customers</button>
   <button class="tab-btn" data-tab="atrisk" data-group="rsm">Listings Report</button>
-  <button class="tab-btn" data-tab="bannergaps" data-group="rsm">Banner Gap Report</button>
   <button class="tab-btn" data-tab="hitlists" data-group="rsm">Hit Lists</button>
   <button class="tab-btn" data-tab="activations" data-group="rsm">Activations</button>
+  <button class="tab-btn" data-tab="customerexplorer" data-group="rsm">Customer List Explorer</button>
+  <button class="tab-btn active" data-tab="grid" data-group="rsm">Customer Pricing</button>
+  <button class="tab-btn" data-tab="newcustomers" data-group="rsm">New Customers</button>
+  <button class="tab-btn" data-tab="margin" data-group="rsm">Margin Calculator - Venues (On Prem)</button>
+  <button class="tab-btn" data-tab="offpremise" data-group="rsm">Margin Calculator - Bottleshops (Off Prem)</button>
+  <button class="tab-btn" data-tab="bannergaps" data-group="rsm">Banner Gap Report</button>
+  <button class="tab-btn" data-tab="summary" data-group="rsm">Customer Details</button>
 
   <span class="tab-group-label"><span class="dot" style="background:var(--grp-mgmt);"></span>Management Tools</span>
   <button class="tab-btn" data-tab="prodprices" data-group="mgmt">Product List Prices</button>
@@ -432,6 +428,7 @@
   <button class="tab-btn" data-tab="colesww" data-group="mgmt">Coles &amp; Woolworths</button>
   <button class="tab-btn" data-tab="totalvolume" data-group="mgmt">Total Volume</button>
   <button class="tab-btn" data-tab="exportemails" data-group="mgmt">Export Emails</button>
+  <button class="tab-btn" data-tab="familygroups" data-group="mgmt">Family Groups</button>
   <button class="tab-btn" data-tab="datarefresh" data-group="mgmt">Data Refresh</button>
 
   <span class="tab-group-label"><span class="dot" style="background:var(--grp-supply);"></span>Supply Chain Tools</span>
@@ -611,95 +608,6 @@
         <table class="datatable">
           <thead><tr><th class="center">Enabled</th><th>SKU group</th><th>Format</th><th>Pack sizes (cartons only)</th><th class="num-cell">List price</th><th class="num-cell">Weight</th><th>Deal price reference (for invoicing)</th><th>Updated</th></tr></thead>
           <tbody id="pp_body"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= TEMPORARY DEALS ================= -->
-  <div class="tabpage" id="tab-tempdeals">
-    <div class="panel">
-      <h2>Add a temporary deal</h2>
-      <div class="formgrid">
-        <div class="fld autocomplete">
-          <label>Customer</label>
-          <input id="td_outletSearch" placeholder="Search customer…" autocomplete="off">
-          <div class="ac-results" id="td_outletResults"></div>
-          <input type="hidden" id="td_outletId">
-        </div>
-        <div class="fld">
-          <label>SKU group</label>
-          <select id="td_groupId"><option value="">Select…</option></select>
-        </div>
-        <div class="fld">
-          <label>Deal</label>
-          <select id="td_dealX" class="dealselect">
-            <option value="0">Nil — list price</option>
-            <option value="custom">Custom…</option>
-          </select>
-          <div class="hint" id="td_dealHint">Pick a SKU group first to see its standard deals.</div>
-        </div>
-        <div class="fld" id="td_customWrap" style="display:none;"><label>Custom (X+1)</label><input id="td_dealCustom" type="number" step="1"></div>
-        <div class="fld"><label>Start date</label><input id="td_start" type="date"></div>
-        <div class="fld"><label>End date</label><input id="td_end" type="date"></div>
-        <div class="fld"><label>Notes</label><input id="td_notes" placeholder="Optional…"></div>
-      </div>
-      <div class="rowflex" style="margin-top:12px;">
-        <button class="btn" id="td_saveBtn" onclick="saveTempDeal()">Save temporary deal</button>
-        <button class="btn secondary" onclick="resetTempDealForm()">Clear form</button>
-        <span class="hint" id="td_saveMsg"></span>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="rowflex" style="justify-content:space-between;">
-        <h2 style="margin:0;">All temporary deals <span class="muted" id="td_count" style="font-weight:400;"></span></h2>
-        <div class="rowflex">
-          <select id="td_statusFilter">
-            <option value="">All statuses</option>
-            <option value="active">Active</option>
-            <option value="upcoming">Upcoming</option>
-            <option value="expired">Expired</option>
-          </select>
-          <input id="td_search" placeholder="Search customer or SKU…" style="max-width:220px;">
-        </div>
-      </div>
-      <div class="tablewrap" style="margin-top:10px;">
-        <table class="datatable">
-          <thead><tr><th>Customer</th><th>SKU group</th><th>Deal</th><th>Start</th><th>End</th><th>Status</th><th>Notes</th><th>Updated</th><th class="no-print">Action</th></tr></thead>
-          <tbody id="td_body"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= ACTIVE TEMP DEALS ================= -->
-  <div class="tabpage" id="tab-activetemp">
-    <div class="cards" id="activeTempCards"></div>
-    <div class="panel no-print">
-      <div class="filters">
-        <div><label>Customer / SKU</label><input id="at_search" placeholder="Search…"></div>
-        <div><label>RSM</label><select id="at_rsm"><option value="">All</option></select></div>
-        <div><label>Ending within</label>
-          <select id="at_endingWithin">
-            <option value="">Any time</option>
-            <option value="7">Next 7 days</option>
-            <option value="14">Next 14 days</option>
-            <option value="30">Next 30 days</option>
-          </select>
-        </div>
-      </div>
-    </div>
-    <div class="panel">
-      <div class="rowflex" style="justify-content:space-between;">
-        <h2 style="margin:0;">Currently active temporary deals <span class="muted" id="at_count" style="font-weight:400;"></span></h2>
-        <button class="btn secondary no-print" onclick="window.print()">Print</button>
-      </div>
-      <div class="hint" style="margin-bottom:8px;">Sorted by soonest-expiring first, so you can catch deals that need renewing or reverting.</div>
-      <div class="tablewrap">
-        <table class="datatable">
-          <thead><tr><th>Customer</th><th>RSM</th><th>SKU group</th><th>Deal</th><th>Started</th><th>Ends</th><th>Days left</th><th>Notes</th><th class="no-print">Action</th></tr></thead>
-          <tbody id="at_body"></tbody>
         </table>
       </div>
     </div>
@@ -913,26 +821,6 @@
     </div>
     <div class="hint" id="perf_printSummary" style="margin:0 0 10px;"></div>
     <div id="perf_detail"></div>
-  </div>
-
-  <!-- ================= TARGET CUSTOMERS ================= -->
-  <div class="tabpage" id="tab-targetcustomers">
-    <div class="panel no-print">
-      <div class="rowflex" style="justify-content:space-between; flex-wrap:wrap; gap:14px;">
-        <div class="fld" style="margin:0; min-width:220px;">
-          <label>View</label>
-          <select id="tc_scope"></select>
-        </div>
-        <div class="qnav">
-          <button class="qstep" onclick="stepPerfQuarter(-1)" title="Previous quarter">‹</button>
-          <div class="qlabel" id="tc_qlabel"></div>
-          <button class="qstep" onclick="stepPerfQuarter(1)" title="Next quarter">›</button>
-          <button class="btn small secondary" onclick="jumpPerfCurrentQuarter()">Current quarter</button>
-        </div>
-      </div>
-      <div class="hint" style="margin-top:8px;">Named keg &amp; carton accounts to land this quarter. Add an existing customer by searching below, or a brand new prospect via <strong>+ New customer…</strong> — that adds them once in the New Customers tab, then come back here and search for them to add as a target. Onboarded status is fully automatic: it flips on its own the moment they're actively ordering that product in the current cycle (4 weeks for kegs, 13 weeks for cartons), based on your latest sales data — no manual tick-off. Shares the same View and quarter as the Team Dashboard.</div>
-    </div>
-    <div id="tc_page_detail"></div>
   </div>
 
   <!-- ================= SET TARGETS ================= -->
@@ -1284,7 +1172,7 @@
         <button class="btn small secondary" onclick="jumpHlCurrentQuarter()">Current quarter</button>
         <button class="btn small" id="hl_generateBtn">Generate Hit Lists</button>
       </div>
-      <div class="hint" style="margin-top:8px;">Five prospecting worklists per RSM — Keg Active Customers, Keg Win Backs, Bottleshop Gaps, Bottleshop Win Backs, and On Prem Carton &amp; Events. Each list's membership is frozen at the start of the quarter (click Generate) so it stays stable while you work through it — nobody drops off the list the moment they place an order. Volume, last order date and status still update live, and a row turns green the moment a customer comes back onboard, a gap gets filled, or a prospect starts buying.</div>
+      <div class="hint" style="margin-top:8px;">Five prospecting worklists per RSM — Keg Active Customers, Keg Win Backs, Bottleshops Never Sold To, Bottleshop Win Backs, and On Prem Carton &amp; Events. Each list's membership is frozen at the start of the quarter (click Generate) so it stays stable while you work through it — nobody drops off the list the moment they place an order. Volume, last order date and status still update live, and a row turns green the moment a customer comes back onboard or a prospect starts buying.</div>
       <div class="rowflex" style="gap:14px; flex-wrap:wrap; align-items:flex-end; margin-top:10px;">
         <div class="fld" style="margin:0;"><label>RSM</label><select id="hl_rsm"></select></div>
         <div class="fld" style="margin:0;"><label>Geo tier</label>
@@ -2445,7 +2333,6 @@ let orders = []; // [ {id, outletId, lines, notes, status, runId, delivery, crea
 let deliveryRuns = []; // [ {id, name, date, truckId, stopOrder, status, startedAt, finishedAt, createdBy, createdAt, updatedBy, updatedAt} ] — shared
 let manualOutlets = {}; // keyed by outletId — customers added before they have any sales history — shared
 let customerDeliveryDetails = {}; // keyed by outletId: {accessNotes, contactName, contactPhone, preferredDay, preferredWindow, updatedBy, updatedAt} — shared
-let targetCustomers = []; // [ {id, rsm, quarterKey, bucket, outletId, addedBy, addedAt, onboarded, onboardedBy, onboardedAt} ] — shared, the quarterly "who are we going after" list for kegs/cartons, per RSM
 let naDistributions = {}; // keyed by "quarterKey|ownerGroup|groupId": {count, updatedBy, updatedAt} — shared, manually-entered store-distribution counts (Coles & Woolworths tab)
 let vipContacts = []; // [ {id, name, company, role, email, phone, source, notes, updatedBy, updatedAt} ] — shared; server-seeded once from the Feb'26 customer list import, a normal live CRUD list from then on
 let rsmZoneOverrides = {}; // { [zone]: rsmName } — shared; lets the user immediately reassign which RSM owns a zone, without waiting for the next Ontap-driven data refresh
@@ -2458,7 +2345,7 @@ let naSkuQuarterOverrides = {}; // keyed "groupId|fy|q": {value, updatedBy, upda
 let customGroups = []; // [ groupRecord,... ] — shared; brand-new SKU groups added via "Add a custom product", or split off an existing group via "Split…". Merged into `groups`/`groupOrder` by applyCustomGroups() on every data load.
 let groupMemberOverrides = {}; // { groupId: [memberId,...] } — shared; set when a Split moves one or more members out of an existing group (custom or baked). Display-only (memberDescs text) — nothing else in the app reads .members.
 let sp_currentGroupId = null; // groupId currently open in the "Split product" panel on Product List Prices — not shared, purely local UI state
-let hlSnapshots = {}; // { [quarterKey]: { [listId]: {outletIds:[...], prospectKeys:[...]?, baselineRanged:{...}?, generatedAt, generatedBy} } } — shared; one frozen membership snapshot per Hit List per quarter (Keg Active Customers / Keg Win Backs / Bottleshop Gaps / Bottleshop Win Backs / On Prem Carton & Events), generated once via hlGenerateSnapshot() and reused for the rest of that quarter. See netlify_part4.js.
+let hlSnapshots = {}; // { [quarterKey]: { [listId]: {outletIds:[...], prospectKeys:[...]?, generatedAt, generatedBy} } } — shared; one frozen membership snapshot per Hit List per quarter (Keg Active Customers / Keg Win Backs / Bottleshops Never Sold To / Bottleshop Win Backs / On Prem Carton & Events), generated once via hlGenerateSnapshot() and reused for the rest of that quarter. See netlify_part4.js.
 let hlQuarter = null; // {fy,q} — set to PERF_CURRENT_Q the first time renderHitListsPage() runs; independent of every other page's own quarter nav — not shared, purely local UI state
 let hlActiveTab = 'kegActive'; // which of the 5 Hit Lists sub-tabs is currently showing — not shared, purely local UI state
 let hlGeoMsel = null, hlBannerMsel = null, hlSkuMsel = null; // Hit Lists filter multi-selects (RSM is a plain single-select, see hl_rsm in the template) — not shared, purely local UI state
@@ -2887,8 +2774,6 @@ function buildServerPayload(fnName, args) {
     case 'deleteManualOutlet': return { id: args[0] };
     case 'saveDeliveryDetails': return { outletId: args[0], accessNotes: args[1], contactName: args[2], contactPhone: args[3], preferredDay: args[4], preferredWindow: args[5], updatedBy: args[6] };
     case 'saveContactInfo': return { outletId: args[0], email: args[1], email2: args[2], familyGroup: args[3], updatedBy: args[4] };
-    case 'saveTargetCustomer': return { outletId: args[0], rsm: args[1], quarterKey: args[2], bucket: args[3], updatedBy: args[4] };
-    case 'deleteTargetCustomer': return { id: args[0] };
     case 'saveNaDistribution': return { quarterKey: args[0], ownerGroup: args[1], groupId: args[2], count: args[3], updatedBy: args[4] };
     case 'saveVipContact':    return { contact: args[0] };
     case 'deleteVipContact':  return { id: args[0] };
@@ -2937,8 +2822,6 @@ function renderSummaryCards() {
   const enabledGroups = groupOrder.filter(gid => isGroupEnabled(gid)).length;
   const pricedGroups = Object.values(productPrices).filter(r=>r && r.listPrice > 0).length;
   const customersWithDeals = new Set(Object.keys(customerDeals).map(k=>k.split('|')[0])).size;
-  const activeTemp = tempDeals.filter(td => tempDealStatus(td)==='active').length;
-  const expiredTemp = tempDeals.filter(td => tempDealStatus(td)==='expired').length;
   const totalCustomers = Object.keys(outlets).length;
   const notUpdated = totalCustomers - Object.values(customerFlags).filter(f=>f && f.pricingUpdated).length;
 
@@ -2947,8 +2830,6 @@ function renderSummaryCards() {
     {n: pricedGroups, l:'SKU groups with list price set', cls: pricedGroups<totalGroups?'warn':''},
     {n: customersWithDeals.toLocaleString(), l:'Customers with a deal set', cls:''},
     {n: notUpdated.toLocaleString(), l:'Customers not yet marked "Priced"', cls: notUpdated>0?'warn':''},
-    {n: activeTemp, l:'Active temporary deals', cls:''},
-    {n: expiredTemp, l:'Expired temp deals (need review)', cls: expiredTemp>0?'bad':''},
   ];
   document.getElementById('summaryCards').innerHTML = cards.map(c => `
     <div class="card ${c.cls}"><div class="num">${c.n}</div><div class="lbl">${c.l}</div></div>
@@ -3773,8 +3654,10 @@ function populateGroupSelect(id) {
   });
   if ([...el.options].some(o=>o.value===keepValue)) el.value = keepValue;
 }
-function refreshGroupSelect() { populateGroupSelect('td_groupId'); populateGroupSelect('nc_dealGroupId'); }
+function refreshGroupSelect() { populateGroupSelect('nc_dealGroupId'); }
 
+// The deal picker on the New Customer / Activations forms only offers the standard tiers that
+// apply to whichever SKU group is selected (Kegs vs Cartons have different approved deals).
 function populateTempDealXOptions(bucket, keepValue, selId, hintId) {
   const sel = document.getElementById(selId || 'td_dealX');
   const hint = document.getElementById(hintId || 'td_dealHint');
@@ -3786,183 +3669,6 @@ function populateTempDealXOptions(bucket, keepValue, selId, hintId) {
   sel.innerHTML = stdDealOptionsHtml(bucket) + `<option value="custom">Custom…</option>`;
   hint.textContent = bucket === 'KEGS' ? 'Standard keg deals: 2+1, 3+1, 4+1, 5+1, 6+1, 8+1, 10+1.' : 'Standard carton deals: 3+1, 5+1, 7+1, 10+1, 15+1.';
   if (keepValue !== undefined && [...sel.options].some(o=>o.value===String(keepValue))) sel.value = String(keepValue);
-}
-
-function resetTempDealForm() {
-  document.getElementById('td_outletId').value = '';
-  document.getElementById('td_outletSearch').value = '';
-  document.getElementById('td_groupId').value = '';
-  populateTempDealXOptions(null);
-  document.getElementById('td_dealCustom').value = '';
-  document.getElementById('td_customWrap').style.display = 'none';
-  document.getElementById('td_start').value = '';
-  document.getElementById('td_end').value = '';
-  document.getElementById('td_notes').value = '';
-  document.getElementById('td_saveMsg').textContent = '';
-}
-function saveTempDeal() {
-  const outletId = document.getElementById('td_outletId').value;
-  const groupId = document.getElementById('td_groupId').value;
-  if (!outletId || !outlets[outletId]) { toast('Please select a customer.'); return; }
-  if (!groupId || !groups[groupId]) { toast('Please select a SKU group.'); return; }
-  const dealSel = document.getElementById('td_dealX').value;
-  const dealX = dealSel === 'custom' ? (parseFloat(document.getElementById('td_dealCustom').value)||0) : parseFloat(dealSel);
-  if (!dealX || dealX <= 0) { toast('Please choose a deal (Nil does not need a temporary entry).'); return; }
-  const start = document.getElementById('td_start').value;
-  const end = document.getElementById('td_end').value;
-  if (!start || !end) { toast('Please set both a start and end date.'); return; }
-  if (end < start) { toast('End date must be after start date.'); return; }
-  const notes = document.getElementById('td_notes').value.trim();
-
-  const saveBtn = document.getElementById('td_saveBtn');
-  saveBtn.disabled = true;
-  document.getElementById('td_saveMsg').textContent = 'Saving…';
-
-  callServer('saveTempDeal', [null, outletId, groupId, dealX, start, end, notes, currentUserEmail], (newId) => {
-    tempDeals.push({ id: newId, outletId, groupId, dealX, start, end, notes, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() });
-    renderSummaryCards();
-    renderTempDealsTable();
-    renderActiveTempDealsPage();
-    renderGrid();
-    if (currentSummaryOutlet === outletId) renderCustomerSummaryPage(outletId);
-    document.getElementById('td_saveMsg').textContent = `Saved at ${new Date().toLocaleTimeString()}`;
-    toast('Temporary deal saved.');
-    resetTempDealForm();
-    saveBtn.disabled = false;
-  }, () => {
-    saveBtn.disabled = false;
-    document.getElementById('td_saveMsg').textContent = '';
-  });
-}
-function renderTempDealsTable() {
-  const q = (document.getElementById('td_search').value||'').trim().toLowerCase();
-  const statusFilter = document.getElementById('td_statusFilter').value;
-  let list = tempDeals.slice();
-  list = list.map(td => ({...td, _status: tempDealStatus(td)}));
-  if (statusFilter) list = list.filter(td => td._status === statusFilter);
-  if (q) list = list.filter(td => {
-    const o = outlets[td.outletId] || {}; const g = groups[td.groupId] || {};
-    return (o.name||'').toLowerCase().includes(q) || (g.label||'').toLowerCase().includes(q);
-  });
-  list.sort((a,b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-  document.getElementById('td_count').textContent = `(${list.length})`;
-  const body = document.getElementById('td_body');
-  if (list.length===0) { body.innerHTML = `<tr><td colspan="9"><div class="empty">No temporary deals yet.</div></td></tr>`; return; }
-  const statusBadge = s => s==='active' ? '<span class="badge blue">Active</span>' : s==='upcoming' ? '<span class="badge grey">Upcoming</span>' : '<span class="badge amber">Expired</span>';
-  body.innerHTML = list.map(td => {
-    const o = outlets[td.outletId] || {}; const g = groups[td.groupId] || {};
-    return `<tr>
-      <td>${escapeHtml(o.name||td.outletId)}</td>
-      <td>${escapeHtml(g.label||td.groupId)} <span class="badge ${g.format?bucketOf(g).toLowerCase():''}">${escapeHtml(g.formatLabel||g.format||'')}</span></td>
-      <td>${dealLabel(td.dealX)}</td>
-      <td>${fmtDate(td.start)}</td>
-      <td>${fmtDate(td.end)}</td>
-      <td>${statusBadge(td._status)}</td>
-      <td>${escapeHtml(td.notes||'')}</td>
-      <td class="muted">${escapeHtml(td.updatedBy||'')}<br>${new Date(td.updatedAt).toLocaleDateString('en-AU')}</td>
-      <td class="no-print rowflex">
-        <button class="btn small secondary" onclick="editTempDeal('${td.id}')">Edit</button>
-        <button class="btn small danger" onclick="deleteTempDeal('${td.id}')">Delete</button>
-      </td>
-    </tr>`;
-  }).join('');
-}
-function editTempDeal(id) {
-  const td = tempDeals.find(t=>t.id===id);
-  if (!td) return;
-  document.getElementById('td_outletId').value = td.outletId;
-  document.getElementById('td_outletSearch').value = outlets[td.outletId] ? outletLabel(outlets[td.outletId]) : td.outletId;
-  document.getElementById('td_groupId').value = td.groupId;
-  const bucket = groups[td.groupId] ? bucketOf(groups[td.groupId]) : null;
-  populateTempDealXOptions(bucket, td.dealX);
-  const stdOptions = dealSetFor(bucket).map(String);
-  if (stdOptions.includes(String(td.dealX))) {
-    document.getElementById('td_dealX').value = String(td.dealX);
-    document.getElementById('td_customWrap').style.display = 'none';
-  } else {
-    document.getElementById('td_dealX').value = 'custom';
-    document.getElementById('td_dealCustom').value = td.dealX;
-    document.getElementById('td_customWrap').style.display = 'block';
-  }
-  document.getElementById('td_start').value = td.start;
-  document.getElementById('td_end').value = td.end;
-  document.getElementById('td_notes').value = td.notes || '';
-  // Editing removes the old server-side record; re-saving the form creates a fresh one.
-  tempDeals = tempDeals.filter(t=>t.id!==id);
-  renderTempDealsTable();
-  renderActiveTempDealsPage();
-  renderSummaryCards();
-  renderGrid();
-  callServer('deleteTempDeal', [id]);
-  window.scrollTo({top:0, behavior:'smooth'});
-}
-function deleteTempDeal(id) {
-  if (!confirm('Delete this temporary deal?')) return;
-  const td = tempDeals.find(t=>t.id===id);
-  tempDeals = tempDeals.filter(t=>t.id!==id);
-  renderSummaryCards();
-  renderTempDealsTable();
-  renderActiveTempDealsPage();
-  renderGrid();
-  if (td && currentSummaryOutlet === td.outletId) renderCustomerSummaryPage(td.outletId);
-  toast('Deleting…');
-  callServer('deleteTempDeal', [id], () => toast('Temporary deal deleted.'));
-}
-
-// ===================== ACTIVE TEMP DEALS =====================
-function renderActiveTempDealsPage() {
-  const cardsEl = document.getElementById('activeTempCards');
-  if (!cardsEl) return;
-  const q = (document.getElementById('at_search').value||'').trim().toLowerCase();
-  const rsmFilter = document.getElementById('at_rsm').value;
-  const endingWithin = document.getElementById('at_endingWithin').value;
-  const today = todayDate();
-
-  let active = tempDeals.filter(td => tempDealStatus(td) === 'active').map(td => {
-    const end = new Date(td.end+'T00:00:00');
-    const daysLeft = Math.round((end - today) / 86400000);
-    return { ...td, daysLeft };
-  });
-
-  if (q) active = active.filter(td => {
-    const o = outlets[td.outletId] || {}; const g = groups[td.groupId] || {};
-    return (o.name||'').toLowerCase().includes(q) || (g.label||'').toLowerCase().includes(q);
-  });
-  if (rsmFilter) active = active.filter(td => (outlets[td.outletId]||{}).rsm === rsmFilter);
-  if (endingWithin) active = active.filter(td => td.daysLeft <= Number(endingWithin));
-
-  active.sort((a,b) => a.daysLeft - b.daysLeft);
-
-  const soon = active.filter(td => td.daysLeft <= 7).length;
-  cardsEl.innerHTML = `
-    <div class="card"><div class="num">${active.length}</div><div class="lbl">Active temporary deals${(q||rsmFilter||endingWithin)?' (filtered)':''}</div></div>
-    <div class="card ${soon>0?'warn':''}"><div class="num">${soon}</div><div class="lbl">Ending within 7 days</div></div>
-  `;
-
-  document.getElementById('at_count').textContent = `(${active.length})`;
-  const body = document.getElementById('at_body');
-  if (active.length === 0) {
-    body.innerHTML = `<tr><td colspan="9"><div class="empty">No active temporary deals right now.</div></td></tr>`;
-    return;
-  }
-  body.innerHTML = active.map(td => {
-    const o = outlets[td.outletId] || {}; const g = groups[td.groupId] || {};
-    const soonBadge = td.daysLeft <= 7 ? `<span class="badge amber">${td.daysLeft} day${td.daysLeft===1?'':'s'} left</span>` : `<span class="badge blue">${td.daysLeft} days left</span>`;
-    return `<tr>
-      <td>${escapeHtml(o.name||td.outletId)}</td>
-      <td>${escapeHtml(o.rsm||'—')}</td>
-      <td>${escapeHtml(g.label||td.groupId)} <span class="badge ${g.format?bucketOf(g).toLowerCase():''}">${escapeHtml(g.formatLabel||g.format||'')}</span></td>
-      <td>${dealLabel(td.dealX)}</td>
-      <td>${fmtDate(td.start)}</td>
-      <td>${fmtDate(td.end)}</td>
-      <td>${soonBadge}</td>
-      <td>${escapeHtml(td.notes||'')}</td>
-      <td class="no-print rowflex">
-        <button class="btn small secondary" onclick="document.querySelector('.tab-btn[data-tab=tempdeals]').click(); editTempDeal('${td.id}')">Edit</button>
-        <button class="btn small danger" onclick="deleteTempDeal('${td.id}')">Delete</button>
-      </td>
-    </tr>`;
-  }).join('');
 }
 
 // ===================== CUSTOMER SUMMARY =====================
@@ -5464,197 +5170,6 @@ function perfDirectDeliveryTableHtml(list) {
   </table></div>`;
 }
 
-// ===================== TARGET CUSTOMERS =====================
-// The quarterly "who are we going after" list for kegs and cartons — a rep picks named accounts
-// at the start of the quarter (existing customers they've never sold that product to, or brand
-// new prospects added via the New Customers tab) and ticks each one off as it's onboarded.
-// Ownership is always derived from the customer's own `rsm` field (same as everywhere else in
-// the app), not from whichever RSM scope happens to be selected when it's added — so "Josh's
-// target customers" always means "target customers whose outlet record says Josh". Shared across
-// the team via the Netlify Function — the server is the source of truth, so every mutation here
-// replaces the local `targetCustomers` array with the server's authoritative response.
-function targetCustomersFor(scope, quarterKey, bucket) {
-  return targetCustomers.filter(t => t.quarterKey === quarterKey && t.bucket === bucket && (scope === PERF_ALL || t.rsm === scope));
-}
-// A target customer counts as "onboarded" once they're actively ordering that bucket within the
-// current purchase cycle (4 weeks for kegs, 13 weeks for cartons) as of `refEndDayIdx` — the same
-// "live during the quarter, fixed as of quarter-end once it's over" reference date used for
-// Listings/charts elsewhere on this page. This is fully automatic: it flips on its own the next
-// time sales data is refreshed, with no manual tick-off step for the rep.
-function targetCustomerOnboarded(t, refEndDayIdx) {
-  const cycleDays = t.bucket === 'KEGS' ? 28 : 91;
-  const startD = refEndDayIdx - cycleDays + 1;
-  for (const gid in groups) {
-    if (bucketOf(groups[gid]) !== t.bucket) continue;
-    const arr = dailyVolume[t.outletId + '|' + gid];
-    if (!arr) continue;
-    for (let i = 0; i < arr.length; i += 2) {
-      if (arr[i] >= startD && arr[i] <= refEndDayIdx) return true;
-    }
-  }
-  return false;
-}
-function addTargetCustomer(bucket) {
-  const hiddenId = bucket === 'KEGS' ? 'tc_kegOutletId' : 'tc_cartonOutletId';
-  const searchId = bucket === 'KEGS' ? 'tc_kegSearch' : 'tc_cartonSearch';
-  const outletId = document.getElementById(hiddenId).value;
-  if (!outletId || !outlets[outletId]) { toast('Search and select a customer first.'); return; }
-  const { fy, q } = perfQuarter;
-  const quarterKey = quarterKeyOf(fy, q);
-  const rsm = outlets[outletId].rsm || 'Unassigned';
-  if (targetCustomers.some(t => t.outletId === outletId && t.quarterKey === quarterKey && t.bucket === bucket)) {
-    toast(`${outlets[outletId].name} is already a ${bucket === 'KEGS' ? 'keg' : 'carton'} target for this quarter.`);
-    return;
-  }
-  callServer('saveTargetCustomer', [outletId, rsm, quarterKey, bucket, currentUserEmail], (data) => {
-    targetCustomers = data.targetCustomers;
-    document.getElementById(hiddenId).value = '';
-    document.getElementById(searchId).value = '';
-    renderTargetCustomersPage();
-    renderPerfPage();
-    toast('Target customer added.');
-  });
-}
-function removeTargetCustomer(id) {
-  const t = targetCustomers.find(x => x.id === id);
-  if (!t) return;
-  if (!confirm(`Remove ${outlets[t.outletId] ? outlets[t.outletId].name : t.outletId} from this quarter's target list?`)) return;
-  callServer('deleteTargetCustomer', [id], (data) => {
-    targetCustomers = data.targetCustomers;
-    renderTargetCustomersPage();
-    renderPerfPage();
-  });
-}
-// Sends the rep to the New Customers tab (reusing that tool entirely rather than duplicating the
-// add-customer form here) with whatever they'd typed in the target-customer search box carried
-// over as a starting point for the name field.
-function jumpToAddNewCustomerForTarget(bucket) {
-  const searchId = bucket === 'KEGS' ? 'tc_kegSearch' : 'tc_cartonSearch';
-  const typed = (document.getElementById(searchId).value || '').trim();
-  const tabBtn = document.querySelector('.tab-btn[data-tab=newcustomers]');
-  if (tabBtn) tabBtn.click();
-  resetNewCustomerForm();
-  if (typed) document.getElementById('nc_name').value = typed;
-  document.getElementById('nc_name').focus();
-  toast('Add their details here, then come back to Target Customers and search for them to add as a target.');
-}
-// Sorts a target-customer list so pending accounts bubble to the top (the ones needing action),
-// onboarded ones sink to the bottom, each group alphabetical by customer name.
-function sortTargetCustomerList(list, refEndDayIdx) {
-  return list.slice().sort((a,b) => {
-    const ao = targetCustomerOnboarded(a, refEndDayIdx), bo = targetCustomerOnboarded(b, refEndDayIdx);
-    if (ao !== bo) return ao ? 1 : -1;
-    return (outlets[a.outletId]?.name||'').localeCompare(outlets[b.outletId]?.name||'');
-  });
-}
-// FULL management panel — search/add a target, remove one, see live onboarded status. Lives on
-// the dedicated Target Customers tab.
-function perfTargetCustomersPanelHtml(bucket, scope, quarterKey, refEndDayIdx) {
-  const list = sortTargetCustomerList(targetCustomersFor(scope, quarterKey, bucket), refEndDayIdx);
-  const onboardedCount = list.filter(t => targetCustomerOnboarded(t, refEndDayIdx)).length;
-  const searchId = bucket === 'KEGS' ? 'tc_kegSearch' : 'tc_cartonSearch';
-  const resultsId = bucket === 'KEGS' ? 'tc_kegResults' : 'tc_cartonResults';
-  const hiddenId = bucket === 'KEGS' ? 'tc_kegOutletId' : 'tc_cartonOutletId';
-  const showRsmCol = scope === PERF_ALL;
-  return `
-    <div class="hint" style="margin-bottom:8px;"><strong>${onboardedCount} of ${list.length}</strong> onboarded this quarter.</div>
-    <div class="rowflex" style="gap:8px; margin-bottom:10px; align-items:flex-start; flex-wrap:wrap;">
-      <div class="fld autocomplete" style="flex:1; min-width:200px; margin:0;">
-        <input id="${searchId}" placeholder="Search customer to add as a target…" autocomplete="off">
-        <div class="ac-results" id="${resultsId}"></div>
-        <input type="hidden" id="${hiddenId}">
-      </div>
-      <button class="btn small" onclick="addTargetCustomer('${bucket}')">+ Add target</button>
-      <button class="btn small secondary" onclick="jumpToAddNewCustomerForTarget('${bucket}')">+ New customer…</button>
-    </div>
-    ${!list.length ? '<div class="empty">No target customers set for this quarter yet.</div>' : `
-    <div class="tablewrap">
-      <table class="datatable">
-        <thead><tr>${showRsmCol?'<th>RSM</th>':''}<th>Customer</th><th>Added</th><th class="num-cell">Status</th><th></th></tr></thead>
-        <tbody>${list.map(t => {
-          const o = outlets[t.outletId] || {};
-          const onboarded = targetCustomerOnboarded(t, refEndDayIdx);
-          return `<tr${onboarded?' style="background:var(--green-bg);"':''}>
-            ${showRsmCol?`<td>${escapeHtml(t.rsm||'—')}</td>`:''}
-            <td>${escapeHtml(o.name||t.outletId)}</td>
-            <td class="muted" style="font-size:10.5px;">${escapeHtml(t.addedBy||'—')} · ${fmtDate((t.addedAt||'').slice(0,10))}</td>
-            <td class="num-cell"><span class="badge ${onboarded?'green':'grey'}">${onboarded?'Onboarded':'Pending'}</span></td>
-            <td><button class="btn small secondary" onclick="removeTargetCustomer('${t.id}')" title="Remove">✕</button></td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>
-    </div>`}
-  `;
-}
-// LIGHTWEIGHT read-only summary — no search/add/remove controls — shown on the Team Dashboard
-// under the Top 20 customer lists, so reps can see quarterly target progress without leaving
-// the page. Onboarded rows are colour-highlighted; the same live/automatic status as the full
-// management panel on the Target Customers tab.
-function perfTargetCustomersSummaryHtml(bucket, scope, quarterKey, refEndDayIdx) {
-  const list = sortTargetCustomerList(targetCustomersFor(scope, quarterKey, bucket), refEndDayIdx);
-  if (!list.length) return '<div class="empty">No target customers set for this quarter yet.</div>';
-  const onboardedCount = list.filter(t => targetCustomerOnboarded(t, refEndDayIdx)).length;
-  const showRsmCol = scope === PERF_ALL;
-  return `
-    <div class="hint" style="margin-bottom:8px;"><strong>${onboardedCount} of ${list.length}</strong> onboarded this quarter.</div>
-    <div class="tablewrap no-max-height">
-      <table class="datatable">
-        <thead><tr>${showRsmCol?'<th>RSM</th>':''}<th>Customer</th><th class="num-cell">Status</th></tr></thead>
-        <tbody>${list.map(t => {
-          const o = outlets[t.outletId] || {};
-          const onboarded = targetCustomerOnboarded(t, refEndDayIdx);
-          return `<tr${onboarded?' style="background:var(--green-bg);"':''}>
-            ${showRsmCol?`<td>${escapeHtml(t.rsm||'—')}</td>`:''}
-            <td>${escapeHtml(o.name||t.outletId)}</td>
-            <td class="num-cell"><span class="badge ${onboarded?'green':'grey'}">${onboarded?'Onboarded':'Pending'}</span></td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>
-    </div>
-  `;
-}
-function renderTargetCustomersPage() {
-  const scope = perfScope;
-  const { fy, q } = perfQuarter;
-  const qKey = quarterKeyOf(fy, q);
-  const [qStart, qEndExcl] = quarterBoundsOf(fy, q);
-  const qEndIncl = new Date(qEndExcl.getTime() - 86400000);
-  const isCurrentQuarter = (fy === PERF_CURRENT_Q.fy && q === PERF_CURRENT_Q.q);
-  const referenceEndDate = isCurrentQuarter ? PERF_TODAY : qEndIncl;
-  const refEndDayIdx = dayIndexOf(referenceEndDate);
-
-  document.getElementById('tc_qlabel').textContent = quarterLabelOf(fy, q);
-  const scopeSel = document.getElementById('tc_scope');
-  if (scopeSel && scopeSel.value !== scope) scopeSel.value = scope;
-
-  document.getElementById('tc_page_detail').innerHTML = `
-    <div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">
-      <div class="panel" style="flex:1; min-width:380px;">
-        <h3>Keg Target Customers <span class="badge kegs" style="font-size:9.5px;">this quarter</span></h3>
-        <div class="hint" style="margin-bottom:4px;">Named accounts to land this quarter — search an existing customer or add a brand new one, and they'll show as Onboarded automatically once sales data shows them actively ordering.</div>
-        ${perfTargetCustomersPanelHtml('KEGS', scope, qKey, refEndDayIdx)}
-      </div>
-      <div class="panel" style="flex:1; min-width:380px;">
-        <h3>Carton Target Customers <span class="badge cartons" style="font-size:9.5px;">this quarter</span></h3>
-        <div class="hint" style="margin-bottom:4px;">Named accounts to land this quarter — search an existing customer or add a brand new one, and they'll show as Onboarded automatically once sales data shows them actively ordering.</div>
-        ${perfTargetCustomersPanelHtml('CARTONS', scope, qKey, refEndDayIdx)}
-      </div>
-    </div>
-  `;
-
-  // The search boxes above are inside the innerHTML block just replaced, so their DOM nodes are
-  // brand new every render — re-wire the autocomplete on them each time (cheap, and the only
-  // correct option since the old listeners went away with the old nodes).
-  setupAutocomplete('tc_kegSearch', 'tc_kegResults', outletList, outletLabel, id => {
-    document.getElementById('tc_kegOutletId').value = id;
-    document.getElementById('tc_kegSearch').value = outlets[id].name;
-  });
-  setupAutocomplete('tc_cartonSearch', 'tc_cartonResults', outletList, outletLabel, id => {
-    document.getElementById('tc_cartonOutletId').value = id;
-    document.getElementById('tc_cartonSearch').value = outlets[id].name;
-  });
-}
-
 function renderPerfPage() {
   const scope = perfScope;
   const { fy, q } = perfQuarter;
@@ -5805,38 +5320,22 @@ function renderPerfPage() {
         ${perfRankListHtml(cartonTop, ' L', 'CARTONS', refEndDayIdx-90, refEndDayIdx, refEndDayIdx-181, refEndDayIdx-91)}
       </div>
     </div>
-    <div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">
-      <div class="panel" style="flex:1; min-width:340px;">
-        <h3>Keg Target Customers <span class="badge kegs" style="font-size:9.5px;">this quarter</span></h3>
-        <div class="hint" style="margin-bottom:4px;">Managed on the <strong>Target Customers</strong> tab. Onboarded status is automatic — updates the moment sales data shows them actively ordering.</div>
-        ${perfTargetCustomersSummaryHtml('KEGS', scope, qKey, refEndDayIdx)}
-      </div>
-      <div class="panel" style="flex:1; min-width:340px;">
-        <h3>Carton Target Customers <span class="badge cartons" style="font-size:9.5px;">this quarter</span></h3>
-        <div class="hint" style="margin-bottom:4px;">Managed on the <strong>Target Customers</strong> tab. Onboarded status is automatic — updates the moment sales data shows them actively ordering.</div>
-        ${perfTargetCustomersSummaryHtml('CARTONS', scope, qKey, refEndDayIdx)}
-      </div>
-    </div>
   `;
 }
 
-// Team Dashboard and the Target Customers tab share the same scope/quarter state (perfScope,
-// perfQuarter) so switching RSM or quarter in either place keeps both in sync — every setter
-// below re-renders both pages.
+// Team Dashboard's scope/quarter state (perfScope, perfQuarter) — every setter below re-renders
+// the page.
 function stepPerfQuarter(delta) {
   perfQuarter = shiftQuarter(perfQuarter.fy, perfQuarter.q, delta);
   renderPerfPage();
-  renderTargetCustomersPage();
 }
 function jumpPerfCurrentQuarter() {
   perfQuarter = { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q };
   renderPerfPage();
-  renderTargetCustomersPage();
 }
 function setPerfScope(v) {
   perfScope = v;
   renderPerfPage();
-  renderTargetCustomersPage();
 }
 function exportPerfPDF() { window.print(); }
 
@@ -6207,14 +5706,12 @@ function saveActivation() {
     // the activation referencing it.
     const existingActive = activeTempDealFor(outletId, groupId);
     if (existingActive && existingActive.id !== priorTempDealId) {
-      toast(`Heads up: ${outlets[outletId].name} already has an active temporary deal on this SKU — check Temporary Deals for overlaps.`);
+      toast(`Heads up: ${outlets[outletId].name} already has an active linked deal on this SKU from another activation — check Activations for overlaps.`);
     }
     callServer('saveTempDeal', [priorTempDealId, outletId, groupId, dealX, start, end, `Activation: ${activationType}`, currentUserEmail], (tdId) => {
       tempDeals = tempDeals.filter(t=>t.id!==tdId);
       tempDeals.push({ id: tdId, outletId, groupId, dealX, start, end, notes: `Activation: ${activationType}`, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() });
       renderSummaryCards();
-      renderTempDealsTable();
-      renderActiveTempDealsPage();
       renderGrid();
       if (currentSummaryOutlet === outletId) renderCustomerSummaryPage(outletId);
       finishSaveActivation(tdId);
@@ -6223,8 +5720,6 @@ function saveActivation() {
     // Deal was cleared to Nil, or the SKU was removed — drop the previously linked temp deal.
     tempDeals = tempDeals.filter(t=>t.id!==priorTempDealId);
     renderSummaryCards();
-    renderTempDealsTable();
-    renderActiveTempDealsPage();
     renderGrid();
     callServer('deleteTempDeal', [priorTempDealId]);
     finishSaveActivation(null);
@@ -6324,8 +5819,6 @@ function deleteActivation(id) {
   if (a && a.tempDealId) {
     tempDeals = tempDeals.filter(t=>t.id!==a.tempDealId);
     renderSummaryCards();
-    renderTempDealsTable();
-    renderActiveTempDealsPage();
     renderGrid();
     if (currentSummaryOutlet === a.outletId) renderCustomerSummaryPage(a.outletId);
     callServer('deleteTempDeal', [a.tempDealId]);
@@ -10190,7 +9683,7 @@ function exportBgComparePDF() {
 
 // ===================== HIT LISTS =====================
 // Five per-RSM prospecting worklists, each its own sub-tab within one Hit Lists page: Keg Active
-// Customers, Keg Win Backs, Bottleshop Gaps, Bottleshop Win Backs, and On Prem Carton & Events.
+// Customers, Keg Win Backs, Bottleshops Never Sold To, Bottleshop Win Backs, and On Prem Carton & Events.
 // Every list's MEMBERSHIP (which outlets appear) is frozen once per financial quarter via
 // hlGenerateSnapshot() — an explicit, auditable action (like every other "Apply"/"Set" button in
 // this app) rather than something that silently recomputes on every render, so an RSM working
@@ -10202,7 +9695,7 @@ function exportBgComparePDF() {
 const HL_LISTS = [
   { id: 'kegActive',          label: 'Keg Active Customers' },
   { id: 'kegWinBacks',        label: 'Keg Win Backs' },
-  { id: 'bottleshopGaps',     label: 'Bottleshop Gaps' },
+  { id: 'bottleshopNeverSold',label: 'Bottleshops Never Sold To' },
   { id: 'bottleshopWinBacks', label: 'Bottleshop Win Backs' },
   { id: 'onPremWinBacks',     label: 'On Prem Carton & Events' },
 ];
@@ -10210,20 +9703,11 @@ const HL_WIN_BACK_TOP_N = 50;
 
 function hlCycleDays(bucket) { return bucket === 'KEGS' ? 28 : 91; }
 
-// "Off Premise" (bottleshop) or "Integrated" — the two customer types List Three (Bottleshop Gaps)
-// is scoped to. isBottleshop() (Banner Gap Report, above) only covers the former.
-function hlIsBottleshopOrIntegrated(o) {
-  if (isBottleshop(o)) return true;
-  return typeof o.custType === 'string' && o.custType.trim().toLowerCase() === 'integrated';
-}
 // The universe for List Five (On Prem Carton & Events) — everything that ISN'T an off-premise
-// bottleshop (On Premise, Integrated, Events, etc). Deliberately overlaps Bottleshop Gaps for
-// Integrated venues, which genuinely can have both an off-premise range AND on-premise business
-// worth chasing separately.
+// bottleshop (On Premise, Integrated, Events, etc).
 function hlIsOnPremOrEvents(o) { return !isBottleshop(o); }
 
 function hlOutletUniverse() { return Object.values(outlets).filter(o => !o.excluded); }
-function hlCoreCartonGids() { return coreCartonGroupIds(); }
 
 // Restricts a bucket's default SKU set down to whatever the Hit Lists SKU filter currently has
 // selected (if anything) — shared by every list so the filter behaves identically everywhere: it
@@ -10246,8 +9730,8 @@ function hlOutletStats(groupIds, startDayIdx, endDayIdx) {
 }
 // Earliest day index any outlet has EVER ordered any SKU in groupIds, for every outlet at once —
 // used to flag "New this quarter" (List 1) and to gate Win Backs membership to outlets that have
-// actually bought from us before (a never-purchased prospect belongs on Bottleshop Gaps' prospect
-// rows, not a Win Backs list).
+// actually bought from us before (a never-purchased prospect belongs on Bottleshops Never Sold
+// To's prospect rows, not a Win Backs list).
 function hlFirstOrderDayIdxMap(groupIds) {
   const groupSet = new Set(groupIds);
   const map = {};
@@ -10304,29 +9788,19 @@ function hlComputeWinBacksOutletIds(groupIds, cycleDays, refDayIdx, outletFilter
     .sort((a, b) => historicalStats[b].totalLitres - historicalStats[a].totalLitres)
     .slice(0, topN);
 }
-// Bottleshop Gaps membership: every off-premise/integrated outlet, plus "prospect" rows for
-// familyGroups stores that don't correspond to any real outlet yet (no sales history at all).
-// Dedup is automatic — familyGroups only carries outletId once a real sales-data match exists (see
-// familyGroupsList()), so taking the inverse (`!s.outletId`) can never double up with a real
-// outlet row. No customer records are created for these — they're reference-only rows, keyed by a
-// synthetic "fg:<groupIdx>:<storeIdx>" string rather than a real outlet id.
-function hlGenerateBottleshopGapsMembership(refDayIdx) {
-  const outletIds = hlOutletUniverse().filter(hlIsBottleshopOrIntegrated).map(o => o.id);
-  const coreGids = hlCoreCartonGids();
-  const rangedWindowStart = refDayIdx - hlCycleDays('CARTONS') + 1;
-  const baselineRanged = {};
-  coreGids.forEach(gid => {
-    const stats = hlOutletStats([gid], rangedWindowStart, refDayIdx);
-    Object.keys(stats).forEach(oid => {
-      if (!baselineRanged[oid]) baselineRanged[oid] = [];
-      baselineRanged[oid].push(gid);
-    });
-  });
+// Bottleshops Never Sold To membership: "prospect" rows for familyGroups stores that don't
+// correspond to any real outlet yet (no sales history at all) — i.e. bottleshops we know about
+// (from the Family Groups import) but have never actually sold to. Dedup is automatic —
+// familyGroups only carries outletId once a real sales-data match exists (see familyGroupsList()),
+// so taking the inverse (`!s.outletId`) can never double up with a real outlet row. No customer
+// records are created for these — they're reference-only rows, keyed by a synthetic
+// "fg:<groupIdx>:<storeIdx>" string rather than a real outlet id.
+function hlGenerateBottleshopNeverSoldMembership() {
   const prospectKeys = [];
   familyGroupsList().forEach((fg, gi) => {
     (fg.stores || []).forEach((s, si) => { if (!s.outletId) prospectKeys.push(`fg:${gi}:${si}`); });
   });
-  return { outletIds, prospectKeys, baselineRanged };
+  return { prospectKeys };
 }
 // Explicit, auditable "freeze this quarter's Hit Lists" action — only ever available for the
 // currently-viewed quarter (past quarters are read-only once closed; future quarters don't have a
@@ -10343,16 +9817,16 @@ function hlGenerateSnapshot(quarterKey) {
   const kegWinBackIds = hlComputeWinBacksOutletIds(kegGids, hlCycleDays('KEGS'), refDayIdx, () => true, HL_WIN_BACK_TOP_N);
   const bsWinBackIds = hlComputeWinBacksOutletIds(cartonGids, hlCycleDays('CARTONS'), refDayIdx, isBottleshop, HL_WIN_BACK_TOP_N);
   const opWinBackIds = hlComputeWinBacksOutletIds(cartonGids, hlCycleDays('CARTONS'), refDayIdx, hlIsOnPremOrEvents, HL_WIN_BACK_TOP_N);
-  const gaps = hlGenerateBottleshopGapsMembership(refDayIdx);
+  const neverSold = hlGenerateBottleshopNeverSoldMembership();
 
   const now = new Date().toISOString();
   const by = currentUserEmail || 'Unknown';
   const snapshot = {
-    kegActive:         { outletIds: kegActiveIds, generatedAt: now, generatedBy: by },
-    kegWinBacks:       { outletIds: kegWinBackIds, generatedAt: now, generatedBy: by },
-    bottleshopGaps:    { outletIds: gaps.outletIds, prospectKeys: gaps.prospectKeys, baselineRanged: gaps.baselineRanged, generatedAt: now, generatedBy: by },
-    bottleshopWinBacks:{ outletIds: bsWinBackIds, generatedAt: now, generatedBy: by },
-    onPremWinBacks:    { outletIds: opWinBackIds, generatedAt: now, generatedBy: by },
+    kegActive:          { outletIds: kegActiveIds, generatedAt: now, generatedBy: by },
+    kegWinBacks:        { outletIds: kegWinBackIds, generatedAt: now, generatedBy: by },
+    bottleshopNeverSold:{ prospectKeys: neverSold.prospectKeys, generatedAt: now, generatedBy: by },
+    bottleshopWinBacks: { outletIds: bsWinBackIds, generatedAt: now, generatedBy: by },
+    onPremWinBacks:     { outletIds: opWinBackIds, generatedAt: now, generatedBy: by },
   };
   // Optimistic local update (visible immediately), then persist to the server in one combined
   // request — matches the round-42 saveRsmTargetsBulk pattern (one read + one write, no races) —
@@ -10410,56 +9884,39 @@ function hlBuildWinBacksList(quarterKey, listId, bucket) {
 function hlBuildKegWinBacks(quarterKey) { return hlBuildWinBacksList(quarterKey, 'kegWinBacks', 'KEGS'); }
 function hlBuildBottleshopWinBacks(quarterKey) { return hlBuildWinBacksList(quarterKey, 'bottleshopWinBacks', 'CARTONS'); }
 function hlBuildOnPremWinBacks(quarterKey) { return hlBuildWinBacksList(quarterKey, 'onPremWinBacks', 'CARTONS'); }
-function hlBuildBottleshopGaps(quarterKey) {
-  const snap = hlSnapshots[quarterKey] && hlSnapshots[quarterKey].bottleshopGaps;
+// Bottleshops Never Sold To builder: pure prospect list — bottleshops we know about (via the
+// Family Groups import) but have no sales history for at all. Membership (which prospect keys
+// appear) is frozen at snapshot time; whether a given prospect has since graduated into a real,
+// selling outlet ("Onboarded") is still recomputed live every render, same "frozen membership,
+// live figures" pattern as the other four lists.
+function hlBuildBottleshopNeverSold(quarterKey) {
+  const snap = hlSnapshots[quarterKey] && hlSnapshots[quarterKey].bottleshopNeverSold;
   if (!snap) return null;
-  const coreGidsAll = hlCoreCartonGids();
-  const sel = hlSkuMsel ? hlSkuMsel.getValues() : [];
-  const coreGids = sel.length ? coreGidsAll.filter(g => sel.includes(g)) : coreGidsAll;
+  const cartonGids = cartonGroupIds();
   const nowDayIdx = dayIndexOf(PERF_TODAY);
   const windowStart = nowDayIdx - hlCycleDays('CARTONS') + 1;
-  const rangedNowByGid = {};
-  coreGids.forEach(gid => { rangedNowByGid[gid] = hlOutletStats([gid], windowStart, nowDayIdx); });
-  const overallStats = hlOutletStats(coreGids, windowStart, nowDayIdx);
-
-  const realRows = snap.outletIds.map(oid => {
-    const o = outlets[oid];
-    if (!o) return null;
-    const baselineSet = new Set((snap.baselineRanged && snap.baselineRanged[oid]) || []);
-    const cols = coreGids.map(gid => {
-      const rangedLive = !!rangedNowByGid[gid][oid];
-      return { gid, ranged: rangedLive, newlyRanged: rangedLive && !baselineSet.has(gid) };
-    });
-    const stat = overallStats[oid];
-    return { outlet: o, isProspect: false, cols, gapCount: cols.filter(c => !c.ranged).length,
-      totalVolume: stat ? stat.totalLitres : 0, lastOrderDayIdx: stat ? stat.lastInvoiceDayIdx : null };
-  }).filter(Boolean);
+  const stats = hlOutletStats(cartonGids, windowStart, nowDayIdx);
 
   const familyGroups = familyGroupsList();
-  const prospectRows = (snap.prospectKeys || []).map(key => {
+  return (snap.prospectKeys || []).map(key => {
     const [, gi, si] = key.split(':');
     const fg = familyGroups[Number(gi)];
     const store = fg && fg.stores && fg.stores[Number(si)];
     if (!store) return null;
-    // Onboarding check: if this family-group store now (live) has a matching real outlet with any
-    // core-carton sales history, it's graduated out of "no history" — keep the row visible but
-    // show it as onboarded, using its live gap columns instead of the 100%-gap placeholder.
+    // Onboarding check: if this family-group store now (live) has a matching real outlet, it's
+    // graduated out of "never sold to" — keep the row visible but flag it as onboarded rather than
+    // silently dropping it, so the RSM who chased it down sees the win.
     if (store.outletId && outlets[store.outletId]) {
       const o = outlets[store.outletId];
-      const cols = coreGids.map(gid => ({ gid, ranged: !!rangedNowByGid[gid][o.id], newlyRanged: false }));
-      const stat = overallStats[o.id];
-      return { outlet: o, isProspect: true, onboarded: true,
-        cols, gapCount: cols.filter(c => !c.ranged).length,
+      const stat = stats[o.id];
+      return { outlet: o, isProspect: true, onboarded: true, status: 'onboarded',
         totalVolume: stat ? stat.totalLitres : 0, lastOrderDayIdx: stat ? stat.lastInvoiceDayIdx : null };
     }
-    const cols = coreGids.map(gid => ({ gid, ranged: false, newlyRanged: false }));
     return {
       outlet: { id: key, name: store.storeName, banner: fg.banner, rsm: null, geoTier: null, suburb: store.suburb, state: store.state },
-      isProspect: true, onboarded: false, cols, gapCount: coreGids.length, totalVolume: 0, lastOrderDayIdx: null,
+      isProspect: true, onboarded: false, status: 'prospect', totalVolume: 0, lastOrderDayIdx: null,
     };
   }).filter(Boolean);
-
-  return [...realRows, ...prospectRows];
 }
 
 // ---------- Rendering ----------
@@ -10468,6 +9925,8 @@ function hlStatusBadge(row) {
   if (row.status === 'wonback') return '<span class="badge green">Won back ✓</span>';
   if (row.status === 'lapsed') return '<span class="badge red">Lapsed</span>';
   if (row.status === 'active') return '<span class="badge blue">Active</span>';
+  if (row.status === 'onboarded') return '<span class="badge green">Onboarded ✓</span>';
+  if (row.status === 'prospect') return '<span class="badge grey">Never sold to</span>';
   return '';
 }
 function hlRowClass(row) {
@@ -10489,32 +9948,6 @@ function hlSimpleTableHtml(rows, emptyMsg) {
   if (!rows.length) return `<div class="empty">${escapeHtml(emptyMsg)}</div>`;
   const header = `<thead><tr><th>Customer</th><th>RSM</th><th>Banner</th><th>Geo tier</th><th>Total Volume</th><th>Last Order</th><th>Status</th></tr></thead>`;
   return `<div class="tablewrap"><table class="datatable">${header}<tbody>${rows.map(hlSimpleRowHtml).join('')}</tbody></table></div>`;
-}
-function hlGapsRowHtml(row, coreGids) {
-  const o = row.outlet;
-  const cells = coreGids.map(gid => {
-    const c = row.cols.find(c => c.gid === gid);
-    const g = groups[gid];
-    const title = escapeHtml(g ? g.label : gid);
-    if (!c || !c.ranged) return `<td class="num-cell" title="${title}"><span class="badge red" style="font-size:9.5px;">Gap</span></td>`;
-    return `<td class="num-cell" title="${title}"><span class="badge ${c.newlyRanged?'green':'blue'}" style="font-size:9.5px;">${c.newlyRanged?'New ✓':'Ranged'}</span></td>`;
-  }).join('');
-  const statusCell = row.onboarded === true ? '<span class="badge green">Onboarded ✓</span>'
-    : row.isProspect ? '<span class="badge grey">No sales history</span>' : '';
-  return `<tr class="${hlRowClass(row)}">
-    <td>${escapeHtml(o.name)}${row.isProspect && !row.onboarded ? ' <span class="badge grey" style="font-size:9px;">prospect</span>' : ''}<div class="muted" style="font-size:10.5px;">${escapeHtml(o.suburb||'')} ${escapeHtml(o.state||'')}${o.rsm?(' · '+escapeHtml(o.rsm)):''}</div></td>
-    <td>${escapeHtml(o.banner||'—')}</td>
-    <td class="num-cell mono" style="font-weight:600;">${row.gapCount}</td>
-    ${cells}
-    <td class="num-cell mono">${fmtNum(row.totalVolume)} L</td>
-    <td>${statusCell}</td>
-  </tr>`;
-}
-function hlGapsTableHtml(rows, coreGids) {
-  if (!rows.length) return `<div class="empty">No bottleshop/integrated customers match these filters.</div>`;
-  const skuHeaders = coreGids.map(gid => `<th style="writing-mode:vertical-rl; text-orientation:mixed; font-size:10px; font-weight:600;">${escapeHtml(groups[gid]?groups[gid].label:gid)}</th>`).join('');
-  const header = `<thead><tr><th>Customer</th><th>Banner</th><th>Gaps</th>${skuHeaders}<th>Volume</th><th>Status</th></tr></thead>`;
-  return `<div class="tablewrap"><table class="datatable">${header}<tbody>${rows.map(r=>hlGapsRowHtml(r,coreGids)).join('')}</tbody></table></div>`;
 }
 function setHlActiveTab(tabId) { hlActiveTab = tabId; renderHitListsPage(); }
 function stepHlQuarter(delta) { hlQuarter = shiftQuarter(hlQuarter.fy, hlQuarter.q, delta); renderHitListsPage(); }
@@ -10564,13 +9997,10 @@ function renderHitListsPage() {
     rows = hlFilteredRows(hlBuildKegWinBacks(quarterKey) || []);
     rows.sort((a,b) => b.totalVolume - a.totalVolume);
     bodyHtml = hlSimpleTableHtml(rows, 'No keg win-back candidates match these filters.');
-  } else if (hlActiveTab === 'bottleshopGaps') {
-    const coreGidsAll = hlCoreCartonGids();
-    const sel = hlSkuMsel ? hlSkuMsel.getValues() : [];
-    const coreGids = sel.length ? coreGidsAll.filter(g => sel.includes(g)) : coreGidsAll;
-    rows = hlFilteredRows(hlBuildBottleshopGaps(quarterKey) || []);
-    rows.sort((a,b) => b.gapCount - a.gapCount || b.totalVolume - a.totalVolume);
-    bodyHtml = hlGapsTableHtml(rows, coreGids);
+  } else if (hlActiveTab === 'bottleshopNeverSold') {
+    rows = hlFilteredRows(hlBuildBottleshopNeverSold(quarterKey) || []);
+    rows.sort((a,b) => (a.onboarded===b.onboarded?0:(a.onboarded?1:-1)) || (a.outlet.name||'').localeCompare(b.outlet.name||''));
+    bodyHtml = hlSimpleTableHtml(rows, 'No bottleshops match these filters.');
   } else if (hlActiveTab === 'bottleshopWinBacks') {
     rows = hlFilteredRows(hlBuildBottleshopWinBacks(quarterKey) || []);
     rows.sort((a,b) => b.totalVolume - a.totalVolume);
@@ -10649,31 +10079,6 @@ function renderEverything() {
   });
   renderProductPrices();
 
-  setupAutocomplete('td_outletSearch','td_outletResults', outletList, outletLabel, id => {
-    document.getElementById('td_outletId').value = id;
-    document.getElementById('td_outletSearch').value = outlets[id].name;
-  });
-  populateGroupSelect('td_groupId');
-  populateTempDealXOptions(null);
-  document.getElementById('td_groupId').addEventListener('change', e => {
-    const gid = e.target.value;
-    const bucket = gid && groups[gid] ? bucketOf(groups[gid]) : null;
-    populateTempDealXOptions(bucket);
-    document.getElementById('td_customWrap').style.display = 'none';
-  });
-  document.getElementById('td_dealX').addEventListener('change', e => {
-    document.getElementById('td_customWrap').style.display = e.target.value==='custom' ? 'block' : 'none';
-  });
-  document.getElementById('td_search').addEventListener('input', renderTempDealsTable);
-  document.getElementById('td_statusFilter').addEventListener('change', renderTempDealsTable);
-  renderTempDealsTable();
-
-  populateSelect('at_rsm', rsmVals);
-  document.getElementById('at_search').addEventListener('input', renderActiveTempDealsPage);
-  document.getElementById('at_rsm').addEventListener('change', renderActiveTempDealsPage);
-  document.getElementById('at_endingWithin').addEventListener('change', renderActiveTempDealsPage);
-  renderActiveTempDealsPage();
-
   const csRsm = document.getElementById('cs_rsmFilter');
   const csAc = setupAutocomplete('cs_search','cs_results', outletList, outletLabel, id => {
     document.getElementById('cs_search').value = outlets[id].name;
@@ -10719,14 +10124,6 @@ function renderEverything() {
     rsmVals.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
   perfScopeSel.addEventListener('change', () => setPerfScope(perfScopeSel.value));
   renderPerfPage();
-
-  // Target Customers page — shares perfScope/perfQuarter with Team Dashboard, so it gets its
-  // own copy of the same View selector, kept in sync by every setter (setPerfScope etc).
-  const tcScopeSel = document.getElementById('tc_scope');
-  tcScopeSel.innerHTML = `<option value="${PERF_ALL}">Sales Team (All RSMs)</option>` +
-    rsmVals.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
-  tcScopeSel.addEventListener('change', () => setPerfScope(tcScopeSel.value));
-  renderTargetCustomersPage();
 
   // Set Targets page
   renderTargetsPage();
@@ -10944,7 +10341,6 @@ function onInitialDataLoaded(data) {
   deliveryRuns = data.deliveryRuns || [];
   manualOutlets = data.manualOutlets || {};
   customerDeliveryDetails = data.customerDeliveryDetails || {};
-  targetCustomers = data.targetCustomers || [];
   naDistributions = data.naDistributions || {};
   vipContacts = data.vipContacts || [];
   rsmZoneOverrides = data.rsmZoneOverrides || {};
@@ -10993,7 +10389,6 @@ function refreshPricingFromServer() {
       deliveryRuns = data.deliveryRuns || [];
       manualOutlets = data.manualOutlets || {};
       customerDeliveryDetails = data.customerDeliveryDetails || {};
-      targetCustomers = data.targetCustomers || [];
       naDistributions = data.naDistributions || {};
   vipContacts = data.vipContacts || [];
       rsmZoneOverrides = data.rsmZoneOverrides || {};
@@ -11011,8 +10406,6 @@ function refreshPricingFromServer() {
       renderSummaryCards();
       renderGrid();
       renderProductPrices();
-      renderTempDealsTable();
-      renderActiveTempDealsPage();
       if (currentSummaryOutlet) renderCustomerSummaryPage(currentSummaryOutlet);
       if (currentMarginOutlet) renderMarginCalculatorPage(currentMarginOutlet);
       if (currentOpOutlet) renderOffPremiseMarginPage(currentOpOutlet);
