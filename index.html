@@ -1100,7 +1100,7 @@
 
     <div class="panel no-print">
       <h2 style="margin:0;">Target vs Prior Periods</h2>
-      <div class="hint" style="margin-top:6px;">Pick a financial year to see all 4 quarters' targets as entered, with actual volume plus the same quarter from the last two years alongside for comparison — toggle between Sales Team/National Accounts volume. National Accounts volume here is scoped by Coles/Woolworths ownership (matching how its target is set), not the Volume Stream filter above.</div>
+      <div class="hint" style="margin-top:6px;">Pick a financial year to see all 4 quarters' targets as entered, with actual volume plus the same quarter from the last two years alongside for comparison — toggle between Sales Team volume, National Accounts volume, or Combined (both together, deduplicated by outlet). National Accounts volume here is scoped by Coles/Woolworths ownership (matching how its target is set), not the Volume Stream filter above. The Full Year panel on the right shows the whole FY as a single total, so you can see the year's overall target vs actual vs the last two years at a glance alongside the quarter-by-quarter breakdown.</div>
       <div class="rowflex" style="margin-top:10px; gap:14px; flex-wrap:wrap; align-items:flex-end;">
         <div class="fld" style="margin:0;">
           <label>Financial Year</label>
@@ -1111,11 +1111,15 @@
           <select id="tv_tp_scope">
             <option value="salesteam">Sales Team volume</option>
             <option value="na">National Accounts volume</option>
+            <option value="combined">Combined (Sales Team + National Accounts)</option>
           </select>
         </div>
       </div>
     </div>
-    <div id="tv_tp_chart"></div>
+    <div class="rowflex" style="gap:14px; align-items:flex-start; flex-wrap:wrap;">
+      <div id="tv_tp_chart" style="flex:3 1 480px; min-width:360px;"></div>
+      <div id="tv_tp_year_chart" style="flex:1 1 240px; min-width:220px;"></div>
+    </div>
 
     <div class="panel no-print">
       <h2 style="margin:0 0 4px;">Breakdown by Period</h2>
@@ -7984,13 +7988,19 @@ function tvTargetForPeriod(period, granularity, bucketFilterVal, streamsSelected
 // ---------- Total Volume: Target vs Prior Periods (focused companion chart) ----------
 // A deliberately simpler companion to the main Total Volume trend chart above: pick a single
 // financial year and see all 4 of its quarters side by side — the targets as entered for that whole
-// year, with actual/last-year/2-years-ago as comparison — plus a Sales Team/National Accounts scope
-// toggle. National Accounts actuals are scoped by ownership group (naSkuAllOutletFilter), not Volume
-// Stream, to stay consistent with how naSkuTargetForQuarter's target itself is defined — a handful
-// of Woolworths-owned outlets are tagged Volume Stream = Sales Team but still belong here (see
-// naOwnerOutletFilter's comment).
+// year, with actual/last-year/2-years-ago as comparison — plus a Sales Team/National Accounts/
+// Combined scope toggle. National Accounts actuals are scoped by ownership group
+// (naSkuAllOutletFilter), not Volume Stream, to stay consistent with how naSkuTargetForQuarter's
+// target itself is defined — a handful of Woolworths-owned outlets are tagged Volume Stream =
+// Sales Team but still belong here (see naOwnerOutletFilter's comment). "Combined" is the union of
+// both outlet sets (not a simple concatenation), so a Woolworths-owned outlet tagged Sales Team
+// still only counts once.
 function tvTpOutletFilter(scope) {
-  return scope === 'na' ? naSkuAllOutletFilter() : (oid => allOutlets[oid] && allOutlets[oid].volumeStream === 'Sales Team');
+  if (scope === 'na') return naSkuAllOutletFilter();
+  const naFilter = naSkuAllOutletFilter();
+  const salesTeamFilter = oid => allOutlets[oid] && allOutlets[oid].volumeStream === 'Sales Team';
+  if (scope === 'combined') return oid => salesTeamFilter(oid) || naFilter(oid);
+  return salesTeamFilter;
 }
 // The 4 quarters (Q1-Q4) of exactly one financial year — deliberately not a rolling trailing window
 // like the rest of the app's trend charts, since the whole point of this chart is "show me the
@@ -8002,6 +8012,15 @@ function tvTpFyQuarterPeriods(fy) {
     out.push({ label: `Q${q}`, startDayIdx: dayIndexOf(start), endDayIdx: dayIndexOf(endExcl) - 1, fy, q });
   }
   return out;
+}
+// The whole financial year as a single period (one bar) — the companion "full year at a glance"
+// chart next to the Q1-Q4 breakdown. Carries `fy` (not `q`) so veePeriodShiftedYears/tvTargetForPeriod
+// resolve it via their 'year' branch, matching how those functions already sum/shift Q1-Q4 as a
+// whole for a year-granularity period elsewhere in the app.
+function tvTpFyYearPeriod(fy) {
+  const [start] = quarterBoundsOf(fy, 1);
+  const [, endExcl] = quarterBoundsOf(fy, 4);
+  return [{ label: `FY${String(fy).slice(-2)}`, startDayIdx: dayIndexOf(start), endDayIdx: dayIndexOf(endExcl) - 1, fy }];
 }
 // Populates the Financial Year picker with every FY the sales data spans, plus one FY ahead (so a
 // target set for next FY via the Volume Target Calculator/FY Forecast is visible even before any
@@ -8034,27 +8053,53 @@ function tvTpLitresSeries(scope, periods, granularity) {
     };
   });
 }
-// Renders the target-vs-actual-vs-prior-years bar+line chart for whichever Financial Year and Sales
-// Team/National Accounts toggle is currently selected — always all 4 quarters of that one FY.
-// Reuses tvTargetForQuarter/tvTargetForPeriod unchanged — passing a single-item streamsSelected
-// array (['Sales Team'] or ['National Accounts']) already scopes the combined target correctly,
-// since that function was built to filter by exactly this list.
+// Resolves the current scope select's value into the streamsSelected list tvTargetForQuarter/
+// tvTargetForPeriod expect. "Combined" passes an empty array, which those functions already treat
+// as "no stream filter — include everything" (see tvTargetForQuarter's includeSalesTeam/includeNA
+// flags), so no change was needed there to support it.
+function tvTpStreamsSelected(scope) {
+  if (scope === 'na') return ['National Accounts'];
+  if (scope === 'combined') return [];
+  return ['Sales Team'];
+}
+function tvTpTitlePrefix(scope) {
+  if (scope === 'na') return 'National Accounts Volume vs Target';
+  if (scope === 'combined') return 'Combined (Sales Team + National Accounts) Volume vs Target';
+  return 'Sales Team Volume vs Target';
+}
+// Renders both the Q1-Q4 chart and the full-year-at-a-glance companion chart for whichever
+// Financial Year and Sales Team/National Accounts/Combined toggle is currently selected. Reuses
+// tvTargetForQuarter/tvTargetForPeriod unchanged — streamsSelected already scopes the combined
+// target correctly for all three options (see tvTpStreamsSelected), since that function was built
+// to filter by exactly this list, including the "empty list = everything" case Combined relies on.
 function renderTvTargetVsPriorChart() {
   const chartEl = document.getElementById('tv_tp_chart');
+  const yearChartEl = document.getElementById('tv_tp_year_chart');
   const fyEl = document.getElementById('tv_tp_fy');
   const scopeEl = document.getElementById('tv_tp_scope');
   if (!chartEl || !fyEl || !scopeEl) return;
   const fy = parseInt(fyEl.value, 10);
   if (!fy) return;
-  const scope = scopeEl.value; // 'salesteam' | 'na'
+  const scope = scopeEl.value; // 'salesteam' | 'na' | 'combined'
+  const streamsSelected = tvTpStreamsSelected(scope);
+  const cssClass = scope === 'na' ? 'cartons' : 'combo';
+  const titlePrefix = tvTpTitlePrefix(scope) + ` — FY${String(fy).slice(-2)}`;
+
   const periods = tvTpFyQuarterPeriods(fy);
   const litresSeries = tvTpLitresSeries(scope, periods, 'quarter');
-  const streamsSelected = scope === 'na' ? ['National Accounts'] : ['Sales Team'];
   const targetSeries = periods.map(p => tvTargetForPeriod(p, 'quarter', 'ALL', streamsSelected, null));
-  const cssClass = scope === 'na' ? 'cartons' : 'combo';
-  const titlePrefix = (scope === 'na' ? 'National Accounts Volume vs Target' : 'Sales Team Volume vs Target') + ` — FY${String(fy).slice(-2)}`;
   veeRenderVolumeChart('tv_tp_chart', litresSeries.map(p => p.label), litresSeries.map(p => p.litres), cssClass, 'quarter', titlePrefix, 'litres', ' L', null,
     { ly: litresSeries.map(p => p.ly), ly2: litresSeries.map(p => p.ly2), target: targetSeries });
+
+  // Full-year companion: the whole FY as a single bar, so the total-for-the-year figure is visible
+  // at a glance alongside the quarter-by-quarter breakdown, without having to mentally sum 4 bars.
+  if (yearChartEl) {
+    const yearPeriod = tvTpFyYearPeriod(fy);
+    const yearLitresSeries = tvTpLitresSeries(scope, yearPeriod, 'year');
+    const yearTargetSeries = yearPeriod.map(p => tvTargetForPeriod(p, 'year', 'ALL', streamsSelected, null));
+    veeRenderVolumeChart('tv_tp_year_chart', yearLitresSeries.map(p => p.label), yearLitresSeries.map(p => p.litres), cssClass, 'year', titlePrefix, 'litres', ' L', null,
+      { ly: yearLitresSeries.map(p => p.ly), ly2: yearLitresSeries.map(p => p.ly2), target: yearTargetSeries });
+  }
 }
 // Two-slice pie (Kegs vs Cartons) for a single period — matches the same period the SKU-by-SKU
 // pie below is showing, using the same conic-gradient/pie-legend markup so the two pies read as a
