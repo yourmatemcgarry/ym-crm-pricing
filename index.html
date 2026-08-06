@@ -5065,7 +5065,14 @@ let bgZoneMsel = null;            // multi-select for Banner Gap Report "Zone" f
 const PERF_TOP_CHART_RSMS = ['Josh Pitts', 'Kayla Miller'];
 
 function perfOutletFilter(scope) {
-  if (scope === PERF_ALL) return () => true;
+  // PERF_ALL means "Sales Team, all RSMs" (see its definition) — NOT "every outlet in the raw
+  // sales data regardless of volume stream". Since Round 18 folded National Accounts, Online
+  // Distributor, Taproom, and Events volume into the same dailyVolume collection, a bare
+  // `() => true` here let all of that non-Sales-Team volume leak into every Team Dashboard number
+  // (Total/Keg/Carton Volume, Listings, and the Top 20 customer lists) whenever "Sales Team (All
+  // RSMs)" was selected — visible as raw numeric outlet IDs on the Top 20 lists, since those
+  // outlets aren't in the Sales-Team-only `outlets` dict so have no `.name` to show (Round 57 fix).
+  if (scope === PERF_ALL) return oid => !!outlets[oid];
   return oid => outlets[oid] && outlets[oid].rsm === scope;
 }
 
@@ -5768,7 +5775,13 @@ function exportArPDF() { window.print(); }
 function renderAtRiskPage() {
   const rsmSel = document.getElementById('ar_rsm').value;
   const pkgSel = document.getElementById('ar_pkgtype').value; // '', 'KEGS', 'CARTONS'
-  const outletFilter = rsmSel ? (oid => outlets[oid] && outlets[oid].rsm === rsmSel) : () => true;
+  // Round 58 fix: "All RSMs" (no rsmSel) must still mean "Sales Team, any RSM" — not literally
+  // every outlet in dailyVolume. A bare `() => true` here let National Accounts/Online
+  // Distributor/Taproom/Events volume leak into New/Returned/At Risk/Current listings counts,
+  // the same bug perfOutletFilter() on the Team Dashboard had (see its comment). Both pages are
+  // meant to reconcile with each other (see test_v9_fixes.js), so both need the same Sales-Team
+  // scoping.
+  const outletFilter = rsmSel ? (oid => outlets[oid] && outlets[oid].rsm === rsmSel) : (oid => !!outlets[oid]);
   const buckets = pkgSel ? [pkgSel] : ['KEGS','CARTONS'];
 
   const asOfInput = document.getElementById('ar_asof').value;
