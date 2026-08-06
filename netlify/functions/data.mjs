@@ -48,7 +48,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, rsmTargetProtected, activations, trucks, orders, deliveryRuns, manualOutletsRaw, customerDeliveryDetails, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlSnapshots, hlDismissals] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, rsmTargetProtected, activations, trucks, orders, deliveryRuns, manualOutletsRaw, customerDeliveryDetails, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlDismissals, postcodeZoneOverrides, customerRsmOverrides, groupLastUpdated] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -74,8 +74,10 @@ async function readAll(s) {
     s.get('fyForecastInputs', { type: 'json' }),
     s.get('naSkuTargets', { type: 'json' }),
     s.get('naSkuQuarterOverrides', { type: 'json' }),
-    s.get('hlSnapshots', { type: 'json' }),
     s.get('hlDismissals', { type: 'json' }),
+    s.get('postcodeZoneOverrides', { type: 'json' }),
+    s.get('customerRsmOverrides', { type: 'json' }),
+    s.get('groupLastUpdated', { type: 'json' }),
   ]);
   // vipContacts is seeded exactly once — the first time anyone loads the app after this feature
   // ships, the blob won't exist yet (null, not just empty), so we seed it from VIP_CONTACTS_SEED
@@ -184,8 +186,10 @@ async function readAll(s) {
     fyForecastInputs: fyForecastInputs || {},
     naSkuTargets: naSkuTargets || {},
     naSkuQuarterOverrides: naSkuQuarterOverrides || {},
-    hlSnapshots: hlSnapshots || {},
     hlDismissals: hlDismissals || {},
+    postcodeZoneOverrides: postcodeZoneOverrides || {},
+    customerRsmOverrides: customerRsmOverrides || {},
+    groupLastUpdated: groupLastUpdated || {},
   };
 }
 
@@ -467,21 +471,6 @@ export default async (req) => {
       });
       await s.setJSON('rsmTargets', current);
       return json({ ok: true, rsmTargets: current });
-    }
-
-    if (action === 'saveHlSnapshot') {
-      // Hit Lists (Keg Active Customers / Keg Win Backs / Bottleshops Never Sold To / Bottleshop
-      // Win Backs / On Prem Carton & Events) — one whole-quarter replace per generate/regenerate,
-      // not a field-by-field merge: the client computes all 5 lists' membership in one pass
-      // (hlGenerateSnapshot) and sends the complete {kegActive, kegWinBacks, bottleshopNeverSold,
-      // bottleshopWinBacks, onPremWinBacks} object for that quarter as a single unit. One read +
-      // one write, same shape as saveRsmTargetsBulk above, so two colleagues generating at close to
-      // the same time can't race each other into a half-written result.
-      const { quarterKey, snapshot } = payload;
-      const current = (await s.get('hlSnapshots', { type: 'json' })) || {};
-      current[quarterKey] = snapshot;
-      await s.setJSON('hlSnapshots', current);
-      return json({ ok: true, hlSnapshots: current });
     }
 
     if (action === 'saveHlDismissal') {
@@ -867,6 +856,47 @@ export default async (req) => {
       if (clean) current[zone] = clean; else delete current[zone];
       await s.setJSON('rsmZoneOverrides', current);
       return json({ ok: true, rsmZoneOverrides: current });
+    }
+
+    if (action === 'savePostcodeZoneOverride') {
+      // Round 56: lets the user reassign an individual postcode to a different zone than the
+      // imported postcode database (POSTCODE_ZONE_SEED, baked into CRM_DATA) says — { [postcode]:
+      // zoneName }, keyed by postcode. Saving an empty/blank zone value clears the override for
+      // that postcode, reverting it to whatever the postcode database (or, failing that, Ontap)
+      // has on file — see applyRsmZoneOverrides() in netlify_part1.js.
+      const { postcode, zone } = payload;
+      const current = (await s.get('postcodeZoneOverrides', { type: 'json' })) || {};
+      const clean = (zone || '').trim();
+      if (clean) current[postcode] = clean; else delete current[postcode];
+      await s.setJSON('postcodeZoneOverrides', current);
+      return json({ ok: true, postcodeZoneOverrides: current });
+    }
+
+    if (action === 'saveCustomerRsmOverride') {
+      // Round 56: pins ONE specific customer to an RSM regardless of what their postcode/zone
+      // would otherwise resolve to — { [outletId]: rsmName }. Highest-priority layer in the RSM
+      // resolution order — see applyRsmZoneOverrides() in netlify_part1.js. Saving an empty/blank
+      // rsm value clears the pin for that customer.
+      const { outletId, rsm } = payload;
+      const current = (await s.get('customerRsmOverrides', { type: 'json' })) || {};
+      const clean = (rsm || '').trim();
+      if (clean) current[outletId] = clean; else delete current[outletId];
+      await s.setJSON('customerRsmOverrides', current);
+      return json({ ok: true, customerRsmOverrides: current });
+    }
+
+    if (action === 'updateGroupLastUpdated') {
+      // Round 57: tracks when a periodically-refreshed batch list (Family Groups, VIP Contacts,
+      // LMG, Star Liquor — see GROUP_TRACKER_DEFS in netlify_part1.js) was last brought up to
+      // date. Purely informational — never feeds any resolution logic elsewhere. Saving an
+      // empty/blank date clears the record back to "Not yet set".
+      const { key, date, updatedBy } = payload;
+      const current = (await s.get('groupLastUpdated', { type: 'json' })) || {};
+      const clean = (date || '').trim();
+      if (clean) current[key] = { date: clean, updatedBy: updatedBy || 'Unknown', updatedAt: new Date().toISOString() };
+      else delete current[key];
+      await s.setJSON('groupLastUpdated', current);
+      return json({ ok: true, groupLastUpdated: current });
     }
 
     if (action === 'saveNaTarget') {
