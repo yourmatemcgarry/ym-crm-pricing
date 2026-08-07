@@ -5573,21 +5573,6 @@ function renderPerfPage() {
     </div>
     <div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">
       <div class="panel" style="flex:1; min-width:340px;">
-        <h3>Keg Activations logged <span class="muted" style="font-weight:400; font-size:11.5px;">(${kegActivationsCount})</span></h3>
-        ${perfActivationsTableHtml(kegActivationsList)}
-      </div>
-      <div class="panel" style="flex:1; min-width:340px;">
-        <h3>Carton Activations logged <span class="muted" style="font-weight:400; font-size:11.5px;">(${cartonActivationsCount})</span></h3>
-        ${perfActivationsTableHtml(cartonActivationsList)}
-      </div>
-    </div>
-    <div class="panel">
-      <h3>Direct Delivery customers onboarded <span class="muted" style="font-weight:400; font-size:11.5px;">(${directDeliveryCount})</span></h3>
-      <div class="hint" style="margin-bottom:4px;">Outlets whose first-ever order via the YMT warehouse fell in this quarter.</div>
-      ${perfDirectDeliveryTableHtml(directDeliveryList)}
-    </div>
-    <div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">
-      <div class="panel" style="flex:1; min-width:340px;">
         <h3>Keg Listings <span class="badge kegs" style="font-size:9.5px;">4-week cycle</span></h3>
         <div class="hint" style="margin-bottom:8px;">"Start of quarter" is a calendar-exact count for ${fmtDateObj(lastMonthStart)} – ${fmtDateObj(lastMonthEndIncl)} (the last calendar month of the prior quarter). "Current listings" is today's rolling 4-week cycle, same as the At Risk report.</div>
         ${perfListingTrioHtml(kegListingsStart, targets.kegListingsTarget, kegListingsNowStats.listingsCount, nowLabel, kegListingsLiveStats.listingsCount)}
@@ -5609,6 +5594,24 @@ function renderPerfPage() {
         <div class="hint" style="margin-bottom:4px;">A listing counts as "new" the first time that beer was ever sold to that venue.</div>
         ${perfBarChartHtml(cartonNew, startDayIdx, endDayIdx, 'cartons')}
       </div>
+    </div>
+    <!-- Round 61: Activations logged + Direct Delivery onboarded moved to below the New Listings
+         charts (previously they sat between the KPI cards and the Listings trio row) — see app3.js
+         renderPerfPage() for the full explanation (mirrored change, kept in sync by hand). -->
+    <div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">
+      <div class="panel" style="flex:1; min-width:340px;">
+        <h3>Keg Activations logged <span class="muted" style="font-weight:400; font-size:11.5px;">(${kegActivationsCount})</span></h3>
+        ${perfActivationsTableHtml(kegActivationsList)}
+      </div>
+      <div class="panel" style="flex:1; min-width:340px;">
+        <h3>Carton Activations logged <span class="muted" style="font-weight:400; font-size:11.5px;">(${cartonActivationsCount})</span></h3>
+        ${perfActivationsTableHtml(cartonActivationsList)}
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Direct Delivery customers onboarded <span class="muted" style="font-weight:400; font-size:11.5px;">(${directDeliveryCount})</span></h3>
+      <div class="hint" style="margin-bottom:4px;">Outlets whose first-ever order via the YMT warehouse fell in this quarter.</div>
+      ${perfDirectDeliveryTableHtml(directDeliveryList)}
     </div>
     <div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">
       <div class="panel" style="flex:1; min-width:320px;">
