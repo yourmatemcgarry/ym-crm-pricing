@@ -318,9 +318,10 @@
        row renders as blank/invisible space. This forces backgrounds to actually print. */
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
     main { padding:0; max-width:none; margin:0; }
-    .panel { border:none; padding:0; margin-bottom:10px; }
+    .panel { border:none; padding:0; margin-bottom:6px; }
     .panel h2 { font-size:13px; margin:0 0 6px; }
     .panel h3 { font-size:11.5px; margin:0 0 4px; }
+    .rowflex { gap:6px; }
     .tablewrap { max-height:none !important; overflow:visible !important; border:none; }
     /* Compact tables so printed reports don't burn extra pages on row height, and stay within
        the A4 width instead of relying on horizontal scroll (which print can't do). */
@@ -374,6 +375,23 @@
     .dash-chart .bar-col { height:auto !important; }
     .dash-chart .bar-rect { height:calc(var(--bar-h) * 0.4) !important; min-height:1px !important; }
     .dash-chart .bar-wk { margin-top:2px !important; }
+    /* Round 60: the Team Dashboard print/PDF export was spilling "New keg/carton listings per
+       week" onto its own near-blank page 2 (pushing the Top 20 lists to pages 3-5), even though
+       that row's own content is already compressed via .dash-chart above. The real cause was
+       cumulative whitespace from the KPI cards and listing-trio boxes above it, which use screen-
+       sized padding/margins that are unnecessarily generous at print scale. Tightening those
+       reclaims enough page-1 height that the New Listings row now lands on page 1 right after the
+       Keg/Carton Listings trio, so the Top 20 lists start on page 2 instead of page 3. */
+    .kpi-grid { gap:6px; margin-bottom:6px !important; break-inside:avoid; }
+    .kpi-card { padding:6px 10px; }
+    .kpi-card .kpi-lbl { font-size:9px; }
+    .kpi-card .kpi-num { font-size:15px; margin-top:2px; }
+    .kpi-card .kpi-target { font-size:9px; margin-top:1px; }
+    .progress-track { height:5px; margin-top:3px; }
+    .listing-trio > div { padding:5px 8px; }
+    .listing-trio .lt-num { font-size:14px; }
+    .listing-trio .lt-lbl { font-size:8.5px; margin-top:1px; }
+    .hint { margin-top:1px !important; font-size:8.5px; }
   }
 </style>
 </head>
