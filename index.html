@@ -5748,6 +5748,54 @@ function perfAtRiskData(bucket, outletFilterFn, nowDayIdx, priorWindow) {
   }
   return { newList, returnedList, atRiskList, currentList };
 }
+// New/Returned listings, redefined per user request (Round 63) to always track activity since the
+// beginning of the CURRENT quarter (the quarter containing the report's as-of date), rather than
+// just the most recent 4-week/13-week cycle — regardless of whether the page is in live/default
+// mode or viewing a historical snapshot. At Risk and Current listings are untouched (still driven
+// by perfAtRiskData above) — they keep comparing the trailing cycle to either the immediately-
+// prior cycle (live mode) or the quarter-start baseline (snapshot mode), exactly as before.
+//
+// New: the combo's first-ever order (firstDayByCombo) falls on/after the quarter's start day.
+// Returned: the combo has ordered at some point since the quarter started, is NOT new (has order
+// history from before the quarter), and was NOT active in the baseline window immediately before
+// the quarter started (last calendar month of the prior quarter for kegs; the full prior quarter
+// for cartons — the same "start of quarter" baseline perfAtRiskData's quarter mode and the Team
+// Dashboard's Listings trio already use) — i.e. it had lapsed heading into the quarter and has now
+// come back at some point during it. A combo that was continuously active straight through the
+// quarter boundary is neither new nor returned by this definition — it only shows up in Current
+// (and never At Risk), same as before.
+function perfQuarterNewReturnedData(bucket, outletFilterFn, qStartD, nowDayIdx, baselineWindow) {
+  const newList = [], returnedList = [];
+  for (const key in dailyVolume) {
+    const sep = key.indexOf('|');
+    const oid = key.slice(0, sep), gid = key.slice(sep+1);
+    const g = groups[gid];
+    if (!g || bucketOf(g) !== bucket) continue;
+    if (!outletFilterFn(oid)) continue;
+    const arr = dailyVolume[key];
+    let activeSinceQStart=false, activeBaseline=false, lastDay=null, sinceQStartLitres=0;
+    for (let i=0; i<arr.length; i+=2) {
+      const d = arr[i], l = arr[i+1];
+      if (lastDay===null || d>lastDay) lastDay = d;
+      if (d>=qStartD && d<=nowDayIdx) { activeSinceQStart = true; sinceQStartLitres += l; }
+      if (d>=baselineWindow.start && d<=baselineWindow.end) activeBaseline = true;
+    }
+    if (!activeSinceQStart) continue;
+    const row = {
+      oid, gid,
+      name: outlets[oid] ? outlets[oid].name : oid,
+      rsm: outlets[oid] ? (outlets[oid].rsm||'—') : '—',
+      beer: g.label,
+      bucketLabel: g.formatLabel,
+      lastOrder: dayLabel(lastDay),
+      litres: sinceQStartLitres,
+    };
+    const fd = firstDayByCombo[key];
+    if (fd >= qStartD) newList.push(row);
+    else if (!activeBaseline) returnedList.push(row);
+  }
+  return { newList, returnedList };
+}
 // Aggregates the At Risk list by SKU (beer + bucket) — a call-list is great for triage, but "which
 // beers are actually bleeding volume" is a different, complementary question: a SKU can dominate
 // the risk even if no single account on it is individually huge. Sorted biggest-volume-at-risk
@@ -5839,33 +5887,33 @@ function renderAtRiskPage() {
   const isLatest = asOfInput === meta.salesDataTo || !asOfInput;
   const nowDayIdx = dayIndexOf(asOfDate);
 
-  // Historical/quarter-end snapshot: swap the comparison baseline to the calendar-exact
-  // start-of-quarter window for the quarter containing the snapshot date — the same definition
-  // the Team Dashboard's Listings trio uses ("Start of quarter" for kegs = last calendar month
-  // of the prior quarter; for cartons = the full prior quarter) — so New/Returned/At Risk here
-  // reconcile with the Dashboard's start->end quarter growth instead of a short recent slice.
-  // Live/default view (asOf = latest data) keeps comparing cycle-to-cycle, since that's the more
-  // useful "who just went quiet, call them" signal for day-to-day triage.
-  let quarterWindows = null;
-  if (!isLatest) {
-    const fq = fyQuarterOf(asOfDate);
-    const prevQ = shiftQuarter(fq.fy, fq.q, -1);
-    const [prevQStart, prevQEndExcl] = quarterBoundsOf(prevQ.fy, prevQ.q);
-    const prevQEndIncl = new Date(prevQEndExcl.getTime() - 86400000);
-    const [lastMonthStart, lastMonthEndExcl] = calendarMonthBoundsOf(prevQEndIncl);
-    const lastMonthEndIncl = new Date(lastMonthEndExcl.getTime() - 86400000);
-    quarterWindows = {
-      KEGS: { start: dayIndexOf(lastMonthStart), end: dayIndexOf(lastMonthEndIncl) },
-      CARTONS: { start: dayIndexOf(prevQStart), end: dayIndexOf(prevQEndIncl) },
-    };
-  }
+  // "Start of quarter" baseline window for the quarter containing asOfDate — the same definition
+  // the Team Dashboard's Listings trio uses ("Start of quarter" for kegs = last calendar month of
+  // the prior quarter; for cartons = the full prior quarter). Round 63: computed unconditionally
+  // now (used to be snapshot-mode-only) because New/Returned always compare against it — see
+  // perfQuarterNewReturnedData below. At Risk/Current still only use it as their comparison
+  // baseline in historical/snapshot mode (passed conditionally further down, unchanged from
+  // before) — live/default view keeps comparing those two cycle-to-cycle, the more useful
+  // "who just went quiet, call them" signal for day-to-day triage.
+  const fq = fyQuarterOf(asOfDate);
+  const qStartD = dayIndexOf(quarterBoundsOf(fq.fy, fq.q)[0]);
+  const prevQ = shiftQuarter(fq.fy, fq.q, -1);
+  const [prevQStart, prevQEndExcl] = quarterBoundsOf(prevQ.fy, prevQ.q);
+  const prevQEndIncl = new Date(prevQEndExcl.getTime() - 86400000);
+  const [lastMonthStart, lastMonthEndExcl] = calendarMonthBoundsOf(prevQEndIncl);
+  const lastMonthEndIncl = new Date(lastMonthEndExcl.getTime() - 86400000);
+  const quarterWindows = {
+    KEGS: { start: dayIndexOf(lastMonthStart), end: dayIndexOf(lastMonthEndIncl) },
+    CARTONS: { start: dayIndexOf(prevQStart), end: dayIndexOf(prevQEndIncl) },
+  };
 
   let allNew=[], allReturned=[], allAtRisk=[], allCurrent=[];
   buckets.forEach(b => {
-    const d = perfAtRiskData(b, outletFilter, nowDayIdx, quarterWindows ? quarterWindows[b] : null);
+    const d = perfAtRiskData(b, outletFilter, nowDayIdx, isLatest ? null : quarterWindows[b]);
+    const q = perfQuarterNewReturnedData(b, outletFilter, qStartD, nowDayIdx, quarterWindows[b]);
     const tag = arr => arr.map(r => ({ ...r, bucket: b }));
-    allNew = allNew.concat(tag(d.newList));
-    allReturned = allReturned.concat(tag(d.returnedList));
+    allNew = allNew.concat(tag(q.newList));
+    allReturned = allReturned.concat(tag(q.returnedList));
     allAtRisk = allAtRisk.concat(tag(d.atRiskList));
     allCurrent = allCurrent.concat(tag(d.currentList));
   });
@@ -5879,21 +5927,22 @@ function renderAtRiskPage() {
   const asOfLabel = fmtDate(asOfInput || meta.salesDataTo);
   const snapshotNote = isLatest ? '' : ` — <strong>historical snapshot as of ${asOfLabel}</strong>, not the latest data`;
 
-  // Live mode: titles/hints describe the actual rolling-cycle comparison (4 weeks for kegs, 13
-  // for cartons) rather than claiming "this quarter", since that window is rarely a full quarter.
-  // Quarter mode: titles/hints now genuinely describe a whole-quarter comparison, matching how
-  // the numbers are computed above.
+  // Live mode: At Risk/Current titles/hints describe the actual rolling-cycle comparison (4 weeks
+  // for kegs, 13 for cartons) rather than claiming "this quarter", since that window is rarely a
+  // full quarter. Quarter mode: their titles/hints genuinely describe a whole-quarter comparison,
+  // matching how those two are computed above. Unchanged from before Round 63.
   const titleSuffix = isLatest ? '' : ` this quarter (as of ${asOfLabel})`;
-  const newHint = isLatest
-    ? "Ordered in the most recent cycle (4 weeks for kegs, 13 weeks for cartons), but hadn't ordered anything in the 12 months before that."
-    : "Ordered by the snapshot date, but hadn't ordered anything in the 12 months before the quarter started.";
-  const returnedHint = isLatest
-    ? "Missed the cycle immediately before this one, but have re-ordered in the most recent cycle."
-    : "Wasn't ordering at the start of the quarter, but has re-ordered since.";
   const atRiskHint = isLatest
     ? "Ordered in the cycle immediately before this one, nothing yet in the most recent cycle — needs a call."
     : "Was ordering at the start of the quarter, but nothing since — lost this quarter.";
   const currentHint = "Everyone actively ordering " + (isLatest ? 'right now' : 'as of that date') + " (most recent cycle: 4 weeks for kegs, 13 weeks for cartons).";
+
+  // Round 63: New/Returned now always describe a whole-quarter comparison (see
+  // perfQuarterNewReturnedData above), in both live and snapshot mode, so their title/hint text no
+  // longer branches on isLatest the way At Risk/Current's still does above.
+  const newReturnedTitleSuffix = isLatest ? ' this quarter' : ` this quarter (as of ${asOfLabel})`;
+  const newHint = "New listings that have appeared since the beginning of the current quarter — their first-ever order fell on or after the quarter's start date.";
+  const returnedHint = "Wasn't ordering at the start of the quarter, but has ordered again at some point since.";
 
   // Shown both on screen and on the printed/PDF report — the filter panel above it is hidden
   // when printing, so this line is what tells you which RSM/package type/date the report covers.
@@ -5903,17 +5952,17 @@ function renderAtRiskPage() {
   document.getElementById('ar_detail').innerHTML = `
     ${snapshotNote ? `<div class="hint no-print" style="margin-bottom:12px; color:var(--amber);">📅 ${snapshotNote.replace(/^ — /,'')}. Reset the date above to see the current picture.</div>` : ''}
     ${arScorecardHtml(allNew, allReturned, allAtRisk, allCurrent)}
-    ${atRiskTableHtml('New listings'+titleSuffix, newHint, allNew, 'green', 'Current volume')}
+    ${atRiskTableHtml('New listings'+newReturnedTitleSuffix, newHint, allNew, 'green', 'Volume this quarter')}
     <div class="panel">
       <h3 style="margin:0 0 4px;">New listings by SKU <span class="badge green">${allNew.length}</span></h3>
       <div class="hint" style="margin-bottom:8px;">Same new listings above, grouped by beer instead of by customer.</div>
-      ${arSkuSummaryHtml(allNew, 'New listings', 'Current volume')}
+      ${arSkuSummaryHtml(allNew, 'New listings', 'Volume this quarter')}
     </div>
-    ${atRiskTableHtml('Returned listings'+titleSuffix, returnedHint, allReturned, 'blue', 'Current volume')}
+    ${atRiskTableHtml('Returned listings'+newReturnedTitleSuffix, returnedHint, allReturned, 'blue', 'Volume this quarter')}
     <div class="panel">
       <h3 style="margin:0 0 4px;">Returned listings by SKU <span class="badge blue">${allReturned.length}</span></h3>
       <div class="hint" style="margin-bottom:8px;">Same returned listings above, grouped by beer instead of by customer.</div>
-      ${arSkuSummaryHtml(allReturned, 'Returned listings', 'Current volume')}
+      ${arSkuSummaryHtml(allReturned, 'Returned listings', 'Volume this quarter')}
     </div>
     ${atRiskTableHtml('At Risk / Churn / Lost Listings'+titleSuffix, atRiskHint, allAtRisk, 'red', 'Last volume')}
     <div class="panel">
