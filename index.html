@@ -984,6 +984,7 @@
         <div class="fld" style="margin:0;"><label>Banner group</label><select id="vt_bannerGroup"><option value="">All banner groups</option></select></div>
         <div class="fld" style="margin:0;"><label>Beer</label><select id="vt_subbrand"><option value="">All beers</option></select></div>
       </div>
+      <div id="vt_seriesToggle"></div>
     </div>
 
     <div class="panel">
@@ -1026,6 +1027,7 @@
           </select>
         </div>
       </div>
+      <div id="na_seriesToggle"></div>
     </div>
 
     <div id="na_cartons"></div>
@@ -1083,6 +1085,7 @@
           </select>
         </div>
       </div>
+      <div id="tv_seriesToggle"></div>
     </div>
 
     <div id="tv_volume"></div>
@@ -7246,14 +7249,27 @@ const VT_SERIES_META = {
 // marker dot) to keep the chart itself uncluttered. The legend lists series earliest-to-most-
 // recent with target last, since it's a goal rather than a point in time and reads more naturally
 // as the thing everything else is measured against.
-function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries) {
-  const activeExtra = ['ly2', 'ly', 'target'].filter(k => extraSeries && extraSeries[k] && extraSeries[k].some(v => v != null));
+// Round 68: `visibleSeries` (e.g. `{actual, ly, ly2, target}`, any key missing/undefined treated as
+// visible — only `false` hides it) lets the caller hide individual series so the page can offer a
+// "just this year" or "this year vs last year" view without recomputing any data. Omit it entirely
+// (or pass null) for the pre-existing "show everything" behaviour — every existing caller that
+// doesn't care about this (Delivery Reports' weight/kegs-collected charts) is unaffected.
+function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries, visibleSeries) {
+  const vis = visibleSeries || {};
+  const showActual = vis.actual !== false;
+  const activeExtra = ['ly2', 'ly', 'target'].filter(k => vis[k] !== false && extraSeries && extraSeries[k] && extraSeries[k].some(v => v != null));
   const fmt = v => decimals != null ? v.toFixed(decimals) : fmtNum(v);
   const n = values.length;
 
+  if (!activeExtra.length && !showActual) {
+    // Every series toggled off — nothing to draw.
+    return `<div class="empty">Every series is hidden above — tick at least one to see this chart.</div>`;
+  }
+
   if (!activeExtra.length) {
-    // No comparison series at all (e.g. Delivery Reports' weight/kegs-collected charts) — the
-    // original single-bar style, unchanged.
+    // No comparison series active — either none exist at all (e.g. Delivery Reports' weight/kegs-
+    // collected charts), or the user has toggled off Target/Last year/2 years ago and left only
+    // "This year" ticked. Either way it's the original single-bar style, unchanged.
     const max = Math.max(1, ...values);
     return `<div class="bar-chart" style="height:150px;">
       ${values.map((v,i) => `<div class="bar-col" title="${labels[i]}: ${fmt(v)}${suffix||''}">
@@ -7264,10 +7280,10 @@ function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries)
     </div>`;
   }
 
-  const lineKeys = ['ly2', 'ly', 'actual'].filter(k => k === 'actual' || activeExtra.includes(k));
+  const lineKeys = ['ly2', 'ly'].filter(k => activeExtra.includes(k)).concat(showActual ? ['actual'] : []);
   const colKeys = lineKeys.concat(activeExtra.includes('target') ? ['target'] : []);
   const seriesVals = { actual: values, ly: extraSeries.ly || null, ly2: extraSeries.ly2 || null, target: extraSeries.target || null };
-  const scaleVals = values.concat(...activeExtra.map(k => extraSeries[k].filter(v => v != null)));
+  const scaleVals = (showActual ? values : []).concat(...activeExtra.map(k => extraSeries[k].filter(v => v != null)));
   const max = Math.max(1, ...scaleVals);
   const lineColor = `var(${cssClass==='kegs'?'--keg':cssClass==='cartons'?'--pack':'--blue'})`;
   const heightPx = v => Math.max(0, Math.min(100, Math.round((v/max)*100)));
@@ -7281,11 +7297,11 @@ function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries)
   }).join('')}</div>`;
 
   const barsHtml = values.map((v, i) => {
-    const t = seriesVals.target ? seriesVals.target[i] : null;
-    const titleParts = [`${labels[i]}: actual ${fmt(v)}${suffix||''}`];
+    const t = (activeExtra.includes('target') && seriesVals.target) ? seriesVals.target[i] : null;
+    const titleParts = [showActual ? `${labels[i]}: actual ${fmt(v)}${suffix||''}` : labels[i]];
     if (t != null) titleParts.push('target ' + fmt(t) + (suffix||''));
-    if (seriesVals.ly && seriesVals.ly[i] != null) titleParts.push('last year ' + fmt(seriesVals.ly[i]) + (suffix||''));
-    if (seriesVals.ly2 && seriesVals.ly2[i] != null) titleParts.push('2 years ago ' + fmt(seriesVals.ly2[i]) + (suffix||''));
+    if (activeExtra.includes('ly') && seriesVals.ly && seriesVals.ly[i] != null) titleParts.push('last year ' + fmt(seriesVals.ly[i]) + (suffix||''));
+    if (activeExtra.includes('ly2') && seriesVals.ly2 && seriesVals.ly2[i] != null) titleParts.push('2 years ago ' + fmt(seriesVals.ly2[i]) + (suffix||''));
     return `<div class="lc-cell" title="${titleParts.join(' · ')}">${t != null ? `<div class="bar-rect ${cssClass}" style="height:${heightPx(t)}px;" data-value="${t}"></div>` : ''}</div>`;
   }).join('');
 
@@ -7334,6 +7350,36 @@ function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries)
     <div class="lc-monthrow">${monthLabelsHtml}</div>
   </div>`;
 }
+// Round 68: shared "Show:" checkbox row for the actuals-vs-targets charts, so a user can drop
+// down to "just this year" or "this year vs last year" on Volume Trends, Total Volume, and
+// National Accounts without leaving the page. One control per page (not per individual chart) —
+// every chart on that page reads the same visibility state, ticked via toggleChartSeries below.
+const CHART_TOGGLE_ITEMS = [
+  { key: 'actual', label: 'This year' },
+  { key: 'ly', label: 'Last year' },
+  { key: 'ly2', label: '2 years ago' },
+  { key: 'target', label: 'Target' },
+];
+function chartSeriesToggleHtml(vis, toggleFnName) {
+  return `<div class="rowflex no-print" style="gap:14px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+    <span class="muted" style="font-size:11.5px;">Show:</span>
+    ${CHART_TOGGLE_ITEMS.map(it => `<label style="display:inline-flex; align-items:center; gap:5px; font-size:12.5px;">
+      <input type="checkbox" ${vis[it.key] !== false ? 'checked' : ''} onchange="${toggleFnName}('${it.key}', this.checked)">
+      ${it.label}
+    </label>`).join('')}
+  </div>`;
+}
+// Per-page visibility state — a plain object of key -> false (missing/true both mean "visible",
+// matching vtBarChartHtml's own "only `false` hides it" convention above). Volume Trends, Total
+// Volume, and National Accounts each get their own independent state since they're separate pages,
+// but every chart WITHIN one page shares its page's single state object, per the "one control per
+// page" design.
+let vtSeriesVisible = {};
+let naSeriesVisible = {};
+let tvSeriesVisible = {};
+function toggleVtSeries(key, checked) { vtSeriesVisible[key] = checked; renderVolumeTrendsPage(); }
+function toggleNaSeries(key, checked) { naSeriesVisible[key] = checked; renderNationalAccountsPage(); }
+function toggleTvSeries(key, checked) { tvSeriesVisible[key] = checked; renderTotalVolumePage(); }
 // Resolves the target figures to overlay on Volume Trends — same RSM the page is filtered to,
 // or the sum across every RSM when no RSM filter is applied (matching how Team Dashboard's
 // "All" scope works).
@@ -7504,15 +7550,18 @@ function renderVolumeTrendsPage() {
     cartonVplTargets.push((t.cartonVolumeTarget != null && t.cartonListingsTarget) ? (t.cartonVolumeTarget / t.cartonListingsTarget) / weeksInQuarter / CARTON_UNIT_LITRES : null);
   });
 
+  const vtToggleEl = document.getElementById('vt_seriesToggle');
+  if (vtToggleEl) vtToggleEl.innerHTML = chartSeriesToggleHtml(vtSeriesVisible, 'toggleVtSeries');
+
   document.getElementById('vt_kegs').innerHTML = `
-    <div class="panel"><h3>Keg Volume per month <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegVol, 'kegs', ' L', null, {ly: kegVolLy, ly2: kegVolLy2, target: kegVolTargets}))}</div>
-    <div class="panel"><h3>Keg Listings per month</h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegListings, 'kegs', '', null, {ly: kegListingsLy, ly2: kegListingsLy2, target: kegListingsTargets}))}</div>
-    <div class="panel"><h3>Keg Volume per Listing per Week <span class="muted" style="font-weight:400; font-size:11px;">(kegs, 50L/keg — shown monthly)</span></h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegVpl, 'kegs', ' kegs', 1, {ly: kegVplLy, ly2: kegVplLy2, target: kegVplTargets}))}</div>
+    <div class="panel"><h3>Keg Volume per month <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegVol, 'kegs', ' L', null, {ly: kegVolLy, ly2: kegVolLy2, target: kegVolTargets}, vtSeriesVisible))}</div>
+    <div class="panel"><h3>Keg Listings per month</h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegListings, 'kegs', '', null, {ly: kegListingsLy, ly2: kegListingsLy2, target: kegListingsTargets}, vtSeriesVisible))}</div>
+    <div class="panel"><h3>Keg Volume per Listing per Week <span class="muted" style="font-weight:400; font-size:11px;">(kegs, 50L/keg — shown monthly)</span></h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegVpl, 'kegs', ' kegs', 1, {ly: kegVplLy, ly2: kegVplLy2, target: kegVplTargets}, vtSeriesVisible))}</div>
   `;
   document.getElementById('vt_cartons').innerHTML = `
-    <div class="panel"><h3>Carton Volume per quarter <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonVol, 'cartons', ' L', null, {ly: cartonVolLy, ly2: cartonVolLy2, target: cartonVolTargets}))}</div>
-    <div class="panel"><h3>Carton Listings per quarter</h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonListings, 'cartons', '', null, {ly: cartonListingsLy, ly2: cartonListingsLy2, target: cartonListingsTargets}))}</div>
-    <div class="panel"><h3>Carton Volume per Listing per Week <span class="muted" style="font-weight:400; font-size:11px;">(cartons, 6L/carton — shown quarterly)</span></h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonVpl, 'cartons', ' ctns', 1, {ly: cartonVplLy, ly2: cartonVplLy2, target: cartonVplTargets}))}</div>
+    <div class="panel"><h3>Carton Volume per quarter <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonVol, 'cartons', ' L', null, {ly: cartonVolLy, ly2: cartonVolLy2, target: cartonVolTargets}, vtSeriesVisible))}</div>
+    <div class="panel"><h3>Carton Listings per quarter</h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonListings, 'cartons', '', null, {ly: cartonListingsLy, ly2: cartonListingsLy2, target: cartonListingsTargets}, vtSeriesVisible))}</div>
+    <div class="panel"><h3>Carton Volume per Listing per Week <span class="muted" style="font-weight:400; font-size:11px;">(cartons, 6L/carton — shown quarterly)</span></h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonVpl, 'cartons', ' ctns', 1, {ly: cartonVplLy, ly2: cartonVplLy2, target: cartonVplTargets}, vtSeriesVisible))}</div>
   `;
 }
 
@@ -7802,11 +7851,11 @@ function veeScrollChart(html) {
 // One volume-only chart (no listings) — shared by both tabs below, which each show a single
 // combined series (cartons only for Coles & Woolworths; keg+carton litres, optionally filtered to
 // just one bucket, for Total Volume) rather than a separate keg/carton pair.
-function veeRenderVolumeChart(elId, labels, values, cssClass, granularity, titlePrefix, unitLabel, tooltipSuffix, decimals, extraSeries) {
+function veeRenderVolumeChart(elId, labels, values, cssClass, granularity, titlePrefix, unitLabel, tooltipSuffix, decimals, extraSeries, visibleSeries) {
   const gLabel = veeGranularityLabel(granularity);
   const unitTag = unitLabel ? `<span class="muted" style="font-weight:400; font-size:11px;">(${unitLabel})</span>` : '';
   document.getElementById(elId).innerHTML = `
-    <div class="panel"><h3>${titlePrefix} by ${gLabel} ${unitTag}</h3>${veeScrollChart(vtBarChartHtml(labels, values, cssClass, tooltipSuffix || '', decimals != null ? decimals : null, extraSeries || null))}</div>
+    <div class="panel"><h3>${titlePrefix} by ${gLabel} ${unitTag}</h3>${veeScrollChart(vtBarChartHtml(labels, values, cssClass, tooltipSuffix || '', decimals != null ? decimals : null, extraSeries || null, visibleSeries || null))}</div>
   `;
 }
 
@@ -8074,8 +8123,11 @@ function renderNationalAccountsPage() {
   const monthWeights = granularity === 'month' ? veeMonthlySeasonalWeights(periods, cartonSeries.map(p => p.ly)) : null;
   const targetSeries = periods.map((p, i) => naTargetForPeriod(p, granularity, monthWeights ? monthWeights[i] : null));
 
+  const naToggleEl = document.getElementById('na_seriesToggle');
+  if (naToggleEl) naToggleEl.innerHTML = chartSeriesToggleHtml(naSeriesVisible, 'toggleNaSeries');
+
   veeRenderVolumeChart('na_cartons', cartonSeries.map(p => p.label), cartonSeries.map(p => p.units), 'cartons', granularity, 'Carton volume', 'units', '', null,
-    { ly: cartonSeries.map(p => p.ly), ly2: cartonSeries.map(p => p.ly2), target: targetSeries });
+    { ly: cartonSeries.map(p => p.ly), ly2: cartonSeries.map(p => p.ly2), target: targetSeries }, naSeriesVisible);
 
   const quarterKey = document.getElementById('na_dist_quarter').value;
   document.getElementById('na_dist_table').innerHTML = naDistTableHtml(quarterKey);
@@ -8274,7 +8326,7 @@ function renderTvTargetVsPriorChart() {
   const litresSeries = tvTpLitresSeries(scope, periods, 'quarter');
   const targetSeries = periods.map(p => tvTargetForPeriod(p, 'quarter', 'ALL', streamsSelected, null));
   veeRenderVolumeChart('tv_tp_chart', litresSeries.map(p => p.label), litresSeries.map(p => p.litres), cssClass, 'quarter', titlePrefix, 'litres', ' L', null,
-    { ly: litresSeries.map(p => p.ly), ly2: litresSeries.map(p => p.ly2), target: targetSeries });
+    { ly: litresSeries.map(p => p.ly), ly2: litresSeries.map(p => p.ly2), target: targetSeries }, tvSeriesVisible);
 
   // Full-year companion: the whole FY as a single bar, so the total-for-the-year figure is visible
   // at a glance alongside the quarter-by-quarter breakdown, without having to mentally sum 4 bars.
@@ -8283,7 +8335,7 @@ function renderTvTargetVsPriorChart() {
     const yearLitresSeries = tvTpLitresSeries(scope, yearPeriod, 'year');
     const yearTargetSeries = yearPeriod.map(p => tvTargetForPeriod(p, 'year', 'ALL', streamsSelected, null));
     veeRenderVolumeChart('tv_tp_year_chart', yearLitresSeries.map(p => p.label), yearLitresSeries.map(p => p.litres), cssClass, 'year', titlePrefix, 'litres', ' L', null,
-      { ly: yearLitresSeries.map(p => p.ly), ly2: yearLitresSeries.map(p => p.ly2), target: yearTargetSeries });
+      { ly: yearLitresSeries.map(p => p.ly), ly2: yearLitresSeries.map(p => p.ly2), target: yearTargetSeries }, tvSeriesVisible);
   }
 }
 // Two-slice pie (Kegs vs Cartons) for a single period — matches the same period the SKU-by-SKU
@@ -8391,9 +8443,12 @@ function renderTotalVolumePage() {
   const monthWeights = granularity === 'month' ? veeMonthlySeasonalWeights(periods, litresSeries.map(p => p.ly)) : null;
   const targetSeries = periods.map((p, i) => tvTargetForPeriod(p, granularity, bucketFilterVal, streamsSelected, monthWeights ? monthWeights[i] : null));
 
+  const tvToggleEl = document.getElementById('tv_seriesToggle');
+  if (tvToggleEl) tvToggleEl.innerHTML = chartSeriesToggleHtml(tvSeriesVisible, 'toggleTvSeries');
+
   const cssClass = bucketFilterVal === 'KEGS' ? 'kegs' : bucketFilterVal === 'CARTONS' ? 'cartons' : 'combo';
   veeRenderVolumeChart('tv_volume', litresSeries.map(p => p.label), litresSeries.map(p => p.litres), cssClass, granularity, 'Volume', 'litres', ' L', null,
-    { ly: litresSeries.map(p => p.ly), ly2: litresSeries.map(p => p.ly2), target: targetSeries });
+    { ly: litresSeries.map(p => p.ly), ly2: litresSeries.map(p => p.ly2), target: targetSeries }, tvSeriesVisible);
 
   // Both the SKU-by-SKU pie and the Keg/Carton split pie below now show the SAME single period —
   // whichever one is selected in the period picker — rather than summing across every period on
