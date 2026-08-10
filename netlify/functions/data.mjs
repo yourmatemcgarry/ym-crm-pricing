@@ -569,6 +569,28 @@ export default async (req) => {
       return json({ ok: true, groupPrices: current });
     }
 
+    if (action === 'saveTargetMarginMultipack') {
+      // Round 64: per-SKU target margin % (multipack pack type) — used by the Off Premise Quick
+      // Margin Calculator to back-solve a suggested shelf price for each deal tier. null clears it
+      // back to "not set" rather than storing a real (if useless) 0%.
+      const { groupId, targetMarginMultipack, updatedBy } = payload;
+      const current = (await s.get('groupPrices', { type: 'json' })) || {};
+      const existing = current[groupId] || {};
+      current[groupId] = { ...existing, targetMarginMultipack: targetMarginMultipack == null ? null : Number(targetMarginMultipack), updatedBy, updatedAt: now };
+      await s.setJSON('groupPrices', current);
+      return json({ ok: true, groupPrices: current });
+    }
+
+    if (action === 'saveTargetMarginCarton') {
+      // Round 64: per-SKU target margin % (carton pack type) — see saveTargetMarginMultipack above.
+      const { groupId, targetMarginCarton, updatedBy } = payload;
+      const current = (await s.get('groupPrices', { type: 'json' })) || {};
+      const existing = current[groupId] || {};
+      current[groupId] = { ...existing, targetMarginCarton: targetMarginCarton == null ? null : Number(targetMarginCarton), updatedBy, updatedAt: now };
+      await s.setJSON('groupPrices', current);
+      return json({ ok: true, groupPrices: current });
+    }
+
     if (action === 'addCustomGroup') {
       // Adds a brand-new, self-serve SKU group (either a fresh custom product or a group
       // split off from an existing multi-member group). Upserted by id so re-saving an

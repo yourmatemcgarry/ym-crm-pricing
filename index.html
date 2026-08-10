@@ -625,7 +625,7 @@
 
       <div class="tablewrap">
         <table class="datatable">
-          <thead><tr><th class="center">Enabled</th><th>SKU group</th><th>Format</th><th>Pack sizes (cartons only)</th><th class="num-cell">List price</th><th class="num-cell">Weight</th><th>Deal price reference (for invoicing)</th><th>Updated</th></tr></thead>
+          <thead><tr><th class="center">Enabled</th><th>SKU group</th><th>Format</th><th>Pack sizes (cartons only)</th><th class="num-cell">List price</th><th class="num-cell">Weight</th><th>Target margin % (cartons only)</th><th>Deal price reference (for invoicing)</th><th>Updated</th></tr></thead>
           <tbody id="pp_body"></tbody>
         </table>
       </div>
@@ -829,11 +829,18 @@
   <div class="tabpage" id="tab-offpremise">
     <div class="panel no-print">
       <h2 style="margin:0;">Quick Margin Calculator</h2>
-      <div class="hint" style="margin-top:6px;">Pick a deal tier (and an optional pick fee) and every core Your Mates carton SKU shows up below — tweak the RRP on each to see what customers should be selling it for and check the margin. Not tied to any customer, just a quick what-if. Nothing here is saved.</div>
+      <div class="hint" style="margin-top:6px;">Set a target margin % (per pack type) on each SKU card below, then tick which deals you want to see — every core Your Mates carton SKU shows the suggested shelf price to hit that margin at each deal, pre-filled to the nearest dollar so you can tweak it and see the real margin at that price. Target margins are also saved to Product List Prices. Not tied to any customer, just a quick what-if — only the target margins are saved.</div>
       <div class="rowflex" style="flex-wrap:wrap; gap:10px; align-items:flex-end; margin-top:10px;">
-        <div class="fld" style="margin:0;"><label>Deal tier</label><select id="qop_dealX" onchange="quickOpOnGlobalDealChange(this)"></select></div>
-        <div class="fld" style="margin:0;"><label>Pick fee</label><input id="qop_pickFee" type="number" step="0.10" style="width:90px;" placeholder="0.00" onchange="quickOpOnGlobalPickFeeChange(this.value)"></div>
+        <div class="fld" style="margin:0;"><label>Pick fee <span class="muted" style="font-weight:400;">(wholesaler deals only)</span></label><input id="qop_pickFee" type="number" step="0.10" style="width:90px;" placeholder="0.00" onchange="quickOpOnGlobalPickFeeChange(this.value)"></div>
       </div>
+      <div class="rowflex" style="justify-content:space-between; align-items:center; margin-top:14px;">
+        <label style="font-weight:600; font-size:12.5px;">Deals to show</label>
+        <div class="rowflex" style="gap:6px;">
+          <button type="button" class="btn small secondary" onclick="setQuickOpDealPreset('all')">All</button>
+          <button type="button" class="btn small secondary" onclick="setQuickOpDealPreset('none')">None</button>
+        </div>
+      </div>
+      <div class="rowflex" style="flex-wrap:wrap; gap:4px 14px; margin-top:6px;" id="qop_dealPicker"></div>
       <div id="qop_body" style="margin-top:10px;"></div>
     </div>
     <div class="panel no-print">
@@ -2754,8 +2761,11 @@ function dcKey(outletId, groupId) { return outletId + '|' + groupId; }
 function listPriceFor(groupId) { const rec = productPrices[groupId]; return rec ? rec.listPrice : null; }
 
 // Default multipack size (cans) used until a SKU has its own value set on the Product List
-// Prices page.
-const DEFAULT_MULTIPACK_QTY = 6;
+// Prices page. Round 66 follow-up: dropped from 6 to 4 — every carton is treated as 4 multipacks
+// by default now, matching how Your Mates cartons actually split. A SKU with an explicit value
+// already saved (rec.multipackQty != null, see multipackQtyFor below) keeps that value; this only
+// changes the fallback for SKUs that have never had it set.
+const DEFAULT_MULTIPACK_QTY = 4;
 
 // Carton/multipack/can sizing — set per SKU group on the Product List Prices page, since each
 // SKU can genuinely come in a different carton size, multipack size, and can size. These are
@@ -2775,6 +2785,18 @@ function multipackQtyFor(groupId) {
 function canSizeMlFor(groupId) {
   const rec = productPrices[groupId];
   return (rec && rec.canSizeMl != null) ? rec.canSizeMl : null;
+}
+// Round 64: per-SKU target margin %, set separately for Multipack and Carton pack types on the
+// Product List Prices page (bottleshops sell the same beer at different margins per pack size).
+// null means "not set yet" — the Quick Margin Calculator (Off Premise) shows a prompt to set one
+// rather than guessing, since there's no sensible default margin to fall back to.
+function targetMarginCartonFor(groupId) {
+  const rec = productPrices[groupId];
+  return (rec && rec.targetMarginCarton != null) ? Number(rec.targetMarginCarton) : null;
+}
+function targetMarginMultipackFor(groupId) {
+  const rec = productPrices[groupId];
+  return (rec && rec.targetMarginMultipack != null) ? Number(rec.targetMarginMultipack) : null;
 }
 // Weight per sale unit (per keg, or per carton) — used by the Orders/Delivery tools to work out
 // a load's total weight and check it against a truck's capacity. These are rough placeholder
@@ -2960,6 +2982,8 @@ function buildServerPayload(fnName, args) {
     case 'removeActivationPhoto': return { id: args[0], photoIdx: args[1] };
     case 'deleteActivation':  return { id: args[0] };
     case 'saveWeightKg':      return { groupId: args[0], weightKg: args[1], updatedBy: args[2] };
+    case 'saveTargetMarginMultipack': return { groupId: args[0], targetMarginMultipack: args[1], updatedBy: args[2] };
+    case 'saveTargetMarginCarton':    return { groupId: args[0], targetMarginCarton: args[1], updatedBy: args[2] };
     case 'saveTruck':         return { id: args[0], name: args[1], maxWeightKg: args[2], updatedBy: args[3] };
     case 'deleteTruck':       return { id: args[0] };
     case 'saveOrder':         return { order: args[0] };
@@ -3606,7 +3630,7 @@ function renderProductPrices() {
   if (statusFilter === 'disabled') list = list.filter(g => !isGroupEnabled(g.id));
   if (pkgFilter) list = list.filter(g => bucketOf(g) === pkgFilter);
   const body = document.getElementById('pp_body');
-  if (list.length === 0) { body.innerHTML = `<tr><td colspan="8"><div class="empty">No SKU groups match.</div></td></tr>`; return; }
+  if (list.length === 0) { body.innerHTML = `<tr><td colspan="9"><div class="empty">No SKU groups match.</div></td></tr>`; return; }
   body.innerHTML = list.map(g => {
     const rec = productPrices[g.id];
     const enabled = isGroupEnabled(g.id);
@@ -3626,6 +3650,20 @@ function renderProductPrices() {
         <div class="fld" style="margin:0;">
           <label style="font-size:10px;">Can size (mL)</label>
           <input type="number" step="5" min="1" style="width:64px;" placeholder="—" value="${canMl===null?'':canMl}" onchange="updateCanSizeMl('${g.id}', this.value)">
+        </div>
+      </div>` : '<span class="muted">—</span>';
+    // Round 64: per-SKU target margin %, used by the Off Premise Quick Margin Calculator to
+    // back-solve a suggested shelf price for each deal tier. Cartons-only, same rationale as the
+    // pack-size fields above — a keg has no bottleshop shelf price to hit a margin target on.
+    const targetMarginCell = isCarton ? `
+      <div class="rowflex" style="gap:8px; flex-wrap:wrap;">
+        <div class="fld" style="margin:0;">
+          <label style="font-size:10px;">Multipack %</label>
+          <input type="number" step="1" min="0" max="99" style="width:56px;" placeholder="—" value="${targetMarginMultipackFor(g.id)===null?'':targetMarginMultipackFor(g.id)}" onchange="updateTargetMarginMultipack('${g.id}', this.value)">
+        </div>
+        <div class="fld" style="margin:0;">
+          <label style="font-size:10px;">Carton %</label>
+          <input type="number" step="1" min="0" max="99" style="width:56px;" placeholder="—" value="${targetMarginCartonFor(g.id)===null?'':targetMarginCartonFor(g.id)}" onchange="updateTargetMarginCarton('${g.id}', this.value)">
         </div>
       </div>` : '<span class="muted">—</span>';
     return `<tr>
@@ -3651,6 +3689,7 @@ function renderProductPrices() {
         <input type="number" step="0.1" min="0" style="width:70px; text-align:right;" value="${weightKgFor(g.id)}" onchange="updateWeightKg('${g.id}', this.value)">
         <div class="hint" style="text-align:right;">kg per ${bucketOf(g)==='KEGS'?'keg':'carton'}</div>
       </td>
+      <td>${targetMarginCell}</td>
       <td id="dealref_${g.id}" style="min-width:280px;">${dealPriceRefHtml(g, rec?rec.listPrice:null)}</td>
       <td class="muted">${rec && rec.updatedAt ? (escapeHtml(rec.updatedBy||'')+'<br>'+new Date(rec.updatedAt).toLocaleDateString('en-AU')) : '—'}</td>
     </tr>`;
@@ -3698,6 +3737,38 @@ function updateWeightKg(groupId, val) {
   productPrices[groupId] = { ...existing, weightKg: num, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
   renderProductPrices();
   callServer('saveWeightKg', [groupId, num, currentUserEmail], () => toast('Weight saved.'));
+}
+// Round 64: target margin % (cartons only, set separately per pack type). Blank clears it back to
+// "not set" (rather than 0%, which would be a real — if useless — target), same pattern as pick
+// fees/delivery fees elsewhere: blank means "no target set yet", not "target is zero".
+// Round 64b: also editable directly on the Quick Margin Calculator (Off Premise) card for each SKU
+// — same underlying productPrices field either way, so both pages re-render on every change to stay
+// in sync no matter which one you edit from.
+function updateTargetMarginMultipack(groupId, val) {
+  const trimmed = (val || '').trim();
+  const existing = productPrices[groupId] || {};
+  let num = null;
+  if (trimmed !== '') {
+    num = parseFloat(trimmed);
+    if (isNaN(num) || num <= 0 || num >= 100) { toast('Enter a margin % between 0 and 100, or leave blank.'); renderProductPrices(); renderQuickOp(); return; }
+  }
+  productPrices[groupId] = { ...existing, targetMarginMultipack: num, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+  renderProductPrices();
+  renderQuickOp();
+  callServer('saveTargetMarginMultipack', [groupId, num, currentUserEmail], () => toast('Target margin (multipack) saved.'));
+}
+function updateTargetMarginCarton(groupId, val) {
+  const trimmed = (val || '').trim();
+  const existing = productPrices[groupId] || {};
+  let num = null;
+  if (trimmed !== '') {
+    num = parseFloat(trimmed);
+    if (isNaN(num) || num <= 0 || num >= 100) { toast('Enter a margin % between 0 and 100, or leave blank.'); renderProductPrices(); renderQuickOp(); return; }
+  }
+  productPrices[groupId] = { ...existing, targetMarginCarton: num, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+  renderQuickOp();
+  renderProductPrices();
+  callServer('saveTargetMarginCarton', [groupId, num, currentUserEmail], () => toast('Target margin (carton) saved.'));
 }
 // ===================== Custom products & splitting =====================
 function slugifyForGroupId(label) {
@@ -4322,10 +4393,18 @@ function singleCostExGst(effPriceCarton, pickFeeCarton, refPackQty) {
   if (c === null || !refPackQty) return null;
   return c / refPackQty;
 }
+// Round 66 fix: a multipack's cost is the case cost split evenly across however many multipacks
+// make up that case — e.g. a $56.50 case sold as 4-packs means each 4-pack costs $56.50/4 =
+// $14.125 ex GST. This divides the case cost directly by multipackQty rather than routing through
+// a per-can cost first (the old formula multiplied the per-can cost, cartonCost/cansPerCarton, back
+// up by multipackQty — mathematically only equivalent to this when cansPerCarton happened to be a
+// clean multiple, and wrong whenever the "Cans/carton" figure didn't match how the case actually
+// splits into multipacks). refPackQty is intentionally unused here now — kept in the signature so
+// every existing call site (which all pass it) doesn't need touching.
 function multipackCostExGst(effPriceCarton, pickFeeCarton, refPackQty, multipackQty) {
-  const single = singleCostExGst(effPriceCarton, pickFeeCarton, refPackQty);
-  if (single === null || !multipackQty) return null;
-  return single * multipackQty;
+  const c = cartonCostExGst(effPriceCarton, pickFeeCarton);
+  if (c === null || !multipackQty) return null;
+  return c / multipackQty;
 }
 function unitMargin(costExGst, retailIncGst) {
   if (costExGst === null || costExGst === undefined) return null;
@@ -4342,6 +4421,26 @@ function computeMargin(effPricePerKeg, kegLitres, sizeMl, retailIncGst, pickFeeK
   const um = unitMargin(costExGst, retailIncGst);
   const servesPerKeg = Math.floor((kegLitres * 1000) / sizeMl);
   return { ...um, servesPerKeg };
+}
+// Round 64: back-solve the shelf (retail, inc GST) price needed to hit a target margin %, given a
+// cost ex GST. Inverse of unitMargin() above — marginPct there is defined as
+// (retailExGst - costExGst) / retailExGst * 100, so retailExGst = costExGst / (1 - marginPct/100).
+// Returns null if there's no cost yet, no target margin set, or the target margin is an invalid/
+// impossible value (<=0% or >=100%, which would mean free stock or negative cost).
+function shelfPriceForTargetMargin(costExGst, targetMarginPct) {
+  if (costExGst === null || costExGst === undefined) return null;
+  if (targetMarginPct === null || targetMarginPct === undefined) return null;
+  const pct = Number(targetMarginPct);
+  if (isNaN(pct) || pct <= 0 || pct >= 100) return null;
+  const retailExGst = costExGst / (1 - pct / 100);
+  return retailExGst * (1 + GST_RATE);
+}
+// "As it would be closest to an even dollar" — the Quick Margin Calculator pre-fills its editable
+// shelf-price field with this rounding of the target-margin-derived price, so reps start from a
+// realistic sticker price instead of an exact-to-the-cent number nobody would actually charge.
+function roundToNearestDollar(x) {
+  if (x === null || x === undefined || isNaN(x)) return null;
+  return Math.round(x);
 }
 function marginBadgeHtml(m) {
   if (!m) return `<div class="muted" style="font-size:10.5px;">Set list price</div>`;
@@ -4745,82 +4844,151 @@ function applyMarginDeal(outletId, groupId) {
 
 // ===================== OFF PREMISE (BOTTLESHOPS) =====================
 // ---------- Quick Margin Calculator (Off Premise) — not tied to any customer ----------
-// Purpose: pick ONE deal tier (and an optional pick fee), and every core carton SKU shows up at
-// once with its RRP editable and margin computed live — the workflow is "what should everyone be
-// selling this range for at this deal", not "let me check one SKU at a time". Nothing here saved.
-let quickOpDealX = 0;      // global deal tier applied to every core SKU
-let quickOpPickFee = 0;    // global pick fee applied to every core SKU
-let quickOpPrices = {};    // groupId -> { carton, multipack, single } RRP overrides
-function quickOpPricesFor(gid) {
-  return quickOpPrices[gid] || (quickOpPrices[gid] = {});
+// Round 64 redesign, per the user's request: "load in a target margin for each SKU (eg 30% MPK,
+// 15% Carton)... be able to choose what deals we see... calculate what the shelf price should be
+// for each deal, then there should be a spot for the user to enter in a number (as it would be
+// closest to a even dollar) then it should show the final margin for that price."
+//
+// Every deal tier you tick (direct AND wholesaler, mixed into one flat list — no need to pick them
+// separately) gets its own row for every core carton SKU. Each row shows, per pack type
+// (Multipack/Carton — Single deliberately left out of this workflow, per the user's own scope):
+// the shelf price needed to hit that SKU's target margin % (from Product List Prices), an editable
+// price field defaulting to that figure rounded to the nearest whole dollar, and the real margin at
+// whatever price ends up in the field. Nothing here is saved.
+let quickOpPickFee = 0;    // global pick fee — wholesaler-tier rows only (direct never has a pick fee, same rule as everywhere else in the app)
+let quickOpDealSelection = null; // Set of dealKey strings to show; null = "all" (the default — start with everything visible)
+let quickOpPrices = {};    // groupId -> dealKey -> { carton, multipack } user-entered price overrides (unset = use the rounded suggestion)
+
+// Builds the flat, combined list of selectable deal tiers: a "No deal" baseline, then every direct
+// tier, then every (non-zero) wholesaler tier — generated from the same DEAL_SETS/WHOLESALER_DEAL_SETS
+// constants used everywhere else, so it stays in sync if those ever change. Wholesaler's own "0"
+// tier is skipped since it's identical to "No deal" (list price, no discount) already covered above.
+function quickOpDealOptions() {
+  const opts = [{ key: 'nodeal', label: 'No deal (list price)', type: 'direct', x: 0 }];
+  const rest = [];
+  dealSetFor('CARTONS').filter(v => v > 0).forEach(v => rest.push({ key: 'direct_' + v, label: 'Direct ' + v + '+1', type: 'direct', x: v }));
+  wholesalerDealSetFor('CARTONS').filter(v => v > 0).forEach(v => rest.push({ key: 'wholesaler_' + v, label: 'Wholesaler ' + v + '+1', type: 'wholesaler', x: v }));
+  // Round 66 fix: order lowest discount -> highest discount. An "X+1" deal's discount fraction is
+  // 1/(X+1), which gets SMALLER as X gets bigger — so "lowest discount first" means biggest X
+  // first. Ties (Direct 15+1 and Wholesaler 15+1 are the same discount) keep direct ahead of
+  // wholesaler, matching the type ordering used everywhere else in the app.
+  rest.sort((a, b) => (b.x - a.x) || (a.type === b.type ? 0 : (a.type === 'direct' ? -1 : 1)));
+  return opts.concat(rest);
 }
+function quickOpDealSelected(key) {
+  return quickOpDealSelection === null || quickOpDealSelection.has(key);
+}
+function setQuickOpDealPreset(mode) {
+  quickOpDealSelection = mode === 'all' ? null : new Set();
+  renderQuickOp();
+}
+function toggleQuickOpDeal(key, checked) {
+  if (quickOpDealSelection === null) quickOpDealSelection = new Set(quickOpDealOptions().map(o => o.key));
+  if (checked) quickOpDealSelection.add(key); else quickOpDealSelection.delete(key);
+  renderQuickOp();
+}
+function quickOpDealPickerHtml() {
+  return quickOpDealOptions().map(o => `<label style="display:inline-flex; align-items:center; gap:5px; font-size:12.5px; white-space:nowrap;">
+    <input type="checkbox" ${quickOpDealSelected(o.key)?'checked':''} onchange="toggleQuickOpDeal('${o.key}',this.checked)">
+    ${escapeHtml(o.label)} <span class="badge ${o.type==='wholesaler'?'amber':'grey'}" style="font-size:9px;">${o.type==='wholesaler'?'Wholesaler':'Direct'}</span>
+  </label>`).join('');
+}
+
 function quickOpCoreGroupIds() {
   return coreCartonGroupIds();
-}
-function quickOpOnGlobalDealChange(sel) {
-  if (sel.value === 'custom') {
-    const val = window.prompt('Enter the custom deal number (X for X+1):');
-    const num = parseFloat(val);
-    quickOpDealX = (!isNaN(num) && num > 0) ? num : 0;
-  } else {
-    quickOpDealX = parseFloat(sel.value) || 0;
-  }
-  renderQuickOp();
 }
 function quickOpOnGlobalPickFeeChange(val) {
   const num = parseFloat(val);
   quickOpPickFee = isNaN(num) ? 0 : num;
   renderQuickOp();
 }
-function quickOpOnPriceChange(gid, type, val) {
-  const num = parseFloat(val);
-  quickOpPricesFor(gid)[type] = isNaN(num) ? 0 : num;
+function quickOpPricesFor(gid, dealKey) {
+  if (!quickOpPrices[gid]) quickOpPrices[gid] = {};
+  if (!quickOpPrices[gid][dealKey]) quickOpPrices[gid][dealKey] = {};
+  return quickOpPrices[gid][dealKey];
+}
+// Blank clears the override back to the rounded target-margin suggestion — same "blank = go back
+// to the computed default" pattern used for fees elsewhere, not "blank = zero".
+function quickOpOnPriceChange(gid, dealKey, type, val) {
+  const trimmed = (val || '').trim();
+  const rec = quickOpPricesFor(gid, dealKey);
+  if (trimmed === '') { delete rec[type]; renderQuickOp(); return; }
+  const num = parseFloat(trimmed);
+  if (isNaN(num) || num < 0) { toast('Enter a valid price.'); renderQuickOp(); return; }
+  rec[type] = num;
   renderQuickOp();
+}
+function quickOpDealRowHtml(gid, opt, listPrice, cartonPackQty, multipackQty, targetMarginMultipack, targetMarginCarton) {
+  const effForCalc = listPrice !== null ? effPrice(listPrice, opt.x) : null;
+  const pickFee = opt.type === 'wholesaler' ? (quickOpPickFee || 0) : 0;
+  const priceRec = quickOpPricesFor(gid, opt.key);
+
+  const multiCost = multipackCostExGst(effForCalc, pickFee, cartonPackQty, multipackQty);
+  const suggestedMulti = roundToNearestDollar(shelfPriceForTargetMargin(multiCost, targetMarginMultipack));
+  const multiPrice = priceRec.multipack != null ? priceRec.multipack : suggestedMulti;
+  const multiM = (multiCost===null || multiPrice===null) ? null : unitMargin(multiCost, multiPrice);
+
+  const cartonCost = cartonCostExGst(effForCalc, pickFee);
+  const suggestedCarton = roundToNearestDollar(shelfPriceForTargetMargin(cartonCost, targetMarginCarton));
+  const cartonPrice = priceRec.carton != null ? priceRec.carton : suggestedCarton;
+  const cartonM = (cartonCost===null || cartonPrice===null) ? null : unitMargin(cartonCost, cartonPrice);
+
+  return `<tr>
+    <td>${escapeHtml(opt.label)} <span class="badge ${opt.type==='wholesaler'?'amber':'grey'}" style="font-size:9px;">${opt.type==='wholesaler'?'Wholesaler':'Direct'}</span>
+      <div class="muted" style="font-size:9.5px;">${effForCalc!==null?('eff '+fmtMoney(effForCalc)):'No list price'}</div>
+    </td>
+    <td class="num-cell mono">${suggestedMulti!==null?fmtMoney(suggestedMulti):'<span class="muted" style="font-size:10.5px;">Set target margin</span>'}</td>
+    <td class="num-cell"><input type="number" step="1" min="0" style="width:64px; text-align:right;" value="${multiPrice!=null?multiPrice:''}" onchange="quickOpOnPriceChange('${gid}','${opt.key}','multipack',this.value)"></td>
+    <td class="num-cell">${marginBadgeHtml(multiM)}</td>
+    <td class="num-cell mono">${suggestedCarton!==null?fmtMoney(suggestedCarton):'<span class="muted" style="font-size:10.5px;">Set target margin</span>'}</td>
+    <td class="num-cell"><input type="number" step="1" min="0" style="width:64px; text-align:right;" value="${cartonPrice!=null?cartonPrice:''}" onchange="quickOpOnPriceChange('${gid}','${opt.key}','carton',this.value)"></td>
+    <td class="num-cell">${marginBadgeHtml(cartonM)}</td>
+  </tr>`;
 }
 function quickOpCardHtml(gid) {
   const g = groups[gid];
   if (!g) return '';
-  const prices = quickOpPricesFor(gid);
   const listPrice = listPriceFor(gid);
-  const effForCalc = listPrice !== null ? effPrice(listPrice, quickOpDealX) : null;
   const cartonPackQty = cartonPackQtyFor(gid);
   const multipackQty = multipackQtyFor(gid);
-  const canMl = canSizeMlFor(gid);
+  const targetMarginMultipack = targetMarginMultipackFor(gid);
+  const targetMarginCarton = targetMarginCartonFor(gid);
 
-  const cartonPrice = prices.carton != null ? prices.carton : defaultOffPremisePrice('carton');
-  const cartonCost = cartonCostExGst(effForCalc, quickOpPickFee);
-  const cartonM = cartonCost===null ? null : unitMargin(cartonCost, cartonPrice);
+  const dealOpts = quickOpDealOptions().filter(o => quickOpDealSelected(o.key));
+  const rowsHtml = dealOpts.map(opt => quickOpDealRowHtml(gid, opt, listPrice, cartonPackQty, multipackQty, targetMarginMultipack, targetMarginCarton)).join('');
 
-  const multiPrice = prices.multipack != null ? prices.multipack : defaultOffPremisePrice('multipack');
-  const multiCost = multipackCostExGst(effForCalc, quickOpPickFee, cartonPackQty, multipackQty);
-  const multiM = multiCost===null ? null : unitMargin(multiCost, multiPrice);
-
-  const singlePrice = prices.single != null ? prices.single : defaultOffPremisePrice('single');
-  const singleCost = singleCostExGst(effForCalc, quickOpPickFee, cartonPackQty);
-  const singleM = singleCost===null ? null : unitMargin(singleCost, singlePrice);
-
-  return `<div class="panel" style="flex:1; min-width:380px;">
+  return `<div class="panel" style="flex:1; min-width:560px;">
     <div class="rowflex" style="justify-content:space-between; align-items:center;">
       <h3 style="margin:0;">${escapeHtml(g.label)} <span class="badge cartons" style="font-size:9px;">${escapeHtml(g.formatLabel)}</span></h3>
     </div>
     <div class="rowflex" style="gap:10px; flex-wrap:wrap; margin:8px 0;">
       <div class="fld" style="margin:0;"><label>List price</label><div class="kpi-num" style="font-size:14px;">${listPrice!==null?fmtMoney(listPrice):'Not set'}</div></div>
-      <div class="fld" style="margin:0;"><label>Effective (${escapeHtml(dealLabel(quickOpDealX))})</label><div class="kpi-num" style="font-size:14px;">${effForCalc!==null?fmtMoney(effForCalc):'—'}</div></div>
+      <div class="fld" style="margin:0;">
+        <label>Target margin (Multipack)</label>
+        <div class="rowflex" style="gap:4px; align-items:center;">
+          <input type="number" step="1" min="0" max="99" style="width:56px;" placeholder="—" value="${targetMarginMultipack!=null?targetMarginMultipack:''}" onchange="updateTargetMarginMultipack('${gid}', this.value)">
+          <span class="muted">%</span>
+        </div>
+      </div>
+      <div class="fld" style="margin:0;">
+        <label>Target margin (Carton)</label>
+        <div class="rowflex" style="gap:4px; align-items:center;">
+          <input type="number" step="1" min="0" max="99" style="width:56px;" placeholder="—" value="${targetMarginCarton!=null?targetMarginCarton:''}" onchange="updateTargetMarginCarton('${gid}', this.value)">
+          <span class="muted">%</span>
+        </div>
+      </div>
     </div>
     ${listPrice===null?'<div class="hint" style="margin-bottom:8px;">No list price set yet — set it on Product List Prices.</div>':''}
+    ${(targetMarginMultipack==null || targetMarginCarton==null)?'<div class="hint" style="margin-bottom:8px;">Set a target margin % above to see a suggested shelf price (also saved to Product List Prices).</div>':''}
     <div class="tablewrap"><table class="datatable">
-      <thead><tr><th>Unit</th><th class="num-cell">RRP (inc GST)</th><th class="num-cell">Margin</th></tr></thead>
-      <tbody>
-        <tr><td>Carton${cartonPackQty?` (${cartonPackQty}-pack)`:''}</td><td class="num-cell"><input type="number" step="0.10" style="width:64px; text-align:right;" value="${cartonPrice}" onchange="quickOpOnPriceChange('${gid}','carton',this.value)"></td><td class="num-cell">${marginBadgeHtml(cartonM)}</td></tr>
-        <tr><td>Multipack${multipackQty?` (${multipackQty}-pack)`:''}</td><td class="num-cell"><input type="number" step="0.10" style="width:64px; text-align:right;" value="${multiPrice}" onchange="quickOpOnPriceChange('${gid}','multipack',this.value)"></td><td class="num-cell">${marginBadgeHtml(multiM)}</td></tr>
-        <tr><td>Single can${canMl?` (${canMl}mL)`:''}</td><td class="num-cell"><input type="number" step="0.10" style="width:64px; text-align:right;" value="${singlePrice}" onchange="quickOpOnPriceChange('${gid}','single',this.value)"></td><td class="num-cell">${marginBadgeHtml(singleM)}</td></tr>
-      </tbody>
+      <thead><tr><th>Deal</th><th class="num-cell">Multipack suggested</th><th class="num-cell">Multipack price</th><th class="num-cell">Multipack margin</th><th class="num-cell">Carton suggested</th><th class="num-cell">Carton price</th><th class="num-cell">Carton margin</th></tr></thead>
+      <tbody>${rowsHtml || '<tr><td colspan="7"><div class="empty">No deals ticked above — tick some to see suggested shelf prices.</div></td></tr>'}</tbody>
     </table></div>
   </div>`;
 }
 function renderQuickOp() {
-  const dealSel = document.getElementById('qop_dealX');
-  if (dealSel) dealSel.innerHTML = dealOptionsHtml(quickOpDealX, 'CARTONS');
+  const dealPickerEl = document.getElementById('qop_dealPicker');
+  if (dealPickerEl) dealPickerEl.innerHTML = quickOpDealPickerHtml();
   const pickFeeEl = document.getElementById('qop_pickFee');
   if (pickFeeEl && document.activeElement !== pickFeeEl) pickFeeEl.value = quickOpPickFee || '';
 
