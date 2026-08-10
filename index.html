@@ -11,6 +11,7 @@
     --green:#1e8a5f; --green-bg:#e7f6ef; --red:#c0392b; --red-bg:#fdecea;
     --amber:#b8842a; --amber-bg:#fbf1de; --blue:#2563eb; --blue-bg:#eaf1fe;
     --keg:#7c4dab; --keg-bg:#f2eaf9; --pack:#1e7fb8; --pack-bg:#e8f3fb;
+    --grey2:#c3c9d1;
     --grp-rsm:#4d8dff; --grp-mgmt:#a875f5; --grp-supply:#3ecf8e;
   }
   * { box-sizing: border-box; }
@@ -89,34 +90,57 @@
   .bar-chart .bar-rect { width:100%; max-width:34px; background:var(--blue); border-radius:3px 3px 0 0; min-height:2px; }
   .bar-chart .bar-rect.kegs { background:var(--keg); }
   .bar-chart .bar-rect.cartons { background:var(--pack); }
+  /* Round 69: on every actuals-vs-target chart (i.e. wherever a comparison series exists at all),
+     colour is fixed by series ROLE rather than by chart type — red = target, blue = actual/this
+     year, grey = last year, lighter grey = 2 years ago — regardless of whether that series is
+     currently drawn as a bar or as a line. Charts with no comparison series at all (Delivery
+     Reports' weight/kegs-collected charts) are a different, unrelated family and keep the
+     kegs/cartons colouring above, untouched. */
+  .bar-rect.role-target { background:var(--red); }
+  .bar-rect.role-actual { background:var(--blue); }
+  .bar-rect.role-ly { background:var(--muted); }
+  .bar-rect.role-ly2 { background:var(--grey2); }
   .bar-chart .bar-wk { font-size:9.5px; color:var(--muted); margin-top:5px; text-align:center; white-space:nowrap; }
   .bar-track { position:relative; width:100%; height:100px; display:flex; align-items:flex-end; justify-content:center; }
   .bar-legend { display:flex; gap:14px; align-items:center; font-size:11px; color:var(--muted); margin-bottom:6px; flex-wrap:wrap; }
   .bar-legend .bl-swatch { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px; background:var(--blue); }
-  /* Legend line swatches for the actual / last-year / 2-years-ago line series — the actual swatch's
-     colour is set inline per chart (kegs/cartons/blue) to match its line; ly/ly2 use a fixed
-     dashed/dotted neutral style so they read consistently across every chart. */
+  .bl-swatch.role-target { background:var(--red); }
+  .bl-swatch.role-actual { background:var(--blue); }
+  .bl-swatch.role-ly { background:var(--muted); }
+  .bl-swatch.role-ly2 { background:var(--grey2); }
+  /* Legend line swatches for whichever series is currently rendered as an overlaid line — colour
+     always follows the same red/blue/grey role rule as the bars above. */
   .bl-line { display:inline-block; width:14px; height:0; margin-right:4px; vertical-align:4px; }
   .bl-line.lc-actual { border-top:2.5px solid var(--blue); }
+  .bl-line.lc-target { border-top:2.5px solid var(--red); }
   .bl-line.lc-ly { border-top:2px dashed rgba(20,24,34,.55); }
   .bl-line.lc-ly2 { border-top:2px dotted rgba(20,24,34,.32); }
-  /* Hybrid bar+line chart: target renders as a bar per period (.lc-bars/.lc-cell/.bar-rect), while
-     actual/last-year/2-years-ago render as SVG line series drawn on top in the same coordinate
-     space. The SVG uses viewBox="0 0 N 100" with preserveAspectRatio="none" so its 0..N horizontal
-     units line up exactly with the N equal-width flex .lc-cell columns beneath it, whatever the
-     chart's actual rendered pixel width turns out to be. */
+  /* Hybrid bar+line chart. Which series render as bars (.lc-bars/.lc-cell/.bar-rect) vs. as
+     overlaid SVG lines depends on the chart's granularity (see vtChartModeFor in app3.js): monthly
+     trend charts keep the original design (target = bar, actual/last-year/2-years-ago = lines);
+     quarterly trend charts flip it (actual/last-year/2-years-ago = grouped bars, target = line);
+     annual/FY charts render every series as a bar, no lines at all. The SVG uses viewBox="0 0 N
+     100" with preserveAspectRatio="none" so its 0..N horizontal units line up exactly with the N
+     equal-width flex .lc-cell columns beneath it, whatever the chart's actual rendered pixel width
+     turns out to be. */
   .bar-chart.line-chart { display:block; padding-top:0; }
   .lc-plot { position:relative; height:100px; }
   .lc-bars { position:absolute; inset:0; display:flex; }
   .lc-bars .lc-cell { flex:1; height:100%; display:flex; align-items:flex-end; justify-content:center; }
   .lc-bars .lc-cell .bar-rect { width:55%; max-width:30px; }
+  /* Grouped cell: 2+ bars share one period (e.g. actual + last year on a quarterly trend chart, or
+     every series at once on an annual/FY chart) — each bar shrinks to fit, side by side. */
+  .lc-bars .lc-cell.grouped { gap:3px; }
+  .lc-bars .lc-cell.grouped .bar-rect { width:auto; flex:1 1 0; max-width:16px; }
   .lc-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
   .lc-line { fill:none; stroke-width:2px; }
-  .lc-line.lc-actual { stroke-width:2.5px; }
+  .lc-line.lc-actual { stroke:var(--blue); stroke-width:2.5px; }
+  .lc-line.lc-target { stroke:var(--red); stroke-width:2.5px; }
   .lc-line.lc-ly { stroke:rgba(20,24,34,.55); stroke-dasharray:5,3; }
   .lc-line.lc-ly2 { stroke:rgba(20,24,34,.32); stroke-dasharray:2,2; }
   .lc-dot { position:absolute; width:6px; height:6px; border-radius:50%; pointer-events:auto; transform:translate(-50%, 50%); }
-  .lc-dot.lc-actual { width:7px; height:7px; }
+  .lc-dot.lc-actual { background:var(--blue); width:7px; height:7px; }
+  .lc-dot.lc-target { background:var(--red); width:7px; height:7px; }
   .lc-dot.lc-ly { background:rgba(20,24,34,.55); }
   .lc-dot.lc-ly2 { background:rgba(20,24,34,.32); }
   .lc-monthrow { display:flex; margin-top:5px; }
@@ -7231,78 +7255,110 @@ function vtGroupFilter() {
 // individual missing data point within an otherwise-present series still renders as "—". The
 // scale accounts for every visible series so no bar is ever clipped off the top of the chart.
 const VT_SERIES_META = {
-  ly2:    { label: '2 years ago', lineClass: 'lc-ly2' },
-  ly:     { label: 'Last year',   lineClass: 'lc-ly' },
-  actual: { label: 'Actual',      lineClass: 'lc-actual' },
-  target: { label: 'Target' },
+  ly2:    { label: '2 years ago', lineClass: 'lc-ly2',    barRole: 'role-ly2' },
+  ly:     { label: 'Last year',   lineClass: 'lc-ly',     barRole: 'role-ly' },
+  actual: { label: 'Actual',      lineClass: 'lc-actual', barRole: 'role-actual' },
+  target: { label: 'Target',      lineClass: 'lc-target', barRole: 'role-target' },
 };
-// Target — a single goal figure per period, when set — renders as a bar, the one series that
-// reads naturally as a solid column. Actual, last year, and 2 years ago are all real historical
-// trends, so they render as overlaid lines instead (a standard combo-chart pattern for "trend vs
-// goal"), sharing one 100px-tall plot row per chart via an absolutely-positioned SVG whose viewBox
-// (0..N periods wide, 0..100 tall) is stretched (preserveAspectRatio="none") to exactly match the
-// N equal-width bar columns beneath it, so a line point at period i sits dead-center over that
-// period's bar. This replaced an earlier "bullet graph" layout (reference lines drawn across each
-// period's own bar) and, before that, a grouped-bar layout (up to 4 full bars per period) — lines
-// scale to a long trailing window far better than either, without needing horizontal scrolling.
-// Per-series figures are on hover only (the target bar's tooltip, and each line point's own small
-// marker dot) to keep the chart itself uncluttered. The legend lists series earliest-to-most-
-// recent with target last, since it's a goal rather than a point in time and reads more naturally
-// as the thing everything else is measured against.
-// Round 68: `visibleSeries` (e.g. `{actual, ly, ly2, target}`, any key missing/undefined treated as
-// visible — only `false` hides it) lets the caller hide individual series so the page can offer a
+// Round 69: which series render as bars vs. an overlaid line depends on the chart's granularity —
+// "quarterly trend chart" -> actual/last-year/2-years-ago are bars, target is a line; "annual or FY
+// chart" -> every series is a bar, no lines at all; anything else (month, or no granularity given
+// at all) keeps the original design: target is the one bar, actual/last-year/2-years-ago are lines.
+// Colours are fixed by series ROLE, not by chart type, everywhere a comparison series exists: red =
+// target, blue = actual/this year, grey = last year, lighter grey = 2 years ago (see the
+// role-target/role-actual/role-ly/role-ly2 + lc-target/lc-actual/lc-ly/lc-ly2 CSS classes). Callers
+// with no comparison series at all (e.g. Delivery Reports' weight/kegs-collected charts) are a
+// different, unrelated chart family and keep their own kegs/cartons/combo `cssClass` colouring,
+// untouched — that colour scheme only ever meant "which bucket", not "actual vs target".
+function vtChartModeFor(granularity) {
+  if (granularity === 'quarter') return 'trend-bars';
+  if (granularity === 'year') return 'all-bars';
+  return 'trend-lines'; // month, or no granularity supplied at all (original design)
+}
+// Per Round 68: `visibleSeries` (e.g. `{actual, ly, ly2, target}`, any key missing/undefined treated
+// as visible — only `false` hides it) lets the caller hide individual series so the page can offer a
 // "just this year" or "this year vs last year" view without recomputing any data. Omit it entirely
-// (or pass null) for the pre-existing "show everything" behaviour — every existing caller that
-// doesn't care about this (Delivery Reports' weight/kegs-collected charts) is unaffected.
-function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries, visibleSeries) {
+// (or pass null) for the pre-existing "show everything" behaviour.
+function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries, visibleSeries, granularity) {
   const vis = visibleSeries || {};
   const showActual = vis.actual !== false;
+  const hasComparisonFamily = !!extraSeries; // true => this is an actuals-vs-target chart (red/blue/grey rule); false => a plain chart like Delivery Reports, keeps its own cssClass colouring
   const activeExtra = ['ly2', 'ly', 'target'].filter(k => vis[k] !== false && extraSeries && extraSeries[k] && extraSeries[k].some(v => v != null));
   const fmt = v => decimals != null ? v.toFixed(decimals) : fmtNum(v);
   const n = values.length;
+  const seriesVals = { actual: values, ly: (extraSeries && extraSeries.ly) || null, ly2: (extraSeries && extraSeries.ly2) || null, target: (extraSeries && extraSeries.target) || null };
+  // Every currently-visible key, oldest-history-first with target last (a natural reading order
+  // regardless of which of them end up rendered as bars vs. a line for this chart's mode).
+  const activeKeys = ['ly2', 'ly'].filter(k => activeExtra.includes(k)).concat(showActual ? ['actual'] : []).concat(activeExtra.includes('target') ? ['target'] : []);
 
-  if (!activeExtra.length && !showActual) {
+  if (!activeKeys.length) {
     // Every series toggled off — nothing to draw.
     return `<div class="empty">Every series is hidden above — tick at least one to see this chart.</div>`;
   }
 
-  if (!activeExtra.length) {
-    // No comparison series active — either none exist at all (e.g. Delivery Reports' weight/kegs-
-    // collected charts), or the user has toggled off Target/Last year/2 years ago and left only
-    // "This year" ticked. Either way it's the original single-bar style, unchanged.
-    const max = Math.max(1, ...values);
+  if (activeKeys.length === 1) {
+    // Only one series showing — either none of the others exist at all (e.g. Delivery Reports'
+    // weight/kegs-collected charts, which never had a comparison series to begin with), or the user
+    // has toggled every other series off. Either way it's the original plain single-bar style;
+    // colour follows its role when this IS an actuals-vs-target chart, otherwise the caller's own
+    // cssClass (byte-identical to the pre-Round-69 behaviour for Delivery-Reports-style callers).
+    const onlyKey = activeKeys[0];
+    const arr = seriesVals[onlyKey];
+    const barClass = hasComparisonFamily ? VT_SERIES_META[onlyKey].barRole : cssClass;
+    const nonNull = arr.filter(v => v != null);
+    const max = Math.max(1, ...nonNull);
     return `<div class="bar-chart" style="height:150px;">
-      ${values.map((v,i) => `<div class="bar-col" title="${labels[i]}: ${fmt(v)}${suffix||''}">
-        <div class="bar-val">${fmt(v)}${suffix||''}</div>
-        <div class="bar-track"><div class="bar-rect ${cssClass}" style="height:${Math.max(2, Math.round((v/max)*100))}px;"></div></div>
-        <div class="bar-wk">${labels[i]}</div>
-      </div>`).join('')}
+      ${labels.map((lab, i) => {
+        const v = arr[i];
+        const hpx = v != null ? Math.max(2, Math.round((v / max) * 100)) : 2;
+        return `<div class="bar-col" title="${lab}${v != null ? ': ' + fmt(v) + (suffix||'') : ': no data'}">
+        <div class="bar-val">${v != null ? fmt(v) + (suffix||'') : '—'}</div>
+        <div class="bar-track"><div class="bar-rect ${barClass}" style="height:${hpx}px;${v == null ? ' opacity:.25;' : ''}"></div></div>
+        <div class="bar-wk">${lab}</div>
+      </div>`;
+      }).join('')}
     </div>`;
   }
 
-  const lineKeys = ['ly2', 'ly'].filter(k => activeExtra.includes(k)).concat(showActual ? ['actual'] : []);
-  const colKeys = lineKeys.concat(activeExtra.includes('target') ? ['target'] : []);
-  const seriesVals = { actual: values, ly: extraSeries.ly || null, ly2: extraSeries.ly2 || null, target: extraSeries.target || null };
-  const scaleVals = (showActual ? values : []).concat(...activeExtra.map(k => extraSeries[k].filter(v => v != null)));
+  // 2+ series active -> mode-specific rendering. Which keys become bars vs. an overlaid line
+  // depends only on granularity (see vtChartModeFor) — everything else below is shared.
+  const mode = vtChartModeFor(granularity);
+  const historicalAndActual = ['ly2', 'ly'].filter(k => activeExtra.includes(k)).concat(showActual ? ['actual'] : []);
+  let barKeys, lineKeys;
+  if (mode === 'trend-bars') {
+    barKeys = historicalAndActual;
+    lineKeys = activeExtra.includes('target') ? ['target'] : [];
+  } else if (mode === 'all-bars') {
+    barKeys = historicalAndActual.concat(activeExtra.includes('target') ? ['target'] : []);
+    lineKeys = [];
+  } else { // trend-lines (original design)
+    barKeys = activeExtra.includes('target') ? ['target'] : [];
+    lineKeys = historicalAndActual;
+  }
+  const scaleVals = (showActual ? values.filter(v => v != null) : []).concat(...activeExtra.map(k => seriesVals[k].filter(v => v != null)));
   const max = Math.max(1, ...scaleVals);
-  const lineColor = `var(${cssClass==='kegs'?'--keg':cssClass==='cartons'?'--pack':'--blue'})`;
-  const heightPx = v => Math.max(0, Math.min(100, Math.round((v/max)*100)));
+  const heightPx = v => Math.max(0, Math.min(100, Math.round((v / max) * 100)));
 
-  const legend = `<div class="bar-legend">${colKeys.map(k => {
+  const legend = `<div class="bar-legend">${activeKeys.map(k => {
     const meta = VT_SERIES_META[k];
-    const swatch = k === 'target'
-      ? `<span class="bl-swatch" style="background:${lineColor};"></span>`
-      : `<span class="bl-line ${meta.lineClass}" style="${k==='actual'?('border-top-color:'+lineColor+';'):''}"></span>`;
+    const swatch = barKeys.includes(k)
+      ? `<span class="bl-swatch ${meta.barRole}"></span>`
+      : `<span class="bl-line ${meta.lineClass}"></span>`;
     return `<span>${swatch}${meta.label}</span>`;
   }).join('')}</div>`;
 
-  const barsHtml = values.map((v, i) => {
-    const t = (activeExtra.includes('target') && seriesVals.target) ? seriesVals.target[i] : null;
-    const titleParts = [showActual ? `${labels[i]}: actual ${fmt(v)}${suffix||''}` : labels[i]];
-    if (t != null) titleParts.push('target ' + fmt(t) + (suffix||''));
+  const barsHtml = labels.map((lab, i) => {
+    const cellBars = barKeys.map(k => {
+      const arr = seriesVals[k];
+      const v = arr ? arr[i] : null;
+      if (v == null) return '';
+      return `<div class="bar-rect ${VT_SERIES_META[k].barRole}" style="height:${heightPx(v)}px;" data-value="${v}"></div>`;
+    }).join('');
+    const titleParts = [showActual ? `${lab}: actual ${fmt(values[i])}${suffix||''}` : lab];
+    if (activeExtra.includes('target') && seriesVals.target && seriesVals.target[i] != null) titleParts.push('target ' + fmt(seriesVals.target[i]) + (suffix||''));
     if (activeExtra.includes('ly') && seriesVals.ly && seriesVals.ly[i] != null) titleParts.push('last year ' + fmt(seriesVals.ly[i]) + (suffix||''));
     if (activeExtra.includes('ly2') && seriesVals.ly2 && seriesVals.ly2[i] != null) titleParts.push('2 years ago ' + fmt(seriesVals.ly2[i]) + (suffix||''));
-    return `<div class="lc-cell" title="${titleParts.join(' · ')}">${t != null ? `<div class="bar-rect ${cssClass}" style="height:${heightPx(t)}px;" data-value="${t}"></div>` : ''}</div>`;
+    return `<div class="lc-cell${barKeys.length > 1 ? ' grouped' : ''}" title="${titleParts.join(' · ')}">${cellBars}</div>`;
   }).join('');
 
   // Splits a series into contiguous non-null runs (each its own <polyline>) so a gap in the data —
@@ -7321,9 +7377,8 @@ function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries,
   const svgLines = lineKeys.map(k => {
     const arr = seriesVals[k];
     if (!arr) return '';
-    const style = k === 'actual' ? ` style="stroke:${lineColor};"` : '';
     return segmentsFor(arr).map(seg =>
-      `<polyline class="lc-line ${VT_SERIES_META[k].lineClass}" vector-effect="non-scaling-stroke"${style} points="${seg.map(([x,y]) => x.toFixed(3)+','+y.toFixed(3)).join(' ')}"/>`
+      `<polyline class="lc-line ${VT_SERIES_META[k].lineClass}" vector-effect="non-scaling-stroke" points="${seg.map(([x,y]) => x.toFixed(3)+','+y.toFixed(3)).join(' ')}"/>`
     ).join('');
   }).join('');
 
@@ -7334,8 +7389,7 @@ function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries,
     return arr.map((v, i) => {
       if (v == null) return '';
       const leftPct = ((i + 0.5) / n * 100).toFixed(3);
-      const bg = k === 'actual' ? `background:${lineColor};` : '';
-      return `<div class="lc-dot ${meta.lineClass}" data-value="${v}" style="left:${leftPct}%; bottom:${heightPx(v)}px; ${bg}" title="${meta.label}: ${fmt(v)}${suffix||''}"></div>`;
+      return `<div class="lc-dot ${meta.lineClass}" data-value="${v}" style="left:${leftPct}%; bottom:${heightPx(v)}px;" title="${meta.label}: ${fmt(v)}${suffix||''}"></div>`;
     }).join('');
   }).join('');
 
@@ -7554,14 +7608,14 @@ function renderVolumeTrendsPage() {
   if (vtToggleEl) vtToggleEl.innerHTML = chartSeriesToggleHtml(vtSeriesVisible, 'toggleVtSeries');
 
   document.getElementById('vt_kegs').innerHTML = `
-    <div class="panel"><h3>Keg Volume per month <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegVol, 'kegs', ' L', null, {ly: kegVolLy, ly2: kegVolLy2, target: kegVolTargets}, vtSeriesVisible))}</div>
-    <div class="panel"><h3>Keg Listings per month</h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegListings, 'kegs', '', null, {ly: kegListingsLy, ly2: kegListingsLy2, target: kegListingsTargets}, vtSeriesVisible))}</div>
-    <div class="panel"><h3>Keg Volume per Listing per Week <span class="muted" style="font-weight:400; font-size:11px;">(kegs, 50L/keg — shown monthly)</span></h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegVpl, 'kegs', ' kegs', 1, {ly: kegVplLy, ly2: kegVplLy2, target: kegVplTargets}, vtSeriesVisible))}</div>
+    <div class="panel"><h3>Keg Volume per month <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegVol, 'kegs', ' L', null, {ly: kegVolLy, ly2: kegVolLy2, target: kegVolTargets}, vtSeriesVisible, 'month'))}</div>
+    <div class="panel"><h3>Keg Listings per month</h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegListings, 'kegs', '', null, {ly: kegListingsLy, ly2: kegListingsLy2, target: kegListingsTargets}, vtSeriesVisible, 'month'))}</div>
+    <div class="panel"><h3>Keg Volume per Listing per Week <span class="muted" style="font-weight:400; font-size:11px;">(kegs, 50L/keg — shown monthly)</span></h3>${veeScrollChart(vtBarChartHtml(kegLabels, kegVpl, 'kegs', ' kegs', 1, {ly: kegVplLy, ly2: kegVplLy2, target: kegVplTargets}, vtSeriesVisible, 'month'))}</div>
   `;
   document.getElementById('vt_cartons').innerHTML = `
-    <div class="panel"><h3>Carton Volume per quarter <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonVol, 'cartons', ' L', null, {ly: cartonVolLy, ly2: cartonVolLy2, target: cartonVolTargets}, vtSeriesVisible))}</div>
-    <div class="panel"><h3>Carton Listings per quarter</h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonListings, 'cartons', '', null, {ly: cartonListingsLy, ly2: cartonListingsLy2, target: cartonListingsTargets}, vtSeriesVisible))}</div>
-    <div class="panel"><h3>Carton Volume per Listing per Week <span class="muted" style="font-weight:400; font-size:11px;">(cartons, 6L/carton — shown quarterly)</span></h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonVpl, 'cartons', ' ctns', 1, {ly: cartonVplLy, ly2: cartonVplLy2, target: cartonVplTargets}, vtSeriesVisible))}</div>
+    <div class="panel"><h3>Carton Volume per quarter <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonVol, 'cartons', ' L', null, {ly: cartonVolLy, ly2: cartonVolLy2, target: cartonVolTargets}, vtSeriesVisible, 'quarter'))}</div>
+    <div class="panel"><h3>Carton Listings per quarter</h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonListings, 'cartons', '', null, {ly: cartonListingsLy, ly2: cartonListingsLy2, target: cartonListingsTargets}, vtSeriesVisible, 'quarter'))}</div>
+    <div class="panel"><h3>Carton Volume per Listing per Week <span class="muted" style="font-weight:400; font-size:11px;">(cartons, 6L/carton — shown quarterly)</span></h3>${veeScrollChart(vtBarChartHtml(cartonLabels, cartonVpl, 'cartons', ' ctns', 1, {ly: cartonVplLy, ly2: cartonVplLy2, target: cartonVplTargets}, vtSeriesVisible, 'quarter'))}</div>
   `;
 }
 
@@ -7855,7 +7909,7 @@ function veeRenderVolumeChart(elId, labels, values, cssClass, granularity, title
   const gLabel = veeGranularityLabel(granularity);
   const unitTag = unitLabel ? `<span class="muted" style="font-weight:400; font-size:11px;">(${unitLabel})</span>` : '';
   document.getElementById(elId).innerHTML = `
-    <div class="panel"><h3>${titlePrefix} by ${gLabel} ${unitTag}</h3>${veeScrollChart(vtBarChartHtml(labels, values, cssClass, tooltipSuffix || '', decimals != null ? decimals : null, extraSeries || null, visibleSeries || null))}</div>
+    <div class="panel"><h3>${titlePrefix} by ${gLabel} ${unitTag}</h3>${veeScrollChart(vtBarChartHtml(labels, values, cssClass, tooltipSuffix || '', decimals != null ? decimals : null, extraSeries || null, visibleSeries || null, granularity))}</div>
   `;
 }
 
