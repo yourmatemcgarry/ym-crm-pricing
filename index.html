@@ -1006,6 +1006,7 @@
           </div>
         </div>
         <div class="fld" style="margin:0;"><label>Banner group</label><select id="vt_bannerGroup"><option value="">All banner groups</option></select></div>
+        <div class="fld" style="margin:0;"><label>Sub banner</label><select id="vt_subBanner"><option value="">All sub banners</option></select></div>
         <div class="fld" style="margin:0;"><label>Beer</label><select id="vt_subbrand"><option value="">All beers</option></select></div>
       </div>
       <div id="vt_seriesToggle"></div>
@@ -7230,12 +7231,14 @@ function vtOutletFilter() {
   const rsmSel = document.getElementById('vt_rsm').value;
   const typeSel = vtTypeMsel ? vtTypeMsel.getValues() : [];
   const bannerGroupSel = document.getElementById('vt_bannerGroup').value;
+  const subBannerSel = document.getElementById('vt_subBanner') ? document.getElementById('vt_subBanner').value : ''; // Round 70 — "sub banner" (o.banner), same pattern as Customer List Explorer / Export Emails.
   return oid => {
     const o = outlets[oid];
     if (!o) return false;
     if (rsmSel && o.rsm !== rsmSel) return false;
     if (typeSel.length && !typeSel.includes(o.custType)) return false;
     if (bannerGroupSel && o.majorGroup !== bannerGroupSel) return false;
+    if (subBannerSel && o.banner !== subBannerSel) return false;
     return true;
   };
 }
@@ -11254,8 +11257,9 @@ function renderEverything() {
   populateSelect('vt_rsm', rsmVals);
   vtTypeMsel = initMultiSelect('vt_custType', typeVals, 'types', renderVolumeTrendsPage);
   populateSelect('vt_bannerGroup', bannerGroupVals);
+  populateSelect('vt_subBanner', subBannerVals); // Round 70 — "sub banner" (o.banner), same pattern as Customer List Explorer / Export Emails.
   populateSelect('vt_subbrand', uniqueVals('subbrand', groups));
-  ['vt_rsm','vt_bannerGroup','vt_subbrand'].forEach(id => document.getElementById(id).addEventListener('change', renderVolumeTrendsPage));
+  ['vt_rsm','vt_bannerGroup','vt_subBanner','vt_subbrand'].forEach(id => document.getElementById(id).addEventListener('change', renderVolumeTrendsPage));
   renderVolumeTrendsPage();
 
   // Coles & Woolworths page — deliberately reads allOutlets, not outlets, so it isn't restricted
