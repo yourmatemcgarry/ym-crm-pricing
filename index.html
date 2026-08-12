@@ -470,6 +470,7 @@
   <button class="tab-btn" data-tab="trends" data-group="mgmt">Volume Trends</button>
   <button class="tab-btn" data-tab="colesww" data-group="mgmt">Coles &amp; Woolworths</button>
   <button class="tab-btn" data-tab="totalvolume" data-group="mgmt">Total Volume</button>
+  <button class="tab-btn" data-tab="bottleshopanalysis" data-group="mgmt">Banner Bottleshop Analysis</button>
   <button class="tab-btn" data-tab="exportemails" data-group="mgmt">Export Emails</button>
   <button class="tab-btn" data-tab="familygroups" data-group="mgmt">Family Groups</button>
   <button class="tab-btn" data-tab="datarefresh" data-group="mgmt">Data Refresh</button>
@@ -1290,6 +1291,27 @@
     <div id="bg_cmp_results"></div>
   </div>
 
+  <!-- ================= BANNER BOTTLESHOP ANALYSIS ================= -->
+  <div class="tabpage" id="tab-bottleshopanalysis">
+    <div class="panel no-print">
+      <div class="qnav">
+        <button class="qstep" onclick="stepBbsQuarter(-1)" title="Previous quarter">‹</button>
+        <div class="qlabel" id="bbs_qlabel"></div>
+        <button class="qstep" onclick="stepBbsQuarter(1)" title="Next quarter">›</button>
+        <button class="btn small secondary" onclick="jumpBbsCurrentQuarter()">Current quarter</button>
+        <button class="btn small secondary" onclick="exportBbsPDF()">Export / Print PDF</button>
+      </div>
+      <div class="rowflex" style="gap:14px; flex-wrap:wrap; align-items:flex-end; margin-top:10px;">
+        <div class="fld" style="margin:0;"><label>Banner Group</label><select id="bbs_bannerGroup"><option value="">All banner groups</option></select></div>
+        <div class="fld" style="margin:0;"><label>Sub Banner</label><select id="bbs_subBanner"><option value="">All sub banners</option></select></div>
+      </div>
+      <div class="hint" style="margin-top:8px;">Off-premise (bottleshop) customers only. Pick a Banner Group (broad, e.g. IGA Liquor), a Sub Banner (specific chain, e.g. Cellarbrations), or both, to scope this page — leave either blank to include every value. Cartons only (no kegs) — bottleshops don't carry keg volume. The current (in-progress) quarter looks back a rolling 13 weeks from the latest sales data; closed quarters use their exact dates.</div>
+    </div>
+    <div class="hint" id="bbs_printSummary" style="margin:0 0 10px;"></div>
+    <div id="bbs_charts"></div>
+    <div id="bbs_body" style="margin-top:14px;"></div>
+  </div>
+
   <!-- ================= HIT LISTS ================= -->
   <div class="tabpage" id="tab-hitlists">
     <div class="panel no-print">
@@ -1577,6 +1599,16 @@
         <div><button class="clearbtn" onclick="clearEmailExportFilters()">Clear filters</button></div>
       </div>
       <div class="hint" id="ee_activeHint" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="panel">
+      <h2 style="margin:0;">Matching customers <span class="muted" id="ee_customerListSummary" style="font-weight:400;"></span></h2>
+      <div class="hint" style="margin-top:6px;">Every checked customer below is included in the email list and CSV export. Uncheck any you don't want, or use the buttons to select all/none, to build a fully custom list on top of the filters above.</div>
+      <div class="rowflex no-print" style="margin-top:10px; gap:10px;">
+        <button class="btn small secondary" onclick="eeSelectAllVisible()">Select all</button>
+        <button class="btn small secondary" onclick="eeSelectNoneVisible()">Select none</button>
+      </div>
+      <div id="ee_customerListBody" style="margin-top:10px;"></div>
     </div>
 
     <div class="panel">
@@ -10728,6 +10760,266 @@ function exportBgComparePDF() {
   document.body.classList.remove('printing-bg-compare');
 }
 
+// ===================== BANNER BOTTLESHOP ANALYSIS (Round 71) =====================
+// "Choose a banner or sub banner" and see, for off-premise bottleshops in that scope: quarterly
+// Volume/Listings/VPL trends (cartons only — bottleshops don't carry keg volume), a venue x SKU
+// listing matrix, and a per-SKU summary of how many stores stock it, with up/down trend badges vs
+// last quarter (LQ), the same quarter last year (SQLY), and the Moving Annual Total a year ago
+// (MAT, trailing 12 months) — for both volume and store count. Two independent filters (Banner
+// Group = o.majorGroup, Sub Banner = o.banner), same pattern as Volume Trends' own pair since
+// Round 70 — pick either, both, or neither.
+let bbsQuarter = { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q };
+function stepBbsQuarter(delta) { bbsQuarter = shiftQuarter(bbsQuarter.fy, bbsQuarter.q, delta); renderBannerBottleshopsPage(); }
+function jumpBbsCurrentQuarter() { bbsQuarter = { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q }; renderBannerBottleshopsPage(); }
+function exportBbsPDF() { window.print(); }
+
+function bbsOutletFilter() {
+  const bannerGroupSel = document.getElementById('bbs_bannerGroup') ? document.getElementById('bbs_bannerGroup').value : '';
+  const subBannerSel = document.getElementById('bbs_subBanner') ? document.getElementById('bbs_subBanner').value : '';
+  return oid => {
+    const o = outlets[oid];
+    if (!o) return false;
+    if (!isBottleshop(o) || o.excluded) return false;
+    if (bannerGroupSel && o.majorGroup !== bannerGroupSel) return false;
+    if (subBannerSel && o.banner !== subBannerSel) return false;
+    return true;
+  };
+}
+
+// Same "rolling 13-week lookback for the in-progress quarter, exact calendar bounds otherwise"
+// rule Banner Gap Report already uses (see bannerGapMatrix above), so this page's "this quarter"
+// figures always agree with Banner Gap Report's for the same window.
+function bbsQuarterWindowBounds(fy, q) {
+  const isCurrentQ = (fy === PERF_CURRENT_Q.fy && q === PERF_CURRENT_Q.q);
+  if (isCurrentQ) {
+    const endIdx = dayIndexOf(PERF_TODAY);
+    return [endIdx - 90, endIdx];
+  }
+  const [qStart, qEndExcl] = quarterBoundsOf(fy, q);
+  return [dayIndexOf(qStart), dayIndexOf(new Date(qEndExcl.getTime() - 86400000))];
+}
+
+// Moving Annual Total window: the 4 quarters ending at (and including) quarter (fy,q). Reuses the
+// same window's own tail-end rule above, so a MAT computed mid-quarter is a genuine trailing
+// ~365-day total ending "today", not inflated by future dates that don't have data yet.
+function bbsMatWindowBounds(fy, q) {
+  const [, endIdx] = bbsQuarterWindowBounds(fy, q);
+  const startQ = shiftQuarter(fy, q, -3);
+  const [startBound] = quarterBoundsOf(startQ.fy, startQ.q);
+  return [dayIndexOf(startBound), endIdx];
+}
+
+// One pass over dailyVolume for a window: per-SKU (carton groups only) volume + distinct-venue
+// count, per-venue volume + SKU set, and per (venue, SKU) cell volume (keyed exactly like
+// dailyVolume itself, `${oid}|${gid}`, matching bannerGapMatrix's activeLitres convention above) —
+// shared by the trend charts, the venue x SKU matrix, and the per-SKU summary/trend table below.
+function bbsWindowStats(startIdx, endIdx, outletFilterFn) {
+  const perSku = {};      // gid -> { volume, outletSet }
+  const perOutlet = {};   // oid -> { volume, gidSet }
+  const activeLitres = {};// `${oid}|${gid}` -> volume
+  for (const key in dailyVolume) {
+    const sep = key.indexOf('|');
+    const oid = key.slice(0, sep), gid = key.slice(sep + 1);
+    const g = groups[gid];
+    if (!g || bucketOf(g) !== 'CARTONS') continue;
+    if (!outletFilterFn(oid)) continue;
+    const arr = dailyVolume[key];
+    let active = false, sum = 0;
+    for (let i = 0; i < arr.length; i += 2) {
+      if (arr[i] >= startIdx && arr[i] <= endIdx) { active = true; sum += arr[i + 1]; }
+    }
+    if (!active) continue;
+    if (!perSku[gid]) perSku[gid] = { volume: 0, outletSet: new Set() };
+    perSku[gid].volume += sum;
+    perSku[gid].outletSet.add(oid);
+    if (!perOutlet[oid]) perOutlet[oid] = { volume: 0, gidSet: new Set() };
+    perOutlet[oid].volume += sum;
+    perOutlet[oid].gidSet.add(gid);
+    activeLitres[key] = sum;
+  }
+  return { perSku, perOutlet, activeLitres };
+}
+function bbsSkuVolume(stats, gid) { return stats.perSku[gid] ? stats.perSku[gid].volume : 0; }
+function bbsSkuListings(stats, gid) { return stats.perSku[gid] ? stats.perSku[gid].outletSet.size : 0; }
+
+function renderBannerBottleshopsPage() {
+  const qLabelEl = document.getElementById('bbs_qlabel');
+  if (!qLabelEl) return; // page not present in this build (defensive, mirrors other page guards)
+  const outletFilterFn = bbsOutletFilter();
+  const rowOutlets = Object.values(outlets).filter(o => outletFilterFn(o.id));
+  const { fy, q } = bbsQuarter;
+  qLabelEl.textContent = quarterLabelOf(fy, q);
+
+  const bannerGroupSel = document.getElementById('bbs_bannerGroup') ? document.getElementById('bbs_bannerGroup').value : '';
+  const subBannerSel = document.getElementById('bbs_subBanner') ? document.getElementById('bbs_subBanner').value : '';
+  const scopeLabel = [subBannerSel, bannerGroupSel].filter(Boolean).join(' · ') || 'All banners';
+  const printSummaryEl = document.getElementById('bbs_printSummary');
+  if (printSummaryEl) printSummaryEl.innerHTML = `<strong>Banner Bottleshop Analysis</strong> — ${escapeHtml(scopeLabel)} · ${escapeHtml(quarterLabelOf(fy, q))}`;
+
+  const chartsEl = document.getElementById('bbs_charts');
+  const bodyEl = document.getElementById('bbs_body');
+  if (!rowOutlets.length) {
+    if (chartsEl) chartsEl.innerHTML = '';
+    if (bodyEl) bodyEl.innerHTML = `<div class="panel"><div class="empty">No off-premise bottleshops match this filter.</div></div>`;
+    return;
+  }
+
+  // ---- Quarterly trend charts: Volume / Listings / VPL, cartons only, no kegs ----
+  const periods = veePeriodRanges('quarter', 8);
+  const trendLabels = periods.map(p => p.label);
+  const vol = [], listings = [], vpl = [];
+  const volLy = [], listingsLy = [], vplLy = [];
+  const volLy2 = [], listingsLy2 = [], vplLy2 = [];
+  function pushVplTriple(volArr, listArr, vplArr, stats, weeks) {
+    volArr.push(stats.totalLitres);
+    listArr.push(stats.listingsCount);
+    vplArr.push(stats.listingsCount > 0 ? (stats.totalLitres / stats.listingsCount) / weeks / CARTON_UNIT_LITRES : 0);
+  }
+  periods.forEach(p => {
+    const weeks = (p.endDayIdx - p.startDayIdx + 1) / 7;
+    pushVplTriple(vol, listings, vpl, trendRangeStats('CARTONS', p.startDayIdx, p.endDayIdx, outletFilterFn, null), weeks);
+
+    const ly1 = veePeriodShiftedYears(p, 'quarter', 1);
+    if (ly1 && ly1.endDayIdx >= 0) {
+      const w1 = (ly1.endDayIdx - ly1.startDayIdx + 1) / 7;
+      pushVplTriple(volLy, listingsLy, vplLy, trendRangeStats('CARTONS', ly1.startDayIdx, ly1.endDayIdx, outletFilterFn, null), w1);
+    } else { volLy.push(null); listingsLy.push(null); vplLy.push(null); }
+
+    const ly2 = veePeriodShiftedYears(p, 'quarter', 2);
+    if (ly2 && ly2.endDayIdx >= 0) {
+      const w2 = (ly2.endDayIdx - ly2.startDayIdx + 1) / 7;
+      pushVplTriple(volLy2, listingsLy2, vplLy2, trendRangeStats('CARTONS', ly2.startDayIdx, ly2.endDayIdx, outletFilterFn, null), w2);
+    } else { volLy2.push(null); listingsLy2.push(null); vplLy2.push(null); }
+  });
+
+  if (chartsEl) chartsEl.innerHTML = `
+    <div class="panel"><h3>Carton volume per quarter <span class="muted" style="font-weight:400; font-size:11px;">(litres)</span></h3>${veeScrollChart(vtBarChartHtml(trendLabels, vol, 'cartons', ' L', null, { ly: volLy, ly2: volLy2 }, null, 'quarter'))}</div>
+    <div class="panel"><h3>Carton listings per quarter</h3>${veeScrollChart(vtBarChartHtml(trendLabels, listings, 'cartons', '', null, { ly: listingsLy, ly2: listingsLy2 }, null, 'quarter'))}</div>
+    <div class="panel"><h3>Carton volume per listing per week <span class="muted" style="font-weight:400; font-size:11px;">(cartons, 6L/carton)</span></h3>${veeScrollChart(vtBarChartHtml(trendLabels, vpl, 'cartons', ' ctns', 1, { ly: vplLy, ly2: vplLy2 }, null, 'quarter'))}</div>
+  `;
+
+  // ---- Current-quarter, LQ, SQLY, MAT and MAT-a-year-ago per-SKU + per-venue stats ----
+  const [curStart, curEnd] = bbsQuarterWindowBounds(fy, q);
+  const isCurrentQ = (fy === PERF_CURRENT_Q.fy && q === PERF_CURRENT_Q.q);
+  const curStats = bbsWindowStats(curStart, curEnd, outletFilterFn);
+
+  const lq = shiftQuarter(fy, q, -1);
+  const [lqStart, lqEnd] = bbsQuarterWindowBounds(lq.fy, lq.q);
+  const lqStats = bbsWindowStats(lqStart, lqEnd, outletFilterFn);
+
+  const sqly = shiftQuarter(fy, q, -4);
+  const [sqlyStart, sqlyEnd] = bbsQuarterWindowBounds(sqly.fy, sqly.q);
+  const sqlyStats = bbsWindowStats(sqlyStart, sqlyEnd, outletFilterFn);
+
+  const [matStart, matEnd] = bbsMatWindowBounds(fy, q);
+  const matStats = bbsWindowStats(matStart, matEnd, outletFilterFn);
+  const matLyQ = shiftQuarter(fy, q, -4);
+  const [matLyStart, matLyEnd] = bbsMatWindowBounds(matLyQ.fy, matLyQ.q);
+  const matLyStats = bbsWindowStats(matLyStart, matLyEnd, outletFilterFn);
+
+  // SKU set: every carton SKU with at least one stockist in this filtered scope THIS quarter —
+  // same "all" logic bannerGapMatrix uses (a matrix full of all-zero columns for SKUs nobody in
+  // scope buys isn't useful) — sorted by store count, most first.
+  const skuIds = Object.keys(curStats.perSku)
+    .map(gid => groups[gid])
+    .filter(Boolean)
+    .sort((a, b) => bbsSkuListings(curStats, b.id) - bbsSkuListings(curStats, a.id) || a.label.localeCompare(b.label))
+    .map(g => g.id);
+
+  const totalVolumeThisQ = Object.values(curStats.perSku).reduce((s, x) => s + x.volume, 0);
+  const cardsHtml = `<div class="cards">
+    <div class="card"><div class="num">${fmtNum(rowOutlets.length)}</div><div class="lbl">Bottleshops in scope</div></div>
+    <div class="card"><div class="num">${fmtNum(skuIds.length)}</div><div class="lbl">Carton SKUs stocked this quarter</div></div>
+    <div class="card"><div class="num">${fmtNum(totalVolumeThisQ)}L</div><div class="lbl">Total carton volume this quarter</div></div>
+  </div>`;
+
+  if (!skuIds.length) {
+    if (bodyEl) bodyEl.innerHTML = cardsHtml + `<div class="panel"><div class="empty">No carton sales recorded for this filter in ${escapeHtml(quarterLabelOf(fy, q))}.</div></div>`;
+    return;
+  }
+
+  // ---- Per-SKU summary: stores stocking it this quarter (= "how many stores each SKU is in"),
+  // volume this quarter, and up/down badges vs LQ, SQLY, and MAT-a-year-ago — volume and store
+  // count tracked as two separate badges per comparison, per the user's own preference.
+  const skuRows = skuIds.map(gid => {
+    const g = groups[gid];
+    return {
+      g,
+      curVol: bbsSkuVolume(curStats, gid), curList: bbsSkuListings(curStats, gid),
+      lqVol: bbsSkuVolume(lqStats, gid), lqList: bbsSkuListings(lqStats, gid),
+      sqlyVol: bbsSkuVolume(sqlyStats, gid), sqlyList: bbsSkuListings(sqlyStats, gid),
+      matVol: bbsSkuVolume(matStats, gid), matList: bbsSkuListings(matStats, gid),
+      matLyVol: bbsSkuVolume(matLyStats, gid), matLyList: bbsSkuListings(matLyStats, gid),
+    };
+  });
+  const skuTableRows = skuRows.map(r => `<tr>
+    <td>${escapeHtml(r.g.label)}</td>
+    <td class="num-cell">${fmtNum(r.curList)} <span class="muted" style="font-size:10px;">/ ${fmtNum(rowOutlets.length)}</span></td>
+    <td class="num-cell mono">${fmtNum(r.curVol)}L</td>
+    <td class="num-cell">${perfTrendHtml(r.curVol, r.lqVol)}</td>
+    <td class="num-cell">${perfTrendHtml(r.curList, r.lqList)}</td>
+    <td class="num-cell">${perfTrendHtml(r.curVol, r.sqlyVol)}</td>
+    <td class="num-cell">${perfTrendHtml(r.curList, r.sqlyList)}</td>
+    <td class="num-cell">${perfTrendHtml(r.matVol, r.matLyVol)}</td>
+    <td class="num-cell">${perfTrendHtml(r.matList, r.matLyList)}</td>
+  </tr>`).join('');
+  const skuTableHtml = `<div class="panel" style="margin-top:14px;">
+    <h3>SKU performance summary</h3>
+    <div class="hint" style="margin-bottom:8px;">How many of the ${fmtNum(rowOutlets.length)} bottleshops in scope stock each SKU ${isCurrentQ ? `this window (rolling 13 weeks to ${escapeHtml(dayLabel(curEnd))})` : 'this quarter'}, and whether volume and store count are trending up or down vs last quarter (LQ), the same quarter last year (SQLY), and the Moving Annual Total a year ago (MAT — trailing 12 months, compared to the trailing 12 months ending 12 months earlier).</div>
+    <div class="tablewrap">
+      <table class="datatable">
+        <thead><tr>
+          <th>SKU</th><th class="num-cell">Stores</th><th class="num-cell">Volume</th>
+          <th class="num-cell">vs LQ (Vol)</th><th class="num-cell">vs LQ (Stores)</th>
+          <th class="num-cell">vs SQLY (Vol)</th><th class="num-cell">vs SQLY (Stores)</th>
+          <th class="num-cell">vs MAT (Vol)</th><th class="num-cell">vs MAT (Stores)</th>
+        </tr></thead>
+        <tbody>${skuTableRows}</tbody>
+      </table>
+    </div>
+  </div>`;
+
+  // ---- Venue x SKU listing matrix — "the venues and their listings for each SKU" ----
+  const matrixHeadCols = skuIds.map(gid => {
+    const g = groups[gid];
+    const pct = rowOutlets.length ? bbsSkuListings(curStats, gid) / rowOutlets.length : 0;
+    return `<th title="${Math.round(pct * 100)}% of bottleshops in scope stock this">${escapeHtml(g.label)}<br><span class="badge ${bgGapCellClass(pct)}" style="font-size:9px;">${Math.round(pct * 100)}%</span></th>`;
+  }).join('');
+  const sortedVenues = rowOutlets.slice().sort((a, b) => {
+    const la = curStats.perOutlet[a.id] ? curStats.perOutlet[a.id].gidSet.size : 0;
+    const lb = curStats.perOutlet[b.id] ? curStats.perOutlet[b.id].gidSet.size : 0;
+    return lb - la || a.name.localeCompare(b.name);
+  });
+  const matrixRows = sortedVenues.map(o => {
+    const os = curStats.perOutlet[o.id];
+    const listingsCount = os ? os.gidSet.size : 0;
+    const cells = skuIds.map(gid => {
+      const key = o.id + '|' + gid;
+      if (curStats.activeLitres[key] != null) {
+        return `<td class="num-cell"><span class="badge green" title="Stocked this window">${fmtNum(curStats.activeLitres[key])}L</span></td>`;
+      }
+      return `<td class="num-cell muted">—</td>`;
+    }).join('');
+    return `<tr>
+      <td><a href="#" onclick="document.querySelector('.tab-btn[data-tab=summary]').click(); setTimeout(()=>selectSummaryOutlet('${o.id}'),0); return false;" title="Open ${escapeHtml(o.name)} in Customer Summary — full listings and sales journal, for validating this row">${escapeHtml(o.name)}</a><br><span class="hint" style="font-size:10.5px;">${escapeHtml(o.suburb || '')}${o.banner ? ' · ' + escapeHtml(o.banner) : ''}</span></td>
+      <td class="num-cell"><span class="badge ${listingsCount > 0 ? 'green' : 'grey'}">${fmtNum(listingsCount)}</span></td>
+      ${cells}
+    </tr>`;
+  }).join('');
+  const matrixHtml = `<div class="panel" style="margin-top:14px;">
+    <h3>Venue listings by SKU</h3>
+    <div class="hint" style="margin-bottom:8px;">Sorted by SKU listings, most first. Green = stocked ${isCurrentQ ? 'this window' : 'this quarter'} (litres shown). Header % = share of bottleshops in scope stocking that SKU. Click a venue's name to open it in Customer Summary and check its full order history — handy for spot-checking a store that looks off here.</div>
+    <div class="tablewrap">
+      <table class="datatable">
+        <thead><tr><th>Venue</th><th class="num-cell">Listings</th>${matrixHeadCols}</tr></thead>
+        <tbody>${matrixRows}</tbody>
+      </table>
+    </div>
+  </div>`;
+
+  if (bodyEl) bodyEl.innerHTML = cardsHtml + skuTableHtml + matrixHtml;
+}
+
 // ===================== HIT LISTS =====================
 // Five per-RSM prospecting worklists, each its own sub-tab within one Hit Lists page: Keg Active
 // Customers, Keg Win Backs, Bottleshops Never Sold To, Bottleshop Win Backs, and On Prem Carton & Events.
@@ -11333,6 +11625,22 @@ function renderEverything() {
     renderBannerGapsPage();
   }
 
+  // Banner Bottleshop Analysis page (Round 71/72)
+  {
+    bbsQuarter = { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q };
+    // Round 72: option lists are scoped to off-premise bottleshops ONLY, not the generic
+    // bannerGroupVals/subBannerVals (every outlet, any custType) Volume Trends uses — this page is
+    // bottleshops-only, so a banner/sub-banner value that only ever appears on On Premise/Integrated
+    // venues (e.g. "Guzman & Gomez", "Accor/Mantra") would otherwise show up as a selectable option
+    // that can never match a single row here.
+    const bbsBottleshops = Object.values(outlets).filter(o => isBottleshop(o) && !o.excluded);
+    populateSelect('bbs_bannerGroup', uniqueVals('majorGroup', bbsBottleshops));
+    populateSelect('bbs_subBanner', uniqueVals('banner', bbsBottleshops));
+    document.getElementById('bbs_bannerGroup').addEventListener('change', renderBannerBottleshopsPage);
+    document.getElementById('bbs_subBanner').addEventListener('change', renderBannerBottleshopsPage);
+    renderBannerBottleshopsPage();
+  }
+
   // Hit Lists page
   {
     hlQuarter = { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q };
@@ -11725,6 +12033,14 @@ async function drPublish() {
 let eeCustTypeMsel = null;      // multi-select for Export Emails "Customer type" filter
 let eeVolumeStreamMsel = null;  // multi-select for Export Emails "Volume stream" filter
 let eeCurrentBatches = [];      // last-rendered batches of {email, outletName, outletId} rows, indexed for eeCopyBatch()
+// Round 72: manual per-customer opt-out on top of the filters above, so a fully custom list can be
+// built ("select only some of the stores or all of the stores"). Tracked as a DESELECTED set rather
+// than a selected one so "everyone currently matching the filters" is the natural default (nothing
+// deselected = nothing unchecked) — matches the tool's pre-Round-72 behaviour exactly when nobody
+// has touched a checkbox yet. Deliberately NOT reset when filters change (so a deselection survives
+// a filter tweak for a customer still in view) — only clearEmailExportFilters() resets it, since
+// that's the tool's own explicit "start over" action.
+let eeDeselectedIds = new Set();
 
 // The base set of outlets to search within, before the common filters (RSM/zone/etc) are
 // applied. Always starts from allOutlets (every outlet in the database, any volume stream,
@@ -11826,6 +12142,46 @@ function eeBatchSizeValue() {
   return (n && n > 0) ? n : null;
 }
 
+// ---------- Round 72: per-customer selection, on top of the filters above ----------
+// The customer actually included in the email list/CSV is the filtered list MINUS whoever's been
+// manually unchecked — see eeDeselectedIds above.
+function eeSelectedOutlets() {
+  return getEmailExportOutlets().filter(o => !eeDeselectedIds.has(o.id));
+}
+function eeToggleOutletSelection(oid, checked) {
+  if (checked) eeDeselectedIds.delete(oid); else eeDeselectedIds.add(oid);
+  renderEmailExportPage();
+}
+function eeSelectAllVisible() {
+  getEmailExportOutlets().forEach(o => eeDeselectedIds.delete(o.id));
+  renderEmailExportPage();
+  toast('All matching customers selected.');
+}
+function eeSelectNoneVisible() {
+  getEmailExportOutlets().forEach(o => eeDeselectedIds.add(o.id));
+  renderEmailExportPage();
+  toast('Selection cleared — check individual customers below to build a custom list.');
+}
+function eeCustomerListHtml(outletList) {
+  if (!outletList.length) return `<div class="empty">No customers match your filters.</div>`;
+  const rows = outletList.map(o => {
+    const c = outletContactInfo(o.id);
+    const emails = [c.email, c.email2].map(e => (e || '').trim()).filter(e => e && e.indexOf('@') !== -1);
+    const checked = !eeDeselectedIds.has(o.id);
+    return `<tr>
+      <td class="no-print"><input type="checkbox" ${checked ? 'checked' : ''} onchange="eeToggleOutletSelection('${o.id}',this.checked)"></td>
+      <td>${escapeHtml(o.name)}<div class="muted" style="font-size:10.5px;">${escapeHtml(o.suburb || '')}${o.state ? ' ' + escapeHtml(o.state) : ''}</div></td>
+      <td>${escapeHtml(o.rsm || '—')}</td>
+      <td>${escapeHtml(o.banner || o.majorGroup || '—')}</td>
+      <td>${emails.length ? emails.map(escapeHtml).join('<br>') : '<span class="muted">No email on file</span>'}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="tablewrap"><table class="datatable">
+    <thead><tr><th class="no-print"></th><th>Customer</th><th>RSM</th><th>Banner</th><th>Email(s) on file</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
 function emailBatchBlockHtml(batch, idx, total) {
   const text = batch.map(r => r.email).join(', ');
   return `
@@ -11847,11 +12203,18 @@ function renderEmailExportPage() {
     : '';
 
   const outletList = getEmailExportOutlets();
-  const emailRows = eeCollectEmails(outletList);
+  const selectedList = outletList.filter(o => !eeDeselectedIds.has(o.id));
+
+  const listBodyEl = document.getElementById('ee_customerListBody');
+  if (listBodyEl) listBodyEl.innerHTML = eeCustomerListHtml(outletList);
+  const listSummaryEl = document.getElementById('ee_customerListSummary');
+  if (listSummaryEl) listSummaryEl.textContent = `— ${outletList.length.toLocaleString()} match your filters, ${selectedList.length.toLocaleString()} selected`;
+
+  const emailRows = eeCollectEmails(selectedList);
   const withEmailCount = new Set(emailRows.map(r => r.outletId)).size;
 
   document.getElementById('ee_summary').textContent =
-    `— ${outletList.length.toLocaleString()} customer${outletList.length===1?'':'s'} match your filters, ${withEmailCount.toLocaleString()} with at least one email on file, ${emailRows.length.toLocaleString()} unique email address${emailRows.length===1?'':'es'} total.`;
+    `— ${selectedList.length.toLocaleString()} customer${selectedList.length===1?'':'s'} selected (of ${outletList.length.toLocaleString()} matching your filters), ${withEmailCount.toLocaleString()} with at least one email on file, ${emailRows.length.toLocaleString()} unique email address${emailRows.length===1?'':'es'} total.`;
 
   const n = eeBatchSizeValue();
   eeCurrentBatches = (n && emailRows.length) ? eeChunk(emailRows, n) : [emailRows];
@@ -11890,9 +12253,8 @@ function eeCopyAll() {
 // Reference CSV (name/suburb/state/RSM alongside each email) for anyone who wants to reconcile
 // the list in a spreadsheet rather than just pasting addresses into Gmail.
 function exportEmailListCSV() {
-  const outletList = getEmailExportOutlets();
-  const emailRows = eeCollectEmails(outletList);
-  if (!emailRows.length) { toast('No emails match the current filters.'); return; }
+  const emailRows = eeCollectEmails(eeSelectedOutlets());
+  if (!emailRows.length) { toast('No emails match the current filters/selection.'); return; }
   const header = ['Customer', 'Suburb', 'State', 'RSM', 'Email'];
   const lines = [header.join(',')];
   emailRows.forEach(r => {
@@ -11911,6 +12273,7 @@ function clearEmailExportFilters() {
   document.getElementById('ee_batchSize').value = 'all';
   if (eeCustTypeMsel) eeCustTypeMsel.clear();
   if (eeVolumeStreamMsel) eeVolumeStreamMsel.clear();
+  eeDeselectedIds = new Set();
   renderEmailExportPage();
 }
 
