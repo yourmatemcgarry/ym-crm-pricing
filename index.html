@@ -73,11 +73,18 @@
   .kpi-card .kpi-lbl { font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.3px; font-weight:600; }
   .kpi-card .kpi-num { font-size:22px; font-weight:700; color:var(--navy); margin-top:4px; }
   .kpi-card .kpi-target { font-size:12px; color:var(--muted); margin-top:2px; }
-  .progress-track { background:#eef0f3; border-radius:20px; height:9px; margin-top:8px; overflow:hidden; }
+  .progress-track { position:relative; background:#eef0f3; border-radius:20px; height:9px; margin-top:8px; overflow:hidden; }
   .progress-fill { height:100%; border-radius:20px; background:var(--blue); }
   .progress-fill.green { background:var(--green); }
   .progress-fill.amber { background:var(--amber); }
   .progress-fill.red { background:var(--red); }
+  /* Round 78: a thin marker on each KPI's progress bar showing where the target "should" sit
+     today based on calendar pacing through the quarter (see quarterPacingInfo()) — separate from
+     the bar's own fill, which shows actual-vs-target. The white outline keeps it visible whether
+     it lands over the empty grey track or the coloured fill underneath. */
+  .progress-pace-marker { position:absolute; top:0; bottom:0; width:2px; margin-left:-1px; background:var(--navy); box-shadow:0 0 0 1px rgba(255,255,255,.9); }
+  .quarter-pacing-badge { display:inline-flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:12px; color:var(--text); }
+  .quarter-pacing-badge strong { color:var(--navy); }
   .listing-trio { display:flex; gap:0; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
   .listing-trio > div { flex:1; padding:12px 14px; text-align:center; }
   .listing-trio > div + div { border-left:1px solid var(--border); }
@@ -909,6 +916,7 @@
       <div class="hint" style="margin-top:8px;">Financial-year quarters (Q1 Jul–Sep … Q4 Apr–Jun). Volumes are shown in <strong>litres</strong> — kegs converted using keg size, cartons converted using each historical sale's actual can size — so keg and carton volume are directly comparable regardless of pack size. A "listing" means one beer actively being bought by one venue. Targets are set per RSM each quarter, shared live with your team; the Sales Team view automatically totals them. This all runs off your sales data, so it updates the moment you refresh it (e.g. your weekly Tuesday update). <strong>Report as of</strong> lets you regenerate this quarter's report as it would have looked on an earlier date (handy for a weekly report). <strong>Export All Reps' Reports</strong> is the one-click weekly report run — it steps through every rep automatically and opens a separate save-as-PDF dialog for each one (just confirm each save as it appears), so you don't have to switch View by hand and export one at a time. <strong>Export Current View</strong> exports just whatever's on screen right now (handy for a one-off check on a single rep or the whole team). Once a quarter is finished, the report locks to that quarter's fixed dates and the date picker no longer applies.</div>
     </div>
     <div class="hint" id="perf_printSummary" style="margin:0 0 10px;"></div>
+    <div id="perf_pacing" style="margin:0 0 12px;"></div>
     <div id="perf_detail"></div>
   </div>
 
@@ -1426,6 +1434,7 @@
           <button class="btn small secondary" onclick="jumpActivationsCurrentQuarter()">Current quarter</button>
         </div>
       </div>
+      <div class="hint" style="margin-top:4px;">An activation only counts toward the Team Dashboard's Activations target once it has at least one photo attached — add one under "Photos" below to mark it Verified.</div>
       <div class="rowflex" style="margin-top:10px; gap:10px; flex-wrap:wrap;">
         <select id="ac_rsmFilter"><option value="">All RSMs</option></select>
         <select id="ac_pkgFilter">
@@ -1437,7 +1446,7 @@
       </div>
       <div class="tablewrap" style="margin-top:10px;">
         <table class="datatable">
-          <thead><tr><th>Customer</th><th>RSM</th><th>Type</th><th>SKU</th><th>Activation</th><th>Start</th><th>End</th><th>Deal</th><th>Bonus stock</th><th>POS</th><th>Consumer pricing</th><th>Photos</th><th>Updated</th><th class="no-print">Action</th></tr></thead>
+          <thead><tr><th>Customer</th><th>RSM</th><th>Type</th><th>SKU</th><th>Activation</th><th>Start</th><th>End</th><th>Deal</th><th>Status</th><th>Bonus stock</th><th>POS</th><th>Consumer pricing</th><th>Photos</th><th>Updated</th><th class="no-print">Action</th></tr></thead>
           <tbody id="ac_body"></tbody>
         </table>
       </div>
@@ -1455,6 +1464,7 @@
         <input type="hidden" id="ord_outletId">
       </div>
       <div id="ord_pricingStatus" style="margin-top:8px;"></div>
+      <div id="ord_deliveryNotes"></div>
       <div id="ord_lines" style="margin-top:12px;"></div>
       <div id="ord_summary" style="margin-top:10px;"></div>
       <div class="rowflex" style="gap:10px; flex-wrap:wrap; margin-top:10px;">
@@ -5318,6 +5328,24 @@ function shiftQuarter(fy,q,delta) {
   const d = new Date(start.getFullYear(), start.getMonth()+3*delta, 1);
   return fyQuarterOf(d);
 }
+// Round 78: "Weekly Progress Target %" — a calendar-pacing benchmark, separate from the KPI
+// cards' own actual-vs-target %. Tells a rep which week of the quarter they're in and what
+// fraction of the quarter has elapsed, so they have something to compare their actual progress
+// against ("we're 46% through the quarter, so we should be at roughly 46% of target by now").
+// `referenceDate` should be whatever date the rest of the page is treating as "now" for this
+// view — PERF_TODAY normally, effectiveAsOf when a Round 75 "as of" override is active, or a
+// past quarter's own qEndIncl once it's finished — so this never disagrees with anything else on
+// the page. Clamped to the quarter's own bounds so a stale reference date (e.g. viewing a future
+// quarter, or an as-of date somehow outside the quarter) can't produce a negative or >100% pace.
+function quarterPacingInfo(qStart, qEndIncl, referenceDate) {
+  const totalDays = Math.round((qEndIncl - qStart) / 86400000) + 1;
+  const totalWeeks = Math.ceil(totalDays / 7);
+  const ref = referenceDate < qStart ? qStart : (referenceDate > qEndIncl ? qEndIncl : referenceDate);
+  const daysElapsed = Math.round((ref - qStart) / 86400000) + 1;
+  const weekNum = Math.min(totalWeeks, Math.max(1, Math.ceil(daysElapsed / 7)));
+  const pct = Math.min(100, Math.max(0, (daysElapsed / totalDays) * 100));
+  return { weekNum, totalWeeks, pct };
+}
 // Calendar-month bounds [start, endExclusive) for whichever month `date` falls in.
 function calendarMonthBoundsOf(date) {
   const y = date.getFullYear(), m = date.getMonth();
@@ -5554,15 +5582,21 @@ function tgClearProtection(rsm, quarterKey) {
 }
 
 // ---------- Render helpers ----------
-function perfKpiCardHtml(label, actual, target, suffix) {
+// Round 78: optional `pacingPct` (0-100, from quarterPacingInfo()) draws a thin marker on the
+// progress bar at "where we should be today" based on calendar pacing through the quarter — a
+// separate benchmark from the bar's own fill, which is actual-vs-target. Comparing the fill
+// against the marker tells a rep at a glance whether they're ahead of, on, or behind pace, not
+// just what % of the full-quarter target they've hit so far.
+function perfKpiCardHtml(label, actual, target, suffix, pacingPct) {
   const hasTarget = target != null && target > 0;
   const pct = hasTarget ? Math.min(100, (actual/target)*100) : null;
   const cls = pct===null ? '' : (pct>=100?'green':pct>=70?'amber':'red');
+  const marker = (hasTarget && pacingPct!=null) ? `<div class="progress-pace-marker" style="left:${Math.min(100,Math.max(0,pacingPct)).toFixed(1)}%;" title="Calendar pace: ${pacingPct.toFixed(0)}% through the quarter"></div>` : '';
   return `<div class="kpi-card">
     <div class="kpi-lbl">${escapeHtml(label)}</div>
     <div class="kpi-num">${fmtNum(actual)}${suffix||''}</div>
     <div class="kpi-target">${hasTarget?`Target ${fmtNum(target)}${suffix||''} · ${pct.toFixed(0)}%`:'No target set'}</div>
-    ${hasTarget?`<div class="progress-track"><div class="progress-fill ${cls}" style="width:${pct}%;"></div></div>`:''}
+    ${hasTarget?`<div class="progress-track"><div class="progress-fill ${cls}" style="width:${pct}%;"></div>${marker}</div>`:''}
   </div>`;
 }
 // liveVal is optional — when provided it adds a 4th box showing today's rolling-cycle listing
@@ -5719,9 +5753,10 @@ function perfListingsByRsmChart(bucket, refEndDayIdx, cycleDays, rsmList, cssCla
 function perfActivationsTableHtml(list) {
   if (!list.length) return `<div class="empty">No activations logged for this quarter yet.</div>`;
   return `<div class="tablewrap"><table class="datatable">
-    <thead><tr><th>Customer</th><th>RSM</th><th>Activation</th><th>Start</th><th>End</th><th>Deal</th></tr></thead>
+    <thead><tr><th>Customer</th><th>RSM</th><th>Activation</th><th>Start</th><th>End</th><th>Deal</th><th>Status</th></tr></thead>
     <tbody>${list.map(a => {
       const o = outlets[a.outletId] || {};
+      const verified = isActivationSuccessful(a);
       return `<tr>
         <td>${escapeHtml(o.name||a.outletId)}</td>
         <td>${escapeHtml(o.rsm||'—')}</td>
@@ -5729,6 +5764,7 @@ function perfActivationsTableHtml(list) {
         <td class="mono">${fmtDate(a.start)}</td>
         <td class="mono">${fmtDate(a.end)}</td>
         <td>${dealLabel(a.dealX)}</td>
+        <td>${verified ? '<span class="badge green">&#10003; Verified</span>' : '<span class="badge amber">Needs photo</span>'}</td>
       </tr>`;
     }).join('')}</tbody>
   </table></div>`;
@@ -5783,6 +5819,17 @@ function renderPerfPage() {
   document.getElementById('perf_printSummary').innerHTML =
     `<strong>Team Dashboard</strong> — ${scope===PERF_ALL?'Sales Team (All RSMs)':escapeHtml(scope)} · ${escapeHtml(quarterLabelOf(fy,q))}${asOfSuffix}`;
 
+  // Round 78: "Weekly Progress Target %" — calendar pacing through the quarter, using the same
+  // referenceEndDate the rest of this page already treats as "now" (live today, the chosen "as
+  // of" override, or a finished quarter's own fixed end date), so it never disagrees with
+  // anything else being shown. Also feeds the pace marker drawn on each KPI card's progress bar
+  // below (perfKpiCardHtml's pacingPct argument).
+  const pacing = quarterPacingInfo(qStart, qEndIncl, referenceEndDate);
+  const pacingEl = document.getElementById('perf_pacing');
+  if (pacingEl) {
+    pacingEl.innerHTML = `<div class="quarter-pacing-badge">Week <strong>${pacing.weekNum}</strong> of ${pacing.totalWeeks} &middot; <strong>${pacing.pct.toFixed(0)}%</strong> through the quarter — that's roughly where targets below should sit if you're on pace.</div>`;
+  }
+
   const outletFilter = perfOutletFilter(scope);
   const rsmList = uniqueVals('rsm', outlets);
 
@@ -5830,8 +5877,12 @@ function renderPerfPage() {
   const kegActivationsList = activationsInQuarter(fy, q, a => a.productType === 'KEGS' && outletFilter(a.outletId)).slice().sort((a,b)=>(a.start||'').localeCompare(b.start||''));
   const cartonActivationsList = activationsInQuarter(fy, q, a => a.productType === 'CARTONS' && outletFilter(a.outletId)).slice().sort((a,b)=>(a.start||'').localeCompare(b.start||''));
   const directDeliveryList = directDeliveryOnboardedList(fy, q, outletFilter);
-  const kegActivationsCount = kegActivationsList.length;
-  const cartonActivationsCount = cartonActivationsList.length;
+  // Round 78: the KPI card's actual count only counts activations with a photo attached (see
+  // isActivationSuccessful() above) — an activation logged with no proof yet doesn't count toward
+  // hitting the target. The table below still lists every activation logged this quarter, photo
+  // or not, so nothing is hidden; it's just visibly flagged "Needs photo" until one is added.
+  const kegActivationsCount = kegActivationsList.filter(isActivationSuccessful).length;
+  const cartonActivationsCount = cartonActivationsList.filter(isActivationSuccessful).length;
   const directDeliveryCount = directDeliveryList.length;
 
   const nowLabel = isCurrentQuarter ? 'Current' : 'End of quarter';
@@ -5874,14 +5925,14 @@ function renderPerfPage() {
       </div>
     </div>
     <div class="kpi-grid" style="margin-bottom:16px;">
-      ${perfKpiCardHtml('Total Volume', totalVolumeLitres, totalVolumeTargetOf(targets), ' L')}
-      ${perfKpiCardHtml('Keg Volume', kegQ.totalLitres, targets.kegVolumeTarget, ' L')}
-      ${perfKpiCardHtml('Carton Volume', cartonQ.totalLitres, targets.cartonVolumeTarget, ' L')}
+      ${perfKpiCardHtml('Total Volume', totalVolumeLitres, totalVolumeTargetOf(targets), ' L', pacing.pct)}
+      ${perfKpiCardHtml('Keg Volume', kegQ.totalLitres, targets.kegVolumeTarget, ' L', pacing.pct)}
+      ${perfKpiCardHtml('Carton Volume', cartonQ.totalLitres, targets.cartonVolumeTarget, ' L', pacing.pct)}
     </div>
     <div class="kpi-grid" style="margin-bottom:16px;">
-      ${perfKpiCardHtml('Keg Activations', kegActivationsCount, targets.kegActivationsTarget, '')}
-      ${perfKpiCardHtml('Carton Activations', cartonActivationsCount, targets.cartonActivationsTarget, '')}
-      ${perfKpiCardHtml('Direct Delivery Customers Onboarded', directDeliveryCount, targets.directDeliveryTarget, '')}
+      ${perfKpiCardHtml('Keg Activations', kegActivationsCount, targets.kegActivationsTarget, '', pacing.pct)}
+      ${perfKpiCardHtml('Carton Activations', cartonActivationsCount, targets.cartonActivationsTarget, '', pacing.pct)}
+      ${perfKpiCardHtml('Direct Delivery Customers Onboarded', directDeliveryCount, targets.directDeliveryTarget, '', pacing.pct)}
     </div>
     <div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">
       <div class="panel" style="flex:1; min-width:340px;">
@@ -5912,11 +5963,13 @@ function renderPerfPage() {
          renderPerfPage() for the full explanation (mirrored change, kept in sync by hand). -->
     <div class="rowflex" style="align-items:stretch; flex-wrap:wrap;">
       <div class="panel" style="flex:1; min-width:340px;">
-        <h3>Keg Activations logged <span class="muted" style="font-weight:400; font-size:11.5px;">(${kegActivationsCount})</span></h3>
+        <h3>Keg Activations logged <span class="muted" style="font-weight:400; font-size:11.5px;">(${kegActivationsList.length} logged &middot; ${kegActivationsCount} verified)</span></h3>
+        <div class="hint" style="margin-bottom:4px;">Only activations with a photo attached count toward the target above — anything marked "Needs photo" below doesn't yet.</div>
         ${perfActivationsTableHtml(kegActivationsList)}
       </div>
       <div class="panel" style="flex:1; min-width:340px;">
-        <h3>Carton Activations logged <span class="muted" style="font-weight:400; font-size:11.5px;">(${cartonActivationsCount})</span></h3>
+        <h3>Carton Activations logged <span class="muted" style="font-weight:400; font-size:11.5px;">(${cartonActivationsList.length} logged &middot; ${cartonActivationsCount} verified)</span></h3>
+        <div class="hint" style="margin-bottom:4px;">Only activations with a photo attached count toward the target above — anything marked "Needs photo" below doesn't yet.</div>
         ${perfActivationsTableHtml(cartonActivationsList)}
       </div>
     </div>
@@ -6349,6 +6402,12 @@ function activationsInQuarter(fy, q, filterFn) {
   const qEndStr = new Date(qEndExcl.getTime()-86400000).toISOString().slice(0,10);
   return activations.filter(a => a.start >= qStartStr && a.start <= qEndStr && (!filterFn || filterFn(a)));
 }
+// Round 78: an activation only counts as "successful" — i.e. only counts toward the Keg/Carton
+// Activations KPI target on the Team Dashboard — once at least one photo has been attached as
+// proof it actually happened. An activation with no photo yet still shows up everywhere it always
+// has (the Activations tab list, the Dashboard's read-only breakdown table) so nothing gets lost,
+// but it's flagged "Needs photo" and excluded from the target count until someone adds one.
+function isActivationSuccessful(a) { return !!(a.photos && a.photos.length > 0); }
 
 function populateActivationDealOptions(bucket, keepValue) {
   const sel = document.getElementById('ac_dealX');
@@ -6500,10 +6559,11 @@ function renderActivationsList() {
 
   document.getElementById('ac_count').textContent = `(${list.length})`;
   const body = document.getElementById('ac_body');
-  if (list.length === 0) { body.innerHTML = `<tr><td colspan="14"><div class="empty">No activations logged for this quarter yet.</div></td></tr>`; return; }
+  if (list.length === 0) { body.innerHTML = `<tr><td colspan="15"><div class="empty">No activations logged for this quarter yet.</div></td></tr>`; return; }
   body.innerHTML = list.map(a => {
     const o = outlets[a.outletId] || {};
     const g = a.groupId ? groups[a.groupId] : null;
+    const verified = isActivationSuccessful(a);
     return `<tr>
       <td>${escapeHtml(o.name||a.outletId)}</td>
       <td>${escapeHtml(o.rsm||'—')}</td>
@@ -6513,6 +6573,7 @@ function renderActivationsList() {
       <td class="mono">${fmtDate(a.start)}</td>
       <td class="mono">${fmtDate(a.end)}</td>
       <td>${dealLabel(a.dealX)}</td>
+      <td>${verified ? '<span class="badge green">&#10003; Verified</span>' : '<span class="badge amber" title="Add a photo for this to count toward the Activations target">Needs photo</span>'}</td>
       <td>${escapeHtml(a.bonusStock||'—')}</td>
       <td>${escapeHtml(a.pos||'—')}</td>
       <td>${escapeHtml(a.consumerPricing||'—')}</td>
@@ -9160,10 +9221,12 @@ function renderOrderForm() {
   const outletId = orderFormOutletId;
   const o = outlets[outletId];
   const statusEl = document.getElementById('ord_pricingStatus');
+  const deliveryNotesEl = document.getElementById('ord_deliveryNotes');
   if (!outletId || !o) {
     body.innerHTML = `<div class="empty">Pick a customer above to start an order.</div>`;
     document.getElementById('ord_summary').innerHTML = '';
     if (statusEl) statusEl.innerHTML = '';
+    if (deliveryNotesEl) deliveryNotesEl.innerHTML = '';
     return;
   }
   if (statusEl) {
@@ -9172,6 +9235,12 @@ function renderOrderForm() {
       ? `<span class="badge green">&#10003; Pricing &amp; deal confirmed for ${escapeHtml(o.name)}</span>`
       : `<span class="badge amber">&#9888; Pricing not yet confirmed for ${escapeHtml(o.name)}</span> <a href="#" onclick="document.querySelector('.tab-btn[data-tab=summary]').click(); setTimeout(()=>selectSummaryOutlet('${outletId}'),0); return false;" style="margin-left:6px;">Review pricing &rarr;</a>`;
   }
+  // Round 78: surface this customer's delivery notes (access notes, on-site contact, preferred
+  // day/window — entered on the Customer Summary page) right here on the order form, so whoever's
+  // placing the order sees them before saving, not just later on the driver's checklist. Reuses
+  // deliveryDetailsBlockHtml() unchanged (same box already shown on Delivery Runs/Reports) — it
+  // returns '' when nothing's been entered for this outlet, so the form stays clean otherwise.
+  if (deliveryNotesEl) deliveryNotesEl.innerHTML = deliveryDetailsBlockHtml(outletId);
   const allGroups = marginEligibleGroupIds('ALL');
   const keg50Groups = allGroups.filter(gid => bucketOf(groups[gid]) === 'KEGS' && groups[gid].format !== 'Keg30L');
   const keg30Groups = allGroups.filter(gid => bucketOf(groups[gid]) === 'KEGS' && groups[gid].format === 'Keg30L');
