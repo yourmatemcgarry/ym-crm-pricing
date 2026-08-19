@@ -294,6 +294,11 @@
   .cell-tier-label { font-size:8px; text-transform:uppercase; letter-spacing:.04em; font-weight:700; margin-bottom:1px; }
   .cell-tier-label.direct { color:var(--navy); }
   .cell-tier-label.ws { color:var(--gold-dark); }
+  /* Round 85: family group pricing badges. .cell-fgdeal is calm/informational (this cell's
+     price came from the store's family group, not its own standing deal). .cell-fg-override is
+     deliberately amber (always-visible "pay attention" flag, never hidden behind hover/click). */
+  .cell-fgdeal { font-size:9.5px; color:var(--blue); margin-top:1px; font-weight:600; }
+  .cell-fg-override { font-size:9.5px; color:var(--amber); margin-top:1px; font-weight:700; }
   @keyframes flashgreen { 0%{ background: var(--green-bg);} 100%{ background: transparent; } }
 
   .bar-chart .bar-rect.combo { background:var(--blue); }
@@ -494,7 +499,7 @@
   <button class="tab-btn" data-tab="totalvolume" data-group="mgmt">Total Volume</button>
   <button class="tab-btn" data-tab="bottleshopanalysis" data-group="mgmt">Banner Bottleshop Analysis</button>
   <button class="tab-btn" data-tab="exportemails" data-group="mgmt">Export Emails</button>
-  <button class="tab-btn" data-tab="familygroups" data-group="mgmt">Family Groups</button>
+  <button class="tab-btn" data-tab="familygroups" data-group="mgmt">Family Group Key Contacts</button>
   <button class="tab-btn" data-tab="datarefresh" data-group="mgmt">Data Refresh</button>
 
   <span class="tab-group-label"><span class="dot" style="background:var(--grp-supply);"></span>Supply Chain Tools</span>
@@ -521,6 +526,7 @@
         </div>
         <div><label>Zone</label><select id="g_zone"><option value="">All</option></select></div>
         <div><label>State</label><select id="g_state"><option value="">All</option></select></div>
+        <div><label>Family group</label><select id="g_familyGroup"><option value="">All</option></select></div>
         <div><label>Package type</label>
           <select id="g_pkgtype">
             <option value="">All (kegs + cartons)</option>
@@ -717,7 +723,7 @@
         <div class="fld"><label>RSM <span class="muted" style="font-weight:400;">(auto-filled from postcode — change if needed)</span></label><select id="nc_rsm"><option value="">Select…</option></select></div>
         <div class="fld"><label>Customer type</label><select id="nc_custType"><option value="">Select…</option></select></div>
         <div class="fld"><label>Zone <span class="muted" style="font-weight:400;">(auto-filled from postcode)</span></label><input id="nc_zone"></div>
-        <div class="fld"><label>Family / franchise group (optional)</label><input id="nc_family" placeholder="e.g. COMISKEY HOTELS"></div>
+        <div class="fld"><label>Family / franchise group (optional)</label><select id="nc_family"><option value="">No family group</option></select></div>
       </div>
       <h2 style="margin:18px 0 4px;">Deals for this customer (optional)</h2>
       <div class="hint" style="margin-bottom:10px;">Common when a new customer is entered right as you're about to take their first order — line up standing deals now so they're already in place. Add as many SKUs as you like.</div>
@@ -780,23 +786,16 @@
     </div>
   </div>
 
-  <!-- ================= FAMILY GROUPS ================= -->
+  <!-- ================= FAMILY GROUP KEY CONTACTS (Round 85) ================= -->
   <div class="tabpage" id="tab-familygroups">
     <div class="panel no-print">
       <div class="rowflex" style="justify-content:space-between; flex-wrap:wrap; gap:10px; align-items:baseline;">
-        <h2 style="margin:0;">Family Groups</h2>
-        <span id="fg_freshness" class="muted" style="font-size:12.5px;"></span>
+        <h2 style="margin:0;">Family Group Key Contacts</h2>
+        <button class="btn small" onclick="fgOpenNewGroupForm()">+ New family group</button>
       </div>
-      <div class="hint" style="margin-top:6px;">Stores grouped by the owner/franchisee/family that runs them, or by banner where no ownership data was available — imported from the Feb'26 customer list (Bottlemart, Liquor Legends, Star Liquor, Cellarbrations Superstores, IBA, ALH, BWS, LiquorLand). Covers every store in those lists, not just your current YMT customers, so it's part reference and part prospect list. Where a store matches one of your outlets it links straight through to Customer Summary. Reference/browse only — since Round 57 these stores no longer feed the New Customer list or any Hit List, so nothing here counts as a real customer until you add them yourself. Set the "Last updated" date on the New Customer tab whenever you get a refreshed store list.</div>
+      <div class="hint" style="margin-top:6px;">Manage each family/franchise group's key contacts, member stores, and group-wide pricing deals. Group membership is fully editable here — add or remove member stores, and move a store to a different group any time ownership changes hands. A deal loaded against a group auto-applies to every member store's Direct pricing on the Customer Pricing grid, but any store can still be set to its own deal, which then overrides the group's (flagged there). Seeded once from an owner-matched CSV of family groups and venues; any venue that couldn't be confidently matched to an existing customer is still shown, clearly flagged as not linked.</div>
       <div class="rowflex" style="margin-top:10px; gap:14px; flex-wrap:wrap; align-items:flex-end;">
-        <div class="fld" style="margin:0; max-width:320px;"><label>Search group or store</label><input id="fg_search" placeholder="e.g. Comiskey, Eatons Hill…"></div>
-        <div class="fld" style="margin:0;"><label>Banner</label><select id="fg_banner"><option value="">All banners</option></select></div>
-        <div class="fld" style="margin:0;"><label>Show</label>
-          <select id="fg_customerOnly">
-            <option value="">All stores</option>
-            <option value="yes">Only stores that are current YMT customers</option>
-          </select>
-        </div>
+        <div class="fld" style="margin:0; max-width:320px;"><label>Search group, contact, or store</label><input id="fg_search" placeholder="e.g. Comiskey, Eatons Hill…"></div>
       </div>
     </div>
     <div class="cards" id="fg_summary"></div>
@@ -1203,6 +1202,7 @@
         <div class="fld" style="margin:0;"><label>Warehouse</label><select id="ce_whouse"><option value="">All warehouses</option></select></div>
         <div class="fld" style="margin:0;"><label>Banner group</label><select id="ce_bannerGroup"><option value="">All banner groups</option></select></div>
         <div class="fld" style="margin:0;"><label>Sub banner</label><select id="ce_subBanner"><option value="">All sub banners</option></select></div>
+        <div class="fld" style="margin:0;"><label>Family group</label><select id="ce_familyGroup"><option value="">All family groups</option></select></div>
         <div class="fld" style="margin:0;">
           <label>Zone</label>
           <div class="msel" id="ce_zone_msel">
@@ -2778,6 +2778,8 @@ let manualOutlets = {}; // keyed by outletId — customers added before they hav
 let customerDeliveryDetails = {}; // keyed by outletId: {accessNotes, contactName, contactPhone, preferredDay, preferredWindow, updatedBy, updatedAt} — shared
 let naDistributions = {}; // keyed by "quarterKey|ownerGroup|groupId": {count, updatedBy, updatedAt} — shared, manually-entered store-distribution counts (Coles & Woolworths tab)
 let vipContacts = []; // [ {id, name, company, role, email, phone, source, notes, updatedBy, updatedAt} ] — shared; server-seeded once from the Feb'26 customer list import, a normal live CRUD list from then on
+let familyGroupsData = []; // [ {id, name, contacts, memberOutletIds, unmatchedStores} ] — Round 85: REPLACES the old read-only CRM_DATA.familyGroups with a genuinely live "group owns members" model. Shared/server-backed; seeded once (server-side, in data.mjs) from FAMILY_GROUPS_SEED, then a normal live/editable collection from that point on — see familyGroupOf() below.
+let familyGroupDeals = {}; // { "groupId|skuGroupId": {dealX, updatedBy, updatedAt} } — Round 85: a deal loaded against a whole family group, auto-applied to every member outlet's direct pricing — see fgDealKey()/familyGroupDealFor()/resolvePricing() below. Shared/server-backed like familyGroupsData above.
 let rsmZoneOverrides = {}; // { [zone]: rsmName } — shared; lets the user immediately reassign which RSM owns a zone, without waiting for the next Ontap-driven data refresh
 let postcodeZoneOverrides = {}; // { [postcode]: zoneName } — shared; Round 56 — lets the user reassign an individual postcode to a different zone than the imported postcode database says
 let customerRsmOverrides = {}; // { [outletId]: rsmName } — shared; Round 56 — pins ONE specific customer to an RSM regardless of zone
@@ -2793,7 +2795,6 @@ let sp_currentGroupId = null; // groupId currently open in the "Split product" p
 let hlDismissals = {}; // { [outletIdOrProspectKey]: {reason:'closed'|'subDistributor', updatedBy, updatedAt} } — shared; a customer marked Closed/Using Sub Distributor on ANY Hit List drops out of every Hit List's main table until someone explicitly undoes it. Global (not quarter-scoped) — see netlify_part4.js.
 let groupLastUpdated = {}; // { [groupKey]: {date, updatedBy, updatedAt} } — Round 57: shared; tracks when each periodically-refreshed batch list (Family Groups, VIP Contacts, LMG, Star Liquor — see GROUP_TRACKER_DEFS) was last brought up to date.
 const GROUP_TRACKER_DEFS = [
-  { key: 'familyGroups', label: 'Family Groups' },
   { key: 'vipContacts', label: 'VIP Contacts' },
   { key: 'lmg', label: 'LMG (Bottlemart)' },
   { key: 'slg', label: 'Star Liquor' },
@@ -3254,15 +3255,37 @@ function activeTempDealFor(outletId, groupId) {
   const matches = tempDeals.filter(td => td.outletId===outletId && td.groupId===groupId && tempDealStatus(td)==='active');
   return matches.length ? matches[0] : null;
 }
+// ---------- Family groups (Round 85) — "group owns members" model. familyGroupsData is the ONLY
+// source of truth for which group an outlet belongs to; nothing else in the app reads/writes an
+// outlet's group membership. Linear scan is fine at this data scale (~1650 outlets, ~16 groups) —
+// not worth a reverse-index for what's at most a few dozen calls per page render. ----------
+function familyGroupOf(outletId) {
+  return familyGroupsData.find(g => g.memberOutletIds.includes(outletId)) || null;
+}
+// Family group deals — a second "customerDeals"-shaped collection, just keyed by groupId instead of
+// outletId. Mirrors dcKey()/standingDealFor() exactly (see saveFamilyGroupDeal()'s 0-means-delete
+// convention in netlify_part4.js, matching _applyStandingDeal()'s).
+function fgDealKey(groupId, skuGroupId) { return groupId + '|' + skuGroupId; }
+function familyGroupDealFor(groupId, skuGroupId) { return familyGroupDeals[fgDealKey(groupId, skuGroupId)] || null; }
+
 function resolvePricing(outletId, groupId) {
   const listPrice = listPriceFor(groupId);
   const temp = activeTempDealFor(outletId, groupId);
   const standing = standingDealFor(outletId, groupId);
+  const fg = familyGroupOf(outletId);
+  const fgDeal = fg ? familyGroupDealFor(fg.id, groupId) : null;
   let dealX = 0, source = 'none';
   if (temp) { dealX = temp.dealX; source = 'temp'; }
   else if (standing) { dealX = standing.dealX; source = 'standing'; }
+  else if (fgDeal) { dealX = fgDeal.dealX; source = 'familyGroup'; }
   const eff = listPrice !== null ? effPrice(listPrice, dealX) : null;
-  return { listPrice, dealX, source, tempDeal: temp, standing, eff };
+  // True whenever this outlet has its OWN standing deal AND its family group also has a deal for
+  // this SKU group, and the two disagree — i.e. the store's standing deal is silently overriding
+  // what the group would otherwise apply. Always computed (regardless of which source is actually
+  // winning — standing always wins when both exist) so the grid cell can show an always-visible
+  // "overrides group deal" badge.
+  const overridesFamilyGroup = !!(fgDeal && standing && standing.dealX !== fgDeal.dealX);
+  return { listPrice, dealX, source, tempDeal: temp, standing, fg, fgDeal, overridesFamilyGroup, eff };
 }
 
 // Maps a server function name + positional args (kept identical to the old
@@ -3306,7 +3329,11 @@ function buildServerPayload(fnName, args) {
     case 'saveManualOutlet':  return { outlet: args[0] };
     case 'deleteManualOutlet': return { id: args[0] };
     case 'saveDeliveryDetails': return { outletId: args[0], accessNotes: args[1], contactName: args[2], contactPhone: args[3], preferredDay: args[4], preferredWindow: args[5], updatedBy: args[6] };
-    case 'saveContactInfo': return { outletId: args[0], email: args[1], email2: args[2], familyGroup: args[3], updatedBy: args[4] };
+    case 'saveContactInfo': return { outletId: args[0], email: args[1], email2: args[2], updatedBy: args[3] };
+    case 'saveFamilyGroup': return { group: args[0] };
+    case 'deleteFamilyGroup': return { id: args[0] };
+    case 'saveFamilyGroupDeal': return { groupId: args[0], skuGroupId: args[1], dealX: args[2], updatedBy: args[3] };
+    case 'deleteFamilyGroupDeal': return { groupId: args[0], skuGroupId: args[1] };
     case 'saveNaDistribution': return { quarterKey: args[0], ownerGroup: args[1], groupId: args[2], count: args[3], updatedBy: args[4] };
     case 'saveVipContact':    return { contact: args[0] };
     case 'deleteVipContact':  return { id: args[0] };
@@ -3499,6 +3526,7 @@ function getGridFilteredOutlets() {
   const custTypes = gCustTypeMsel ? gCustTypeMsel.getValues() : [];
   const zone = document.getElementById('g_zone').value;
   const state = document.getElementById('g_state').value;
+  const familyGroupSel = document.getElementById('g_familyGroup').value;
   const whouse = document.getElementById('g_whouse').value;
   const wsDealFilter = document.getElementById('g_wsdeal').value;
   const wsDealOutletIds = wsDealFilter ? outletIdsWithWholesalerDeal() : null;
@@ -3517,6 +3545,8 @@ function getGridFilteredOutlets() {
     if (custTypes.length && !custTypes.includes(o.custType)) return false;
     if (zone && o.zone !== zone) return false;
     if (state && o.state !== state) return false;
+    // Round 85 — same familyGroupOf() lookup used by the Customer List Explorer's equivalent filter.
+    if (familyGroupSel) { const fg = familyGroupOf(o.id); if (!fg || fg.name !== familyGroupSel) return false; }
     if (whouse && (outletSummary[o.id]||{}).lastWhouse !== whouse) return false;
     if (wsDealFilter) {
       const has = wsDealOutletIds.has(o.id);
@@ -3559,7 +3589,7 @@ function getGridFilteredOutlets() {
 
 function clearGridFilters() {
   document.getElementById('g_search').value = '';
-  ['g_rsm','g_zone','g_state','g_active','g_pkgtype','g_whouse','g_wsdeal','g_pricingupdated','g_contact'].forEach(id => document.getElementById(id).value = '');
+  ['g_rsm','g_zone','g_state','g_familyGroup','g_active','g_pkgtype','g_whouse','g_wsdeal','g_pricingupdated','g_contact'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('g_sort').value = 'name_asc';
   if (gCustTypeMsel) gCustTypeMsel.clear();
   gridPage = 1;
@@ -3707,6 +3737,8 @@ function renderGridCell(outletId, groupId) {
     ${listPrice===null ? '<div class="cell-eff unset">No list price</div>' :
       pr.source==='temp' ? `<div class="cell-eff">${fmtMoney(pr.eff)}</div><div class="cell-temp">Temp to ${fmtDateShort(pr.tempDeal.end)}</div>` :
       `<div class="cell-eff ${pr.source==='none'?'unset':''}">${fmtMoney(pr.eff)}</div>`}
+    ${pr.source==='familyGroup' ? `<div class="cell-fgdeal" title="Auto-applied from this store's family group — override it below any time.">Group deal (${escapeHtml(pr.fg.name)})</div>` : ''}
+    ${pr.overridesFamilyGroup ? `<div class="cell-fg-override" title="This store's own deal (${escapeHtml(dealLabel(pr.standing.dealX))}) overrides its family group ${escapeHtml(pr.fg.name)}'s deal (${escapeHtml(dealLabel(pr.fgDeal.dealX))}).">&#9888; Overrides group deal</div>` : ''}
     <div class="cell-last">${lastLine}</div>
     ${wholesaleBlock}
   </td>`;
@@ -4264,6 +4296,7 @@ function renderCustomerSummaryPage(outletId) {
   const o = outlets[outletId];
   if (!o) { document.getElementById('cs_detail').innerHTML=''; return; }
   const os = outletSummary[outletId] || {};
+  const fgCurrent = familyGroupOf(outletId); // Round 85 — this outlet's family group, if any; see the Family / franchise group panel below
   const shownGroups = enabledGroupOrder();
   const disabledCount = groupOrder.length - shownGroups.length;
 
@@ -4357,15 +4390,28 @@ function renderCustomerSummaryPage(outletId) {
     </div>
     <div class="panel">
       <h3>Contact info</h3>
-      <div class="hint" style="margin-bottom:10px;">Email address(es) for pricing/marketing, and the family/franchise group this store belongs to (if any) — see the <a href="#" onclick="document.querySelector('.tab-btn[data-tab=familygroups]').click(); return false;">Family Groups</a> tab. Mostly seeded from the Feb'26 customer list import; edit freely — your changes always win over the import.</div>
+      <div class="hint" style="margin-bottom:10px;">Email address(es) for pricing/marketing. Mostly seeded from the Feb'26 customer list import; edit freely — your changes always win over the import.</div>
       <div class="formgrid">
         <div class="fld"><label>Email</label><input id="cs_ci_email" type="email" placeholder="e.g. manager@venue.com.au" value="${escapeHtml(outletContactInfo(outletId).email)}"></div>
         <div class="fld"><label>Email 2 (optional)</label><input id="cs_ci_email2" type="email" value="${escapeHtml(outletContactInfo(outletId).email2)}"></div>
-        <div class="fld"><label>Family / franchise group</label><input id="cs_ci_family" placeholder="e.g. COMISKEY HOTELS" value="${escapeHtml(outletContactInfo(outletId).familyGroup)}"></div>
       </div>
       <div class="rowflex no-print" style="margin-top:8px;">
         <button class="btn small" onclick="saveCsContactInfo('${outletId}')">Save contact info</button>
         <span class="hint" id="cs_ci_msg"></span>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Family / franchise group</h3>
+      <div class="hint" style="margin-bottom:10px;">This store's family/franchise group, managed on the <a href="#" onclick="document.querySelector('.tab-btn[data-tab=familygroups]').click(); return false;">Family Group Key Contacts</a> tab. Group membership is the single source of truth — changing it here immediately moves this store out of its current group (if any) and into the one you pick.</div>
+      <div class="formgrid">
+        <div class="fld">
+          <label>Current group</label>
+          <div>${fgCurrent ? `<a href="#" onclick="document.querySelector('.tab-btn[data-tab=familygroups]').click(); return false;">${escapeHtml(fgCurrent.name)}</a>` : '<span class="muted">No family group</span>'}</div>
+        </div>
+        <div class="fld">
+          <label>Change group</label>
+          <select onchange="csChangeFamilyGroup('${outletId}', this)">${fgGroupOptionsHtml(fgCurrent ? fgCurrent.id : '')}</select>
+        </div>
       </div>
     </div>
     <div class="panel">
@@ -8075,7 +8121,7 @@ const DELIVERY_DAYS = ['Any day', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 
 function deliveryDetailsFor(outletId) { return customerDeliveryDetails[outletId] || {}; }
 function _isDeliveryRecordBlank(rec) {
   return !rec.accessNotes && !rec.contactName && !rec.contactPhone && !rec.preferredWindow
-    && (!rec.preferredDay || rec.preferredDay === 'Any day') && !rec.email && !rec.email2 && !rec.familyGroup;
+    && (!rec.preferredDay || rec.preferredDay === 'Any day') && !rec.email && !rec.email2;
 }
 function saveCsDeliveryDetails(outletId) {
   const accessNotes = document.getElementById('cs_dd_access').value.trim();
@@ -8101,19 +8147,44 @@ function outletContactInfo(outletId) {
   return {
     email: (live.email !== undefined ? live.email : o.email) || '',
     email2: (live.email2 !== undefined ? live.email2 : o.email2) || '',
-    familyGroup: (live.familyGroup !== undefined ? live.familyGroup : o.familyGroup) || '',
   };
 }
 function saveCsContactInfo(outletId) {
   const email = document.getElementById('cs_ci_email').value.trim();
   const email2 = document.getElementById('cs_ci_email2').value.trim();
-  const familyGroup = document.getElementById('cs_ci_family').value.trim();
-  const rec = { ...(customerDeliveryDetails[outletId] || {}), email, email2, familyGroup, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+  const rec = { ...(customerDeliveryDetails[outletId] || {}), email, email2, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
   if (_isDeliveryRecordBlank(rec)) delete customerDeliveryDetails[outletId];
   else customerDeliveryDetails[outletId] = rec;
   document.getElementById('cs_ci_msg').textContent = `Saved at ${new Date().toLocaleTimeString()}`;
   toast('Contact info saved.');
-  callServer('saveContactInfo', [outletId, email, email2, familyGroup, currentUserEmail]);
+  callServer('saveContactInfo', [outletId, email, email2, currentUserEmail]);
+}
+// Round 85 — Customer Summary's "Change group" control. familyGroupsData is the single source of
+// truth for group membership now, so changing it here means: pull the outlet out of whichever
+// group it's currently in (if any), then push it into the newly chosen one (if any). Touches up to
+// TWO groups in one user action, so — same as fgAddStoreToGroup — both saves are fired without
+// response reconciliation, to avoid one save's response overwriting the other's already-applied
+// optimistic change.
+function csChangeFamilyGroup(outletId, selectEl) {
+  let groupId = selectEl.value;
+  if (groupId === '__new__') {
+    const name = (prompt('New family group name:') || '').trim();
+    if (!name) { renderCustomerSummaryPage(outletId); return; }
+    groupId = fgCreateGroup(name).id;
+  }
+  const current = familyGroupOf(outletId);
+  if (current) current.memberOutletIds = current.memberOutletIds.filter(id => id !== outletId);
+  if (groupId) {
+    const g = familyGroupsData.find(x => x.id === groupId);
+    if (g && !g.memberOutletIds.includes(outletId)) g.memberOutletIds.push(outletId);
+  }
+  toast(groupId ? 'Family group updated.' : 'Removed from family group.');
+  renderCustomerSummaryPage(outletId);
+  if (current) callServer('saveFamilyGroup', [current], null, null);
+  if (groupId) {
+    const g = familyGroupsData.find(x => x.id === groupId);
+    if (g) callServer('saveFamilyGroup', [g], null, null);
+  }
 }
 // Compact block used wherever a delivery run needs to surface this customer's delivery info —
 // the pick list stops table and, more importantly, the driver's on-the-road checklist.
@@ -9072,6 +9143,7 @@ function ceOutletFilter() {
   const typeSel = ceTypeMsel ? ceTypeMsel.getValues() : [];
   const bannerGroupSel = document.getElementById('ce_bannerGroup').value;
   const subBannerSel = document.getElementById('ce_subBanner') ? document.getElementById('ce_subBanner').value : '';
+  const familyGroupSel = document.getElementById('ce_familyGroup') ? document.getElementById('ce_familyGroup').value : '';
   const whouseSel = document.getElementById('ce_whouse').value;
   const zoneSel = ceZoneMsel ? ceZoneMsel.getValues() : [];
   return oid => {
@@ -9081,6 +9153,9 @@ function ceOutletFilter() {
     if (typeSel.length && !typeSel.includes(o.custType)) return false;
     if (bannerGroupSel && o.majorGroup !== bannerGroupSel) return false;
     if (subBannerSel && o.banner !== subBannerSel) return false;
+    // Round 85: filters against the live familyGroupsData model (familyGroupOf), not any field on
+    // the outlet record itself — group membership has no baked outlet field to compare against.
+    if (familyGroupSel) { const fg = familyGroupOf(oid); if (!fg || fg.name !== familyGroupSel) return false; }
     if (zoneSel.length && !zoneSel.includes(o.zone)) return false;
     if (whouseSel) {
       const os = outletSummary[oid];
@@ -10391,13 +10466,17 @@ function saveNewCustomer() {
     rsm: document.getElementById('nc_rsm').value,
     custType: document.getElementById('nc_custType').value,
     zone: document.getElementById('nc_zone').value.trim(),
-    familyGroup: document.getElementById('nc_family').value.trim(),
     createdBy: existing ? existing.createdBy : currentUserEmail,
     createdAt: existing ? existing.createdAt : new Date().toISOString(),
     updatedBy: currentUserEmail, updatedAt: new Date().toISOString(),
   };
   const dealsToSave = ncPendingDeals.slice();
   toast('Saving…');
+  // Round 85: family group membership lives ONLY in familyGroupsData — no familyGroup string gets
+  // written onto the outlet record itself. The picker's "+ New group…" option is already resolved
+  // to a real group id by the time we get here (see wireFamilyGroupSelect()), so this is always
+  // either a real group id or empty.
+  const familyGroupId = document.getElementById('nc_family').value;
   callServer('saveManualOutlet', [rec], () => {
     manualOutlets[id] = rec;
     mergeManualOutletIntoLive(id);
@@ -10405,6 +10484,13 @@ function saveNewCustomer() {
       _applyStandingDealLocal(id, d.groupId, d.dealX);
       callServer('saveCustomerDeal', [id, d.groupId, d.dealX, currentUserEmail]);
     });
+    if (familyGroupId) {
+      const g = familyGroupsData.find(x => x.id === familyGroupId);
+      if (g && !g.memberOutletIds.includes(id)) {
+        g.memberOutletIds.push(id);
+        callServer('saveFamilyGroup', [g], (data) => { familyGroupsData = data.familyGroupsData || familyGroupsData; }, null);
+      }
+    }
     renderManualCustomersPanel();
     document.getElementById('nc_saveMsg').textContent = `Saved at ${new Date().toLocaleTimeString()}`;
     toast('Customer added' + (dealsToSave.length ? ` with ${dealsToSave.length} deal${dealsToSave.length===1?'':'s'} set` : '') + ' — now available anywhere you pick a customer.');
@@ -10605,74 +10691,361 @@ function renderGroupFreshnessPanel() {
   }).join('');
 }
 
-// ===================== FAMILY GROUPS =====================
-// Pure reference/browse — every store across the banner/franchise sheets from the Feb'26 customer
-// list import (CRM_DATA.familyGroups), grouped by owner/franchisee where that data existed, else
-// by banner. Deliberately covers the whole banner universe, not just current YMT customers, so
-// this doubles as a lightweight prospect list. Not live-editable here — to correct/refresh it,
-// send an updated spreadsheet and the import gets re-run (see the aggregate*.py pipeline). Purely
-// client-side (baked into CRM_DATA at build time), no server calls needed.
-function familyGroupsList() { return (CRM_DATA.familyGroups || []); }
-function fgBannerOptions() {
-  return Array.from(new Set(familyGroupsList().map(g => g.banner))).sort();
-}
+// ===================== FAMILY GROUP KEY CONTACTS (Round 85) =====================
+// Replaces the old read-only "Family Groups" tab. Group membership (familyGroupsData) is now
+// genuinely live and editable here: rename/delete a group, manage its key contacts, add/remove
+// member stores (including moving a store between groups when ownership changes hands), and load
+// a deal against the whole group that auto-applies to every member store's Direct pricing on the
+// Customer Pricing grid (see resolvePricing()). Venues from the source CSV that couldn't be
+// confidently matched to an existing outlet are kept and shown read-only per group, clearly
+// flagged as not linked to a customer — see fgUnmatchedStoresHtml(). Same logic as app3.js's
+// version — only the persistence layer differs: familyGroupsData/familyGroupDeals are server-
+// backed via Netlify Blobs here (saveFamilyGroup/deleteFamilyGroup/saveFamilyGroupDeal/
+// deleteFamilyGroupDeal), optimistic-local-update-then-callServer, same convention as VIP
+// Contacts. Operations that only touch ONE group (rename, contact CRUD, remove a store, deal CRUD)
+// reconcile local state from the server's response, same as saveVipContact/deleteVipContact.
+// Operations that touch TWO groups in one user action (moving a store between groups — see
+// fgAddStoreToGroup and csChangeFamilyGroup) deliberately do NOT reconcile from either response —
+// reconciling could let a slower response for one group's save stomp the other's already-applied
+// optimistic change; the optimistic local mutation is the source of truth for the rest of this
+// session, and the existing 20s refreshPricingFromServer() poll settles both onto the server's
+// final state regardless.
+function familyGroupsList() { return familyGroupsData; }
+
+// Transient page state — which group's rename control / contact form is currently open. Reset to
+// null (closed) whenever a save/cancel/delete happens, same "one thing open at a time, re-render
+// the whole tab" approach the rest of this app uses for inline edit state.
+let fgRenamingGroupId = null;
+let fgOpenContactForm = null; // { groupId, contactId } — contactId is null when adding a NEW contact
+
 function fgMatchesSearch(group, q) {
   if (!q) return true;
-  if (group.groupName.toLowerCase().includes(q)) return true;
-  return group.stores.some(s => s.storeName.toLowerCase().includes(q) || (s.suburb||'').toLowerCase().includes(q));
+  if (group.name.toLowerCase().includes(q)) return true;
+  if (group.contacts.some(c => (c.name||'').toLowerCase().includes(q))) return true;
+  return group.memberOutletIds.some(oid => { const o = outlets[oid]; return o && (o.name||'').toLowerCase().includes(q); });
 }
+
+// ---------- Shared "pick a family group, with a '+ New group…' escape hatch" helpers — used by
+// this tab's own "+ New family group" button AND the Customer Summary / New Customer pickers. ----------
+function fgGroupOptionsHtml(selectedId) {
+  const sorted = familyGroupsData.slice().sort((a,b) => a.name.localeCompare(b.name));
+  return `<option value="">No family group</option>` +
+    sorted.map(g => `<option value="${escapeHtml(g.id)}" ${g.id===selectedId?'selected':''}>${escapeHtml(g.name)}</option>`).join('') +
+    `<option value="__new__">+ New group…</option>`;
+}
+// Creates a brand-new, empty group and saves it immediately (rather than staging it) — so it's
+// available to pick from on every other family-group picker on the page right away, matching how
+// every other "+ New X…" escape hatch in this app already behaves. The id is generated client-side
+// (same as VIP Contacts' rec.id) so the group is usable synchronously, before the server round trip
+// even completes.
+function fgCreateGroup(name) {
+  const g = { id: 'fg_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5), name, contacts: [], memberOutletIds: [], unmatchedStores: [] };
+  familyGroupsData.push(g);
+  callServer('saveFamilyGroup', [g], (data) => { familyGroupsData = data.familyGroupsData || familyGroupsData; }, null);
+  return g;
+}
+// Wires a family-group <select>'s "+ New group…" option; onChange(groupIdOrEmpty) fires for every
+// other selection too, so the caller only needs one code path.
+function wireFamilyGroupSelect(selectEl, onChange) {
+  selectEl.addEventListener('change', () => {
+    if (selectEl.value === '__new__') {
+      const name = (prompt('New family group name:') || '').trim();
+      if (!name) { selectEl.value = ''; return; }
+      const g = fgCreateGroup(name);
+      selectEl.innerHTML = fgGroupOptionsHtml(g.id);
+      onChange(g.id);
+      return;
+    }
+    onChange(selectEl.value);
+  });
+}
+function fgOpenNewGroupForm() {
+  const name = (prompt('New family group name:') || '').trim();
+  if (!name) return;
+  const g = fgCreateGroup(name);
+  renderFamilyGroupsPage();
+  toast(`"${g.name}" created.`);
+}
+// Deleting a group never deletes its outlets — they just become un-grouped. Any deal loaded
+// against the group is meaningless once the group is gone, so those get cleaned up too.
+function fgDeleteGroup(groupId) {
+  const g = familyGroupsData.find(x => x.id === groupId);
+  if (!g) return;
+  if (!confirm(`Delete "${g.name}"? Its ${g.memberOutletIds.length} member store${g.memberOutletIds.length===1?'':'s'} will NOT be deleted — they'll just become un-grouped.`)) return;
+  familyGroupsData = familyGroupsData.filter(x => x.id !== groupId);
+  Object.keys(familyGroupDeals).filter(k => k.startsWith(groupId + '|')).forEach(k => delete familyGroupDeals[k]);
+  renderFamilyGroupsPage();
+  toast('Group deleted.');
+  callServer('deleteFamilyGroup', [groupId], (data) => {
+    familyGroupsData = data.familyGroupsData || familyGroupsData;
+    familyGroupDeals = data.familyGroupDeals || familyGroupDeals;
+    renderFamilyGroupsPage();
+  }, null);
+}
+function fgStartRename(groupId) { fgRenamingGroupId = groupId; renderFamilyGroupsPage(); }
+function fgCancelRename() { fgRenamingGroupId = null; renderFamilyGroupsPage(); }
+function fgSaveRename(groupId, inputEl) {
+  const name = (inputEl.value || '').trim();
+  if (!name) { toast('Enter a group name.'); return; }
+  const g = familyGroupsData.find(x => x.id === groupId);
+  if (g) g.name = name;
+  fgRenamingGroupId = null;
+  renderFamilyGroupsPage();
+  toast('Group renamed.');
+  if (g) callServer('saveFamilyGroup', [g], (data) => { familyGroupsData = data.familyGroupsData || familyGroupsData; }, null);
+}
+
+// ---------- Key contacts ----------
+function fgShowAddContactForm(groupId) { fgOpenContactForm = { groupId, contactId: null }; renderFamilyGroupsPage(); }
+function fgShowEditContactForm(groupId, contactId) { fgOpenContactForm = { groupId, contactId }; renderFamilyGroupsPage(); }
+function fgCancelContactForm() { fgOpenContactForm = null; renderFamilyGroupsPage(); }
+function fgSaveContactForm(groupId, contactId) {
+  const name = document.getElementById('fg_ct_name').value.trim();
+  if (!name) { toast('Enter a contact name.'); return; }
+  const g = familyGroupsData.find(x => x.id === groupId);
+  if (!g) return;
+  const rec = {
+    id: contactId || ('c_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6)),
+    name,
+    position: document.getElementById('fg_ct_position').value.trim(),
+    phone: document.getElementById('fg_ct_phone').value.trim(),
+    email: document.getElementById('fg_ct_email').value.trim(),
+  };
+  if (contactId) {
+    const idx = g.contacts.findIndex(c => c.id === contactId);
+    if (idx >= 0) g.contacts[idx] = rec;
+  } else {
+    g.contacts.push(rec);
+  }
+  fgOpenContactForm = null;
+  renderFamilyGroupsPage();
+  toast('Contact saved.');
+  callServer('saveFamilyGroup', [g], (data) => { familyGroupsData = data.familyGroupsData || familyGroupsData; }, null);
+}
+function fgRemoveContact(groupId, contactId) {
+  if (!confirm('Remove this contact?')) return;
+  const g = familyGroupsData.find(x => x.id === groupId);
+  if (!g) return;
+  g.contacts = g.contacts.filter(c => c.id !== contactId);
+  renderFamilyGroupsPage();
+  toast('Contact removed.');
+  callServer('saveFamilyGroup', [g], (data) => { familyGroupsData = data.familyGroupsData || familyGroupsData; }, null);
+}
+function fgContactRowHtml(group, c) {
+  if (fgOpenContactForm && fgOpenContactForm.groupId === group.id && fgOpenContactForm.contactId === c.id) {
+    return `<tr>
+      <td><input id="fg_ct_name" value="${escapeHtml(c.name)}" placeholder="Name"></td>
+      <td><input id="fg_ct_position" value="${escapeHtml(c.position||'')}" placeholder="Position"></td>
+      <td><input id="fg_ct_phone" value="${escapeHtml(c.phone||'')}" placeholder="Phone"></td>
+      <td><input id="fg_ct_email" value="${escapeHtml(c.email||'')}" placeholder="Email"></td>
+      <td class="no-print rowflex"><button class="btn small" onclick="fgSaveContactForm('${group.id}','${c.id}')">Save</button><button class="btn small secondary" onclick="fgCancelContactForm()">Cancel</button></td>
+    </tr>`;
+  }
+  return `<tr>
+    <td>${escapeHtml(c.name||'—')}</td>
+    <td>${escapeHtml(c.position||'—')}</td>
+    <td>${escapeHtml(c.phone||'—')}</td>
+    <td>${c.email ? `<a href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a>` : '<span class="muted">—</span>'}</td>
+    <td class="no-print rowflex"><button class="btn small secondary" onclick="fgShowEditContactForm('${group.id}','${c.id}')">Edit</button><button class="btn small danger" onclick="fgRemoveContact('${group.id}','${c.id}')">Remove</button></td>
+  </tr>`;
+}
+function fgAddContactRowHtml(group) {
+  if (!(fgOpenContactForm && fgOpenContactForm.groupId === group.id && fgOpenContactForm.contactId === null)) return '';
+  return `<tr>
+    <td><input id="fg_ct_name" placeholder="Name"></td>
+    <td><input id="fg_ct_position" placeholder="Position"></td>
+    <td><input id="fg_ct_phone" placeholder="Phone"></td>
+    <td><input id="fg_ct_email" placeholder="Email"></td>
+    <td class="no-print rowflex"><button class="btn small" onclick="fgSaveContactForm('${group.id}', null)">Save</button><button class="btn small secondary" onclick="fgCancelContactForm()">Cancel</button></td>
+  </tr>`;
+}
+
+// ---------- Member stores ----------
+// Skips (rather than crashes on) any memberOutletIds entry that no longer resolves in `outlets` —
+// an outlet can in principle disappear from a data refresh; this tab shouldn't break because of it.
+function fgMemberStoreRowsHtml(group) {
+  const rows = group.memberOutletIds.map(oid => {
+    const o = outlets[oid];
+    if (!o) return '';
+    return `<tr>
+      <td><a href="#" onclick="document.querySelector('.tab-btn[data-tab=summary]').click(); setTimeout(()=>selectSummaryOutlet('${oid}'),0); return false;">${escapeHtml(o.name)}</a></td>
+      <td>${escapeHtml(o.suburb||'—')}</td>
+      <td>${escapeHtml(o.state||'—')}</td>
+      <td>${escapeHtml(o.rsm||'—')}</td>
+      <td class="no-print"><button class="btn small danger" onclick="fgRemoveStore('${group.id}','${oid}')">Remove from group</button></td>
+    </tr>`;
+  }).filter(Boolean).join('');
+  return rows || `<tr><td colspan="5"><div class="empty">No member stores yet.</div></td></tr>`;
+}
+// Only clears membership — never touches the outlet record itself.
+function fgRemoveStore(groupId, outletId) {
+  const g = familyGroupsData.find(x => x.id === groupId);
+  if (!g) return;
+  g.memberOutletIds = g.memberOutletIds.filter(id => id !== outletId);
+  renderFamilyGroupsPage();
+  toast('Removed from group.');
+  callServer('saveFamilyGroup', [g], (data) => { familyGroupsData = data.familyGroupsData || familyGroupsData; }, null);
+}
+// Adding an already-grouped store here is how "move a store between groups" actually works —
+// confirm before silently pulling it out of wherever it already was.
+function fgAddStoreToGroup(groupId, outletId) {
+  const g = familyGroupsData.find(x => x.id === groupId);
+  if (!g || !outlets[outletId]) return;
+  if (g.memberOutletIds.includes(outletId)) { toast('Already a member of this group.'); return; }
+  const current = familyGroupOf(outletId);
+  if (current && current.id !== groupId) {
+    if (!confirm(`${outlets[outletId].name} is currently in "${current.name}" — move it to "${g.name}"?`)) return;
+    current.memberOutletIds = current.memberOutletIds.filter(id => id !== outletId);
+  }
+  g.memberOutletIds.push(outletId);
+  renderFamilyGroupsPage();
+  toast(`${outlets[outletId].name} added to ${g.name}.`);
+  // See the block comment at the top of this section — this can touch TWO groups in one user
+  // action, so both saves fire without response reconciliation.
+  if (current && current.id !== groupId) callServer('saveFamilyGroup', [current], null, null);
+  callServer('saveFamilyGroup', [g], null, null);
+}
+function fgUnmatchedStoresHtml(group) {
+  if (!group.unmatchedStores.length) return '';
+  return `<div style="margin-top:10px;">
+    <div class="muted" style="font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.3px;">Not linked to an existing customer (${group.unmatchedStores.length})</div>
+    <ul style="margin:6px 0 0; padding-left:18px; color:var(--muted); font-size:12.5px;">
+      ${group.unmatchedStores.map(s => `<li>${escapeHtml(s.rawText || [s.storeName, s.suburb].filter(Boolean).join(', '))}</li>`).join('')}
+    </ul>
+  </div>`;
+}
+
+// ---------- Family group deals ----------
+function fgDealRowsHtml(group) {
+  const entries = Object.keys(familyGroupDeals).filter(k => k.startsWith(group.id + '|'));
+  const rows = entries.map(key => {
+    const gid = key.slice(group.id.length + 1);
+    const g = groups[gid];
+    if (!g) return '';
+    const deal = familyGroupDeals[key];
+    return `<tr>
+      <td>${escapeHtml(g.label)} <span class="badge ${bucketOf(g)==='KEGS'?'kegs':'cartons'}" style="font-size:9px;">${escapeHtml(g.formatLabel||g.format)}</span></td>
+      <td>${escapeHtml(dealLabel(deal.dealX))}</td>
+      <td class="muted" style="font-size:11.5px;">Applies to all ${group.memberOutletIds.length} member store${group.memberOutletIds.length===1?'':'s'} automatically, per-store overridable</td>
+      <td class="no-print"><button class="btn small danger" onclick="fgRemoveGroupDeal('${group.id}','${gid}')">Remove</button></td>
+    </tr>`;
+  }).filter(Boolean).join('');
+  return rows || `<tr><td colspan="4"><div class="empty">No group deals set.</div></td></tr>`;
+}
+function fgRemoveGroupDeal(groupId, skuGroupId) {
+  delete familyGroupDeals[fgDealKey(groupId, skuGroupId)];
+  renderFamilyGroupsPage();
+  toast('Group deal removed.');
+  callServer('deleteFamilyGroupDeal', [groupId, skuGroupId], (data) => { familyGroupDeals = data.familyGroupDeals || familyGroupDeals; renderFamilyGroupsPage(); }, null);
+}
+// Repopulates the deal-tier select for whichever bucket (Kegs vs Cartons) the chosen SKU group
+// belongs to — same "SKU group choice narrows the deal tier options" pattern as the New Customer
+// form's pending-deal picker (see populateTempDealXOptions()). Purely local UI, no server call.
+function fgOnDealGroupChange(groupId, selectEl) {
+  const gid = selectEl.value;
+  const bucket = gid && groups[gid] ? bucketOf(groups[gid]) : null;
+  const tierSel = document.getElementById('fg_dealTierSel_' + groupId);
+  tierSel.innerHTML = bucket ? stdDealOptionsHtml(bucket) : `<option value="0">Pick a SKU group first</option>`;
+}
+function fgAddGroupDeal(groupId) {
+  const skuGroupId = document.getElementById('fg_dealGroupSel_' + groupId).value;
+  if (!skuGroupId) { toast('Pick a SKU group first.'); return; }
+  const dealX = parseInt(document.getElementById('fg_dealTierSel_' + groupId).value, 10) || 0;
+  if (dealX <= 0) { toast('Pick a deal tier first — "Nil" doesn\'t need to be added.'); return; }
+  familyGroupDeals[fgDealKey(groupId, skuGroupId)] = { dealX, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+  renderFamilyGroupsPage();
+  toast('Group deal saved — applies to every member store\'s Direct pricing automatically.');
+  callServer('saveFamilyGroupDeal', [groupId, skuGroupId, dealX, currentUserEmail], (data) => { familyGroupDeals = data.familyGroupDeals || familyGroupDeals; renderFamilyGroupsPage(); }, null);
+}
+
+function fgGroupPanelHtml(g) {
+  const nameHtml = fgRenamingGroupId === g.id
+    ? `<span class="rowflex" style="gap:6px; align-items:center;">
+         <input id="fg_renameInput_${g.id}" value="${escapeHtml(g.name)}" style="font-size:15px; font-weight:700; padding:4px 8px;">
+         <button class="btn small" onclick="fgSaveRename('${g.id}', document.getElementById('fg_renameInput_${g.id}'))">Save</button>
+         <button class="btn small secondary" onclick="fgCancelRename()">Cancel</button>
+       </span>`
+    : `<h3 style="margin:0;">${escapeHtml(g.name)} <button class="btn small secondary no-print" onclick="fgStartRename('${g.id}')" title="Rename group" style="margin-left:4px;">✎ Rename</button></h3>`;
+  const dealOptions = enabledGroupOrder().map(gid => `<option value="${gid}">${escapeHtml(groups[gid].label)} (${escapeHtml(groups[gid].formatLabel||groups[gid].format)})</option>`).join('');
+  return `<div class="panel">
+    <div class="rowflex" style="justify-content:space-between; flex-wrap:wrap; align-items:center;">
+      ${nameHtml}
+      <button class="btn small danger no-print" onclick="fgDeleteGroup('${g.id}')">Delete group</button>
+    </div>
+
+    <h4 style="margin:14px 0 4px;">Key contacts</h4>
+    <div class="tablewrap">
+      <table class="datatable">
+        <thead><tr><th>Name</th><th>Position</th><th>Phone</th><th>Email</th><th class="no-print">Actions</th></tr></thead>
+        <tbody>${g.contacts.map(c => fgContactRowHtml(g,c)).join('')}${fgAddContactRowHtml(g)}</tbody>
+      </table>
+    </div>
+    ${(!(fgOpenContactForm && fgOpenContactForm.groupId===g.id)) ? `<div class="no-print" style="margin-top:6px;"><button class="btn small secondary" onclick="fgShowAddContactForm('${g.id}')">+ Add contact</button></div>` : ''}
+
+    <h4 style="margin:16px 0 4px;">Member stores (${g.memberOutletIds.length})</h4>
+    <div class="tablewrap">
+      <table class="datatable">
+        <thead><tr><th>Store</th><th>Suburb</th><th>State</th><th>RSM</th><th class="no-print">Actions</th></tr></thead>
+        <tbody>${fgMemberStoreRowsHtml(g)}</tbody>
+      </table>
+    </div>
+    ${fgUnmatchedStoresHtml(g)}
+
+    <div class="no-print" style="margin-top:10px;">
+      <label style="font-size:11.5px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.3px;">+ Add existing customer to this group</label>
+      <div class="fld autocomplete" style="max-width:420px; margin:4px 0 0;">
+        <input id="fg_addStore_${g.id}" placeholder="Search customer name…" autocomplete="off">
+        <div class="ac-results" id="fg_addStoreResults_${g.id}"></div>
+      </div>
+    </div>
+
+    <h4 style="margin:16px 0 4px;">Family group deals</h4>
+    <div class="hint" style="margin-bottom:6px;">Loaded once against the group, auto-applied to every member store's Direct pricing on the Customer Pricing grid — any store can still be set to its own deal instead, which then overrides the group's (flagged on the grid).</div>
+    <div class="tablewrap">
+      <table class="datatable">
+        <thead><tr><th>SKU group</th><th>Deal</th><th>Applies to</th><th class="no-print">Actions</th></tr></thead>
+        <tbody>${fgDealRowsHtml(g)}</tbody>
+      </table>
+    </div>
+    <div class="no-print rowflex" style="gap:6px; margin-top:8px; flex-wrap:wrap; align-items:center;">
+      <select id="fg_dealGroupSel_${g.id}" onchange="fgOnDealGroupChange('${g.id}', this)" style="min-width:200px;">
+        <option value="">Pick a SKU group…</option>
+        ${dealOptions}
+      </select>
+      <select id="fg_dealTierSel_${g.id}"><option value="0">Pick a SKU group first</option></select>
+      <button class="btn small" onclick="fgAddGroupDeal('${g.id}')">+ Add group deal</button>
+    </div>
+  </div>`;
+}
+
 function renderFamilyGroupsPage() {
-  const freshnessEl = document.getElementById('fg_freshness');
-  if (freshnessEl) freshnessEl.innerHTML = groupFreshnessBadge('familyGroups');
   const q = (document.getElementById('fg_search').value || '').trim().toLowerCase();
-  const bannerSel = document.getElementById('fg_banner').value;
-  const customerOnly = document.getElementById('fg_customerOnly').value === 'yes';
+  const list = familyGroupsList().filter(g => fgMatchesSearch(g, q)).slice().sort((a,b) => a.name.localeCompare(b.name));
 
-  let groups_ = familyGroupsList();
-  if (bannerSel) groups_ = groups_.filter(g => g.banner === bannerSel);
-  if (q) groups_ = groups_.filter(g => fgMatchesSearch(g, q));
-
-  const totalStores = groups_.reduce((s,g) => s + g.stores.length, 0);
-  const matchedStores = groups_.reduce((s,g) => s + g.stores.filter(st => st.outletId).length, 0);
+  const totalMemberStores = list.reduce((s,g) => s + g.memberOutletIds.length, 0);
+  const totalUnmatched = list.reduce((s,g) => s + g.unmatchedStores.length, 0);
   document.getElementById('fg_summary').innerHTML = `
-    <div class="card"><div class="num">${groups_.length}</div><div class="lbl">Groups shown</div></div>
-    <div class="card"><div class="num">${totalStores.toLocaleString()}</div><div class="lbl">Stores shown</div></div>
-    <div class="card"><div class="num">${matchedStores.toLocaleString()}</div><div class="lbl">...that are current YMT customers</div></div>
+    <div class="card"><div class="num">${list.length}</div><div class="lbl">Family groups${q?' matching search':''}</div></div>
+    <div class="card"><div class="num">${totalMemberStores.toLocaleString()}</div><div class="lbl">Member stores</div></div>
+    <div class="card"><div class="num">${totalUnmatched.toLocaleString()}</div><div class="lbl">Unmatched — not linked to a customer</div></div>
   `;
 
-  if (!groups_.length) {
-    document.getElementById('fg_list').innerHTML = `<div class="panel"><div class="empty">No family groups match this search/filter.</div></div>`;
+  const listEl = document.getElementById('fg_list');
+  if (!list.length) {
+    listEl.innerHTML = `<div class="panel"><div class="empty">No family groups match this search.</div></div>`;
     return;
   }
-
-  document.getElementById('fg_list').innerHTML = groups_.map(g => {
-    let stores = g.stores;
-    if (customerOnly) stores = stores.filter(s => s.outletId);
-    if (!stores.length) return '';
-    const rows = stores.map(s => {
-      const o = s.outletId ? outlets[s.outletId] : null;
-      return `<tr>
-        <td>${o ? `<a href="#" onclick="document.querySelector('.tab-btn[data-tab=summary]').click(); setTimeout(()=>selectSummaryOutlet('${s.outletId}'),0); return false;">${escapeHtml(s.storeName)}</a>` : escapeHtml(s.storeName)}</td>
-        <td>${escapeHtml(s.suburb||'—')}</td>
-        <td>${escapeHtml(s.state||'—')}</td>
-        <td>${s.email ? escapeHtml(s.email) : '<span class="muted">—</span>'}</td>
-        <td>${o ? '<span class="badge green">YMT customer</span>' : '<span class="muted">Not a current customer</span>'}</td>
-      </tr>`;
-    }).join('');
-    return `<div class="panel">
-      <div class="rowflex" style="justify-content:space-between; flex-wrap:wrap;">
-        <h3 style="margin:0;">${escapeHtml(g.groupName)} <span class="muted" style="font-weight:400; font-size:12px;">(${escapeHtml(g.banner)} · ${stores.length} store${stores.length===1?'':'s'})</span></h3>
-      </div>
-      <div class="tablewrap" style="margin-top:8px;">
-        <table class="datatable">
-          <thead><tr><th>Store</th><th>Suburb</th><th>State</th><th>Email</th><th>Status</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    </div>`;
-  }).join('');
+  listEl.innerHTML = list.map(g => fgGroupPanelHtml(g)).join('');
+  // Wire each group's own "add existing customer" autocomplete now that its HTML is actually in
+  // the DOM — there can be up to ~16 of these on the page at once, one per rendered group, each
+  // with its own unique input/results ids (see fgGroupPanelHtml above). Same "wire listeners after
+  // injecting HTML" idiom used elsewhere in this file for per-row dynamic controls.
+  list.forEach(g => {
+    setupAutocomplete(`fg_addStore_${g.id}`, `fg_addStoreResults_${g.id}`, Object.values(outlets), outletLabel, oid => fgAddStoreToGroup(g.id, oid));
+  });
 }
-// Used by the Family Groups store links above — jumps straight to a matched customer's summary.
+// Used by the Family Group Key Contacts store links above — jumps straight to a matched customer's
+// summary. Also reused by Customer Summary's own family-group hint link.
 function selectSummaryOutlet(outletId) {
   const el = document.getElementById('cs_search');
   if (el && outlets[outletId]) el.value = outletLabel(outlets[outletId]);
@@ -11960,16 +12333,21 @@ function renderEverything() {
   const bannerGroupVals = uniqueVals('majorGroup', outlets);
   const subBannerVals = uniqueVals('banner', outlets); // Round 57 — the more granular "sub banner" (specific chain, e.g. Cellarbrations, Bottle-O), distinct from the broader Banner Group (majorGroup) above.
   const whouseVals = [...new Set(Object.values(outletSummary).map(os=>os.lastWhouse).filter(Boolean))].sort();
+  // Round 85 — family group names, for the Pricing Grid and Customer List Explorer's family-group
+  // filters. familyGroupsData (not any outlet field) is the source, since group membership no
+  // longer lives on the outlet record — see familyGroupOf().
+  const familyGroupVals = familyGroupsData.map(g => g.name).sort();
   populateSelect('g_rsm', rsmVals);
   populateSelect('g_zone', zoneVals);
   populateSelect('g_state', stateVals);
+  populateSelect('g_familyGroup', familyGroupVals);
   populateSelect('g_whouse', whouseVals);
   populateSelect('cs_rsmFilter', rsmVals);
   gCustTypeMsel = initMultiSelect('g_custtype', typeVals, 'types', ()=>{gridPage=1;renderGrid();});
   csTypeMsel = initMultiSelect('cs_typeFilter', typeVals, 'types', ()=>{ if (csAcRef) csAcRef.refresh(); });
 
   ['g_search'].forEach(id => document.getElementById(id).addEventListener('input', ()=>{gridPage=1;renderGrid();}));
-  ['g_rsm','g_zone','g_state','g_active','g_sort','g_whouse','g_wsdeal','g_pricingupdated','g_contact'].forEach(id => document.getElementById(id).addEventListener('change', ()=>{gridPage=1;renderGrid();}));
+  ['g_rsm','g_zone','g_state','g_familyGroup','g_active','g_sort','g_whouse','g_wsdeal','g_pricingupdated','g_contact'].forEach(id => document.getElementById(id).addEventListener('change', ()=>{gridPage=1;renderGrid();}));
   document.getElementById('g_pkgtype').addEventListener('change', ()=>{ renderGridHeader(); renderGrid(); });
 
   renderColCheckList();
@@ -12092,9 +12470,10 @@ function renderEverything() {
   populateSelect('ce_whouse', whouseVals);
   populateSelect('ce_bannerGroup', bannerGroupVals);
   populateSelect('ce_subBanner', subBannerVals);
+  populateSelect('ce_familyGroup', familyGroupVals);
   ceZoneMsel = initMultiSelect('ce_zone', zoneVals, 'zones', () => { cePage = 1; renderCustomerExplorerPage(); });
   ceSubbrandMsel = initMultiSelect('ce_subbrand', uniqueVals('subbrand', groups), 'beers', () => { cePage = 1; renderCustomerExplorerPage(); });
-  ['ce_period','ce_compare','ce_rsm','ce_pkgtype','ce_whouse','ce_bannerGroup','ce_subBanner'].forEach(id =>
+  ['ce_period','ce_compare','ce_rsm','ce_pkgtype','ce_whouse','ce_bannerGroup','ce_subBanner','ce_familyGroup'].forEach(id =>
     document.getElementById(id).addEventListener('change', () => { cePage = 1; renderCustomerExplorerPage(); }));
   renderCustomerExplorerPage();
 
@@ -12196,6 +12575,9 @@ function renderEverything() {
   populateSelect('nc_rsm', rsmVals);
   populateSelect('nc_custType', typeVals);
   document.getElementById('nc_postcode').addEventListener('input', ncAutoFillFromPostcode);
+  // Round 85 — family group picker, same "+ New group…" escape hatch as Customer Summary's own picker.
+  document.getElementById('nc_family').innerHTML = fgGroupOptionsHtml('');
+  wireFamilyGroupSelect(document.getElementById('nc_family'), () => {});
   populateGroupSelect('nc_dealGroupId');
   populateTempDealXOptions(null, undefined, 'nc_dealX', 'nc_dealHint');
   document.getElementById('nc_dealGroupId').addEventListener('change', e => {
@@ -12211,11 +12593,8 @@ function renderEverything() {
   renderManualCustomersPanel();
   renderGroupFreshnessPanel();
 
-  // Family Groups page
-  document.getElementById('fg_banner').innerHTML = `<option value="">All banners</option>` + fgBannerOptions().map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
-  ['fg_search','fg_banner','fg_customerOnly'].forEach(id => document.getElementById(id).addEventListener('input', renderFamilyGroupsPage));
-  document.getElementById('fg_banner').addEventListener('change', renderFamilyGroupsPage);
-  document.getElementById('fg_customerOnly').addEventListener('change', renderFamilyGroupsPage);
+  // Family Group Key Contacts page (Round 85)
+  document.getElementById('fg_search').addEventListener('input', renderFamilyGroupsPage);
   renderFamilyGroupsPage();
 
   // VIP Contacts page
@@ -12282,6 +12661,8 @@ function onInitialDataLoaded(data) {
   customerDeliveryDetails = data.customerDeliveryDetails || {};
   naDistributions = data.naDistributions || {};
   vipContacts = data.vipContacts || [];
+  familyGroupsData = data.familyGroupsData || [];
+  familyGroupDeals = data.familyGroupDeals || {};
   rsmZoneOverrides = data.rsmZoneOverrides || {};
   naTargets = data.naTargets || {};
   fyForecastInputs = data.fyForecastInputs || {};
@@ -12333,6 +12714,8 @@ function refreshPricingFromServer() {
       customerDeliveryDetails = data.customerDeliveryDetails || {};
       naDistributions = data.naDistributions || {};
   vipContacts = data.vipContacts || [];
+      familyGroupsData = data.familyGroupsData || [];
+      familyGroupDeals = data.familyGroupDeals || {};
       rsmZoneOverrides = data.rsmZoneOverrides || {};
       naTargets = data.naTargets || {};
       fyForecastInputs = data.fyForecastInputs || {};
