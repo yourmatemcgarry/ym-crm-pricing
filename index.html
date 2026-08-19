@@ -265,6 +265,14 @@
   thead tr.sku-row th { position:sticky; top:26px; z-index:4; }
   thead tr.band-row th.stick1, thead tr.band-row th.stick2, thead tr.band-row th.stick3, thead tr.band-row th.stick4 { top:0; z-index:6; }
 
+  /* Round 82: click-to-sort column headers (Customer List Explorer). */
+  th.sortable { cursor:pointer; user-select:none; white-space:nowrap; }
+  th.sortable:hover { text-decoration:underline; }
+
+  /* Round 83: flag a customer's Last invoice date in red when it's more than 13 weeks before the
+     last sales data update (Customer List Explorer). */
+  .ce-stale-invoice { color:var(--red); font-weight:700; }
+
   .grp-head { text-align:center; }
   .grp-head .g-label { font-weight:700; color:var(--navy); font-size:12px; }
   .grp-fmt { font-size:9.5px; padding:1px 6px; border-radius:8px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; margin-top:2px; display:inline-block; }
@@ -1229,14 +1237,14 @@
       <!-- On-screen, paginated view (25 rows/page). -->
       <div class="tablewrap no-print">
         <table class="datatable">
-          <thead><tr><th>Customer</th><th class="num-cell">Volume</th><th class="num-cell">Volume Δ</th><th class="num-cell">Listings</th><th class="num-cell">Listings Δ</th><th class="num-cell">Keg Vol/Listing/Wk <span class="muted" style="font-weight:400;">(50L)</span></th><th class="num-cell">Carton Vol/Listing/Wk <span class="muted" style="font-weight:400;">(6L)</span></th><th>Last invoice</th></tr></thead>
+          <thead id="ce_thead"><tr><th>Customer</th><th class="num-cell">Volume</th><th class="num-cell">Volume Δ</th><th class="num-cell">Volume Δ (L)</th><th class="num-cell">Listings</th><th class="num-cell">Listings Δ</th><th class="num-cell">Keg Vol/Listing/Wk <span class="muted" style="font-weight:400;">(50L)</span></th><th class="num-cell">Carton Vol/Listing/Wk <span class="muted" style="font-weight:400;">(6L)</span></th><th>Last invoice</th></tr></thead>
           <tbody id="ce_body"></tbody>
         </table>
       </div>
       <!-- Print-only view: every filtered customer, not just the current page. -->
       <div class="tablewrap print-only">
         <table class="datatable">
-          <thead><tr><th>Customer</th><th class="num-cell">Volume</th><th class="num-cell">Volume Δ</th><th class="num-cell">Listings</th><th class="num-cell">Listings Δ</th><th class="num-cell">Keg Vol/Listing/Wk <span class="muted" style="font-weight:400;">(50L)</span></th><th class="num-cell">Carton Vol/Listing/Wk <span class="muted" style="font-weight:400;">(6L)</span></th><th>Last invoice</th></tr></thead>
+          <thead><tr><th>Customer</th><th class="num-cell">Volume</th><th class="num-cell">Volume Δ</th><th class="num-cell">Volume Δ (L)</th><th class="num-cell">Listings</th><th class="num-cell">Listings Δ</th><th class="num-cell">Keg Vol/Listing/Wk <span class="muted" style="font-weight:400;">(50L)</span></th><th class="num-cell">Carton Vol/Listing/Wk <span class="muted" style="font-weight:400;">(6L)</span></th><th>Last invoice</th></tr></thead>
           <tbody id="ce_printBody"></tbody>
         </table>
       </div>
@@ -8752,6 +8760,12 @@ let cePage = 1;
 const CE_PAGE_SIZE = 25;
 let ceSelectedOutletId = null;
 let ceLastRows = []; // cached rows from the most recent render, reused by CSV export
+// Round 82: click-to-sort columns. Default is Volume descending (the table's original fixed
+// order), preserved as the starting state so nothing changes on first load — clicking a column
+// header toggles ascending/descending, clicking a different column switches to it at that
+// column's own sensible default direction (see CE_COLUMNS below).
+let ceSortCol = 'volume';
+let ceSortDir = -1; // 1 = ascending, -1 = descending
 
 // Calendar-quarter bounds (Jan–Mar / Apr–Jun / Jul–Sep / Oct–Dec) — distinct from the app's
 // financial-quarter helper only in how it's *labelled* to the user; the actual date boundaries
@@ -8922,6 +8936,12 @@ function ceBuildRows() {
   const kegCompareStats = ceComputeAllOutletStats(dayIndexOf(cStart), dayIndexOf(cEnd), kegGroupFilterFn);
   const cartonCompareStats = ceComputeAllOutletStats(dayIndexOf(cStart), dayIndexOf(cEnd), cartonGroupFilterFn);
 
+  // Round 83: "last sales update" = PERF_TODAY (derived from meta.salesDataTo, the most recent
+  // date actually present in the sales data) — the same reference date used by the Team
+  // Dashboard's As-of feature. 13 weeks = 91 days.
+  const todayDayIdx = dayIndexOf(PERF_TODAY);
+  const STALE_INVOICE_DAYS = 91;
+
   const allOids = new Set([...Object.keys(primaryStats), ...Object.keys(compareStats)]);
   const rows = [];
   allOids.forEach(oid => {
@@ -8930,18 +8950,27 @@ function ceBuildRows() {
     if (!o) return;
     const p = primaryStats[oid] || { totalLitres: 0, listingsCount: 0, lastInvoiceDayIdx: null };
     const c = compareStats[oid] || { totalLitres: 0, listingsCount: 0, lastInvoiceDayIdx: null };
+    const lastInvoiceDayIdx = p.lastInvoiceDayIdx != null ? p.lastInvoiceDayIdx : c.lastInvoiceDayIdx;
     rows.push({
       oid, name: o.name, rsm: o.rsm || '—', custType: o.custType || '—',
       volume: p.totalLitres, volumeCompare: c.totalLitres, volumeDeltaPct: cePctDelta(p.totalLitres, c.totalLitres),
+      // Round 82: raw litres change (not just %), so the list can be sorted to find who lost the
+      // most volume in absolute terms, not just proportionally.
+      volumeDeltaL: p.totalLitres - c.totalLitres,
       listings: p.listingsCount, listingsCompare: c.listingsCount, listingsDelta: p.listingsCount - c.listingsCount,
       kegVpl: ceVplPerWeek(kegPrimaryStats[oid], primaryWeeks, KEG_UNIT_LITRES),
       kegVplCompare: ceVplPerWeek(kegCompareStats[oid], compareWeeks, KEG_UNIT_LITRES),
       cartonVpl: ceVplPerWeek(cartonPrimaryStats[oid], primaryWeeks, CARTON_UNIT_LITRES),
       cartonVplCompare: ceVplPerWeek(cartonCompareStats[oid], compareWeeks, CARTON_UNIT_LITRES),
-      lastInvoice: p.lastInvoiceDayIdx != null ? dayLabel(p.lastInvoiceDayIdx) : (c.lastInvoiceDayIdx != null ? dayLabel(c.lastInvoiceDayIdx) : '—'),
+      lastInvoiceDayIdx,
+      lastInvoice: lastInvoiceDayIdx != null ? dayLabel(lastInvoiceDayIdx) : '—',
+      // Round 83: flag customers whose last order is more than 13 weeks before the last sales data
+      // update — highlighted in red on the Last invoice column so a rep can spot "gone quiet"
+      // customers at a glance.
+      lastInvoiceStale: lastInvoiceDayIdx != null && (todayDayIdx - lastInvoiceDayIdx) > STALE_INVOICE_DAYS,
     });
   });
-  rows.sort((a, b) => b.volume - a.volume);
+  rows.sort(ceCompareRows);
   return { rows, pStart, pEnd, cStart, cEnd, periodKey, compareMode };
 }
 function ceVplDisplay(v) { return v == null ? '—' : v.toFixed(1); }
@@ -8949,6 +8978,51 @@ function cePctDisplay(v) {
   if (v == null) return '<span class="muted">new</span>';
   const cls = v > 0 ? 'green' : v < 0 ? 'red' : '';
   return `<span class="${cls}" style="font-weight:600;">${v>0?'+':''}${v.toFixed(0)}%</span>`;
+}
+function ceLitresDeltaDisplay(v) {
+  if (v == null) return '—';
+  const cls = v > 0 ? 'green' : v < 0 ? 'red' : '';
+  return `<span class="${cls}" style="font-weight:600;">${v>0?'+':''}${fmtNum(v)}L</span>`;
+}
+
+const CE_COLUMNS = [
+  { key: 'name', label: 'Customer', numCell: false, defaultDir: 1 },
+  { key: 'volume', label: 'Volume', numCell: true, defaultDir: -1 },
+  { key: 'volumeDeltaPct', label: 'Volume Δ', numCell: true, defaultDir: -1 },
+  { key: 'volumeDeltaL', label: 'Volume Δ (L)', numCell: true, defaultDir: 1 },
+  { key: 'listings', label: 'Listings', numCell: true, defaultDir: -1 },
+  { key: 'listingsDelta', label: 'Listings Δ', numCell: true, defaultDir: -1 },
+  { key: 'kegVpl', label: 'Keg Vol/Listing/Wk <span class="muted" style="font-weight:400;">(50L)</span>', numCell: true, defaultDir: -1 },
+  { key: 'cartonVpl', label: 'Carton Vol/Listing/Wk <span class="muted" style="font-weight:400;">(6L)</span>', numCell: true, defaultDir: -1 },
+  { key: 'lastInvoiceDayIdx', label: 'Last invoice', numCell: false, defaultDir: -1 },
+];
+function ceSetSort(col) {
+  if (ceSortCol === col) {
+    ceSortDir = -ceSortDir;
+  } else {
+    ceSortCol = col;
+    const def = CE_COLUMNS.find(c => c.key === col);
+    ceSortDir = def ? def.defaultDir : -1;
+  }
+  cePage = 1;
+  renderCustomerExplorerPage();
+}
+function ceCompareRows(a, b) {
+  const col = ceSortCol, dir = ceSortDir;
+  const av = a[col], bv = b[col];
+  const aNull = av == null, bNull = bv == null;
+  if (aNull && bNull) return 0;
+  if (aNull) return 1;
+  if (bNull) return -1;
+  if (typeof av === 'string') return dir * av.localeCompare(bv);
+  return dir * (av - bv);
+}
+function ceTheadHtml() {
+  return '<tr>' + CE_COLUMNS.map(c => {
+    const active = ceSortCol === c.key;
+    const arrow = active ? `<span class="muted" style="font-size:10px;">${ceSortDir === 1 ? ' ▲' : ' ▼'}</span>` : '';
+    return `<th class="${c.numCell ? 'num-cell ' : ''}sortable" onclick="ceSetSort('${c.key}')" title="Click to sort">${c.label}${arrow}</th>`;
+  }).join('') + '</tr>';
 }
 function renderCustomerExplorerPage() {
   const { rows, pStart, pEnd, cStart, cEnd, periodKey, compareMode } = ceBuildRows();
@@ -8963,20 +9037,23 @@ function renderCustomerExplorerPage() {
   const pageRows = rows.slice(start, start + CE_PAGE_SIZE);
 
   document.getElementById('ce_count').textContent = `${rows.length} customer${rows.length===1?'':'s'}`;
+  const ceTheadEl = document.getElementById('ce_thead');
+  if (ceTheadEl) ceTheadEl.innerHTML = ceTheadHtml();
   const ceRowHtml = r => `
     <tr class="${r.oid===ceSelectedOutletId?'row-selected':''}" style="cursor:pointer;" onclick="selectCeOutlet('${r.oid}')">
       <td>${escapeHtml(r.name)}<div class="muted" style="font-size:10.5px;">${escapeHtml(r.rsm)} · ${escapeHtml(r.custType)}</div></td>
       <td class="num-cell mono">${fmtNum(r.volume)} L<div class="muted" style="font-size:10px;">${fmtNum(r.volumeCompare)} L</div></td>
       <td class="num-cell">${cePctDisplay(r.volumeDeltaPct)}</td>
+      <td class="num-cell">${ceLitresDeltaDisplay(r.volumeDeltaL)}</td>
       <td class="num-cell mono">${r.listings}<div class="muted" style="font-size:10px;">${r.listingsCompare}</div></td>
       <td class="num-cell mono">${r.listingsDelta>0?'+':''}${r.listingsDelta}</td>
       <td class="num-cell mono">${ceVplDisplay(r.kegVpl)}<div class="muted" style="font-size:10px;">${ceVplDisplay(r.kegVplCompare)}</div></td>
       <td class="num-cell mono">${ceVplDisplay(r.cartonVpl)}<div class="muted" style="font-size:10px;">${ceVplDisplay(r.cartonVplCompare)}</div></td>
-      <td class="mono">${r.lastInvoice}</td>
+      <td class="mono${r.lastInvoiceStale ? ' ce-stale-invoice' : ''}"${r.lastInvoiceStale ? ' title="Last order was more than 13 weeks before the latest sales data"' : ''}>${r.lastInvoice}</td>
     </tr>`;
-  document.getElementById('ce_body').innerHTML = pageRows.length ? pageRows.map(ceRowHtml).join('') : `<tr><td colspan="8"><div class="empty">No customers match these filters for this period.</div></td></tr>`;
+  document.getElementById('ce_body').innerHTML = pageRows.length ? pageRows.map(ceRowHtml).join('') : `<tr><td colspan="9"><div class="empty">No customers match these filters for this period.</div></td></tr>`;
   // Print/PDF export shows every filtered customer, not just the current on-screen page.
-  document.getElementById('ce_printBody').innerHTML = rows.length ? rows.map(ceRowHtml).join('') : `<tr><td colspan="8"><div class="empty">No customers match these filters for this period.</div></td></tr>`;
+  document.getElementById('ce_printBody').innerHTML = rows.length ? rows.map(ceRowHtml).join('') : `<tr><td colspan="9"><div class="empty">No customers match these filters for this period.</div></td></tr>`;
 
   document.getElementById('ce_pageInfo').textContent = `Page ${cePage} of ${totalPages}`;
   document.getElementById('ce_prevPage').disabled = cePage <= 1;
@@ -9051,12 +9128,12 @@ function renderCeDrilldown(oid) {
     </div>`;
 }
 function exportCeCSV() {
-  const header = ['Customer','RSM','Customer Type','Volume (L)','Volume Comparison (L)','Volume Δ%','Listings','Listings Comparison','Listings Δ','Keg Volume per listing per week (50L kegs)','Keg Volume per listing per week Comparison','Carton Volume per listing per week (6L cartons)','Carton Volume per listing per week Comparison','Last Invoice'];
+  const header = ['Customer','RSM','Customer Type','Volume (L)','Volume Comparison (L)','Volume Δ%','Volume Δ (L)','Listings','Listings Comparison','Listings Δ','Keg Volume per listing per week (50L kegs)','Keg Volume per listing per week Comparison','Carton Volume per listing per week (6L cartons)','Carton Volume per listing per week Comparison','Last Invoice'];
   const lines = [header.join(',')];
   ceLastRows.forEach(r => {
     lines.push([
       r.name, r.rsm, r.custType, r.volume.toFixed(1), r.volumeCompare.toFixed(1),
-      r.volumeDeltaPct==null?'':r.volumeDeltaPct.toFixed(1), r.listings, r.listingsCompare, r.listingsDelta,
+      r.volumeDeltaPct==null?'':r.volumeDeltaPct.toFixed(1), r.volumeDeltaL.toFixed(1), r.listings, r.listingsCompare, r.listingsDelta,
       r.kegVpl==null?'':r.kegVpl.toFixed(2), r.kegVplCompare==null?'':r.kegVplCompare.toFixed(2),
       r.cartonVpl==null?'':r.cartonVpl.toFixed(2), r.cartonVplCompare==null?'':r.cartonVplCompare.toFixed(2), r.lastInvoice,
     ].map(v => `"${String(v??'').replace(/"/g,'""')}"`).join(','));
