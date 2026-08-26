@@ -62,7 +62,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, rsmTargets, rsmTargetProtected, activations, trucks, orders, deliveryRuns, manualOutletsRaw, customerDeliveryDetails, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlDismissals, postcodeZoneOverrides, customerRsmOverrides, groupLastUpdated] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, customerDeliveryFeeOverrides, rsmTargets, rsmTargetProtected, activations, trucks, orders, deliveryRuns, manualOutletsRaw, customerDeliveryDetails, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlDismissals, postcodeZoneOverrides, customerRsmOverrides, groupLastUpdated] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -72,6 +72,10 @@ async function readAll(s) {
     s.get('customerPickFees', { type: 'json' }),
     s.get('customerOffPremisePricing', { type: 'json' }),
     s.get('customerCartonDeliveryFees', { type: 'json' }),
+    // Round 87 — per-customer auto delivery-fee override (flat $ or per-carton pick fee with
+    // min/max), separate collection from customerCartonDeliveryFees above (which is an unrelated,
+    // optional cost assumption used only inside the Off Premise Wholesaler vs Direct comparison).
+    s.get('customerDeliveryFeeOverrides', { type: 'json' }),
     s.get('rsmTargets', { type: 'json' }),
     s.get('rsmTargetProtected', { type: 'json' }),
     s.get('activations', { type: 'json' }),
@@ -204,6 +208,7 @@ async function readAll(s) {
     customerPickFees: customerPickFees || {},
     customerOffPremisePricing: customerOffPremisePricing || {},
     customerCartonDeliveryFees: customerCartonDeliveryFees || {},
+    customerDeliveryFeeOverrides: customerDeliveryFeeOverrides || {},
     rsmTargets: rsmTargets || {},
     rsmTargetProtected: rsmTargetProtected || {},
     activations: activations || [],
@@ -417,6 +422,29 @@ export default async (req) => {
       current[outletId] = { ...existing, [scenario]: (fee === null || fee === undefined) ? null : Number(fee), updatedBy, updatedAt: now };
       await s.setJSON('customerCartonDeliveryFees', current);
       return json({ ok: true, customerCartonDeliveryFees: current });
+    }
+
+    if (action === 'saveDeliveryFeeOverride') {
+      // Round 87 — a customer's own auto-delivery-fee rule, set from the Customer Summary
+      // "Delivery fee" panel: either a flat $ per delivery, or a per-carton pick fee with its own
+      // minimum carton count and max fee cap. Replaces (not merges into) any prior override for
+      // this outlet — mode fully determines which fields are meaningful, so a stale flatFee left
+      // over from a previous 'flat' record should not leak into a later 'perCarton' record.
+      const { outletId, mode, flatFee, perCartonFee, minCartons, maxFee, updatedBy } = payload;
+      const current = (await s.get('customerDeliveryFeeOverrides', { type: 'json' })) || {};
+      current[outletId] = { mode, flatFee, perCartonFee, minCartons, maxFee, updatedBy, updatedAt: now };
+      await s.setJSON('customerDeliveryFeeOverrides', current);
+      return json({ ok: true, customerDeliveryFeeOverrides: current });
+    }
+
+    if (action === 'clearDeliveryFeeOverride') {
+      // Removes this outlet's override entirely — back to the company default rules ($20 flat on
+      // any keg delivery, else $1.50/carton with a 3-carton minimum and $10 cap).
+      const { outletId } = payload;
+      const current = (await s.get('customerDeliveryFeeOverrides', { type: 'json' })) || {};
+      delete current[outletId];
+      await s.setJSON('customerDeliveryFeeOverrides', current);
+      return json({ ok: true, customerDeliveryFeeOverrides: current });
     }
 
     if (action === 'saveCartonPackQty') {
@@ -795,7 +823,7 @@ export default async (req) => {
       delete dd[oldId];
       await s.setJSON('customerDeliveryDetails', dd);
 
-      const simpleBlobKeys = ['customerFlags', 'customerGlassPricing', 'customerPickFees', 'customerOffPremisePricing', 'customerCartonDeliveryFees', 'hlDismissals'];
+      const simpleBlobKeys = ['customerFlags', 'customerGlassPricing', 'customerPickFees', 'customerOffPremisePricing', 'customerCartonDeliveryFees', 'customerDeliveryFeeOverrides', 'hlDismissals'];
       const simpleResults = {};
       for (const blobKey of simpleBlobKeys) {
         const cur = (await s.get(blobKey, { type: 'json' })) || {};

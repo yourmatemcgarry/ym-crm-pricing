@@ -524,7 +524,12 @@
             <div class="msel-menu" id="g_custtype_menu"></div>
           </div>
         </div>
-        <div><label>Zone</label><select id="g_zone"><option value="">All</option></select></div>
+        <div><label>Zone</label>
+          <div class="msel" id="g_zone_msel">
+            <button type="button" class="msel-btn" id="g_zone_btn">All zones ▾</button>
+            <div class="msel-menu" id="g_zone_menu"></div>
+          </div>
+        </div>
         <div><label>State</label><select id="g_state"><option value="">All</option></select></div>
         <div><label>Family group</label><select id="g_familyGroup"><option value="">All</option></select></div>
         <div><label>Package type</label>
@@ -2768,6 +2773,12 @@ let customerGlassPricing = {}; // keyed by outletId: {sizes:{pot,schooner,pint,j
 let customerPickFees = {}; // keyed by outletId: {keg, carton, updatedBy, updatedAt} — shared, null/absent means "not set"
 let customerOffPremisePricing = {}; // keyed by outletId: {multipackQty, prices:{groupId:{carton,multipack,single}}, updatedBy, updatedAt} — shared
 let customerCartonDeliveryFees = {}; // keyed by outletId: {wholesaler, direct, updatedBy, updatedAt} — shared; optional per-carton delivery-cost assumption used only by the Off Premise calculator's Wholesaler vs Direct comparison; null/absent means "not set"
+// Round 87 — keyed by outletId: {mode:'flat'|'perCarton', flatFee, perCartonFee, minCartons,
+// maxFee, updatedBy, updatedAt}. This customer's own auto-delivery-fee rule, used by
+// computeAutoDeliveryFee() to suggest a fee on the Orders form; unrelated to
+// customerCartonDeliveryFees above (that's a Wholesaler-vs-Direct cost assumption, this is what we
+// charge the customer for delivery). Absent means "use the company default rules".
+let customerDeliveryFeeOverrides = {};
 let rsmTargets = {}; // keyed by "rsm|quarterKey": {totalVolumeTarget, kegVolumeTarget, cartonVolumeTarget, kegListingsTarget, cartonListingsTarget, kegActivationsTarget, cartonActivationsTarget, directDeliveryTarget, updatedBy, updatedAt} — shared
 let rsmTargetProtected = {}; // keyed by "rsm|quarterKey": true — shared; set whenever a quarter's targets are set via the standalone per-quarter Volume Target Calculator, so fyForecastApply() knows to skip it. See tgApplyTarget()/tgSetNewListingsTarget()/fyForecastApply() in netlify_part4.js.
 let activations = []; // [ {id, outletId, productType, activationType, start, end, dealX, groupId, tempDealId, bonusStock, pos, consumerPricing, photos:[{dataUrl,takenAt,takenBy}], updatedBy, updatedAt} ] — shared
@@ -3306,6 +3317,9 @@ function buildServerPayload(fnName, args) {
     case 'saveGlassPrice': return { outletId: args[0], groupId: args[1], glassKey: args[2], price: args[3], updatedBy: args[4] };
     case 'savePickFee':    return { outletId: args[0], unitType: args[1], fee: args[2], updatedBy: args[3] };
     case 'saveCartonDeliveryFee': return { outletId: args[0], scenario: args[1], fee: args[2], updatedBy: args[3] };
+    // Round 87 — per-customer auto delivery-fee override.
+    case 'saveDeliveryFeeOverride': return { outletId: args[0], mode: args[1], flatFee: args[2], perCartonFee: args[3], minCartons: args[4], maxFee: args[5], updatedBy: args[6] };
+    case 'clearDeliveryFeeOverride': return { outletId: args[0] };
     case 'saveOffPremisePrice': return { outletId: args[0], groupId: args[1], priceType: args[2], price: args[3], updatedBy: args[4] };
     case 'saveCartonPackQty': return { groupId: args[0], cartonPackQty: args[1], updatedBy: args[2] };
     case 'saveMultipackQty':  return { groupId: args[0], multipackQty: args[1], updatedBy: args[2] };
@@ -3498,6 +3512,7 @@ function initMultiSelect(prefix, values, label, onChange, defaultSelected) {
 let gridPage = 1;
 const GRID_PAGE_SIZE = 25;
 let gCustTypeMsel = null;   // multi-select for Pricing Grid "Customer type" filter
+let gZoneMsel = null;       // Round 87 — multi-select for Pricing Grid "Zone" filter (was a plain single-select)
 let csTypeMsel = null;      // multi-select for Customer Summary "Customer type" filter
 let csAcRef = null;         // Customer Summary autocomplete instance, so the type multi-select can trigger a refresh
 let vtTypeMsel = null;      // multi-select for Volume Trends "Customer type" filter
@@ -3524,7 +3539,7 @@ function getGridFilteredOutlets() {
   const q = (document.getElementById('g_search').value||'').trim().toLowerCase();
   const rsm = document.getElementById('g_rsm').value;
   const custTypes = gCustTypeMsel ? gCustTypeMsel.getValues() : [];
-  const zone = document.getElementById('g_zone').value;
+  const zones = gZoneMsel ? gZoneMsel.getValues() : [];
   const state = document.getElementById('g_state').value;
   const familyGroupSel = document.getElementById('g_familyGroup').value;
   const whouse = document.getElementById('g_whouse').value;
@@ -3543,7 +3558,7 @@ function getGridFilteredOutlets() {
     if (q && !((o.name||'').toLowerCase().includes(q) || (o.suburb||'').toLowerCase().includes(q))) return false;
     if (rsm && o.rsm !== rsm) return false;
     if (custTypes.length && !custTypes.includes(o.custType)) return false;
-    if (zone && o.zone !== zone) return false;
+    if (zones.length && !zones.includes(o.zone)) return false;
     if (state && o.state !== state) return false;
     // Round 85 — same familyGroupOf() lookup used by the Customer List Explorer's equivalent filter.
     if (familyGroupSel) { const fg = familyGroupOf(o.id); if (!fg || fg.name !== familyGroupSel) return false; }
@@ -3589,9 +3604,10 @@ function getGridFilteredOutlets() {
 
 function clearGridFilters() {
   document.getElementById('g_search').value = '';
-  ['g_rsm','g_zone','g_state','g_familyGroup','g_active','g_pkgtype','g_whouse','g_wsdeal','g_pricingupdated','g_contact'].forEach(id => document.getElementById(id).value = '');
+  ['g_rsm','g_state','g_familyGroup','g_active','g_pkgtype','g_whouse','g_wsdeal','g_pricingupdated','g_contact'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('g_sort').value = 'name_asc';
   if (gCustTypeMsel) gCustTypeMsel.clear();
+  if (gZoneMsel) gZoneMsel.clear();
   gridPage = 1;
   renderGrid();
   renderGridHeader();
@@ -4429,6 +4445,7 @@ function renderCustomerSummaryPage(outletId) {
         <span class="hint" id="cs_dd_msg"></span>
       </div>
     </div>
+    ${csDeliveryFeePanelHtml(outletId)}
     <div class="panel">
       <div class="rowflex" style="justify-content:space-between; align-items:flex-start;">
         <h2>Pricing in place — enabled SKU groups (${shownGroups.length})</h2>
@@ -8137,6 +8154,152 @@ function saveCsDeliveryDetails(outletId) {
   callServer('saveDeliveryDetails', [outletId, accessNotes, contactName, contactPhone, preferredDay, preferredWindow, currentUserEmail]);
 }
 
+// ---------- Delivery fee (per customer) — Round 87, direct user request: "Add a custom delivery
+// fee per customer (Flat Fee or per carton pick fee with min & max amount). Automatically add the
+// delivery fee to our orders sheet." Auto-suggested on every new order for a customer (still
+// editable per order — see orderFormAutoRecomputeDeliveryFee() below), using this customer's own
+// override if one is on file, else the company default rules the user specified verbatim:
+// 1. Keg deliveries = $20 flat (triggered by >=1 keg on the order; cartons ride free on top).
+// 2. Carton-only deliveries = $1.50/carton, minimum 3 billable cartons, capped at $10/delivery.
+// Server-backed (customerDeliveryFeeOverrides blob) via the saveDeliveryFeeOverride/
+// clearDeliveryFeeOverride actions added to data.mjs, same optimistic-update-then-callServer
+// pattern as saveCsDeliveryDetails/saveCsContactInfo above.
+const DEFAULT_KEG_DELIVERY_FEE = 20;       // flat $ whenever at least one keg (any size) is on the order — cartons ride along free
+const DEFAULT_CARTON_FEE_PER_UNIT = 1.5;   // $ per carton, keg-free orders only
+const DEFAULT_CARTON_MIN_UNITS = 3;        // minimum billable cartons per delivery (an order of 1-2 cartons is still billed as if it were 3)
+const DEFAULT_CARTON_MAX_FEE = 10;         // fee never exceeds this per delivery, however many cartons
+function deliveryFeeOverrideFor(outletId) { return customerDeliveryFeeOverrides[outletId] || null; }
+function saveDeliveryFeeOverride(outletId, mode, fields) {
+  customerDeliveryFeeOverrides[outletId] = { mode, ...fields, updatedBy: currentUserEmail, updatedAt: new Date().toISOString() };
+  callServer('saveDeliveryFeeOverride', [outletId, mode, fields.flatFee, fields.perCartonFee, fields.minCartons, fields.maxFee, currentUserEmail]);
+}
+function clearDeliveryFeeOverride(outletId) {
+  delete customerDeliveryFeeOverrides[outletId];
+  callServer('clearDeliveryFeeOverride', [outletId]);
+}
+// lines: [{groupId, qty}, ...] — the full ordered quantity per line (bonus/free stock included;
+// delivery fees are about what physically goes on the truck, not what's invoiced). Works against
+// both a live Orders-form line set and a saved order.lines array.
+function deliveryFeeLineTotals(lines) {
+  let kegQty = 0, cartonQty = 0;
+  (lines || []).forEach(l => {
+    const g = groups[l.groupId];
+    if (!g) return;
+    const qty = Number(l.qty) || 0;
+    if (bucketOf(g) === 'KEGS') kegQty += qty; else cartonQty += qty;
+  });
+  return { kegQty, cartonQty };
+}
+function computeAutoDeliveryFee(outletId, lines) {
+  const { kegQty, cartonQty } = deliveryFeeLineTotals(lines);
+  const override = deliveryFeeOverrideFor(outletId);
+  if (override) {
+    if (override.mode === 'flat') return Math.round((Number(override.flatFee) || 0) * 100) / 100;
+    if (override.mode === 'perCarton') {
+      // This customer's own per-carton rule replaces the default entirely for them — including
+      // the default's keg-triggers-$20-flat behaviour, since a perCarton override is a deliberate
+      // choice to price this customer purely off carton count. A keg-only order for such a
+      // customer bills $0 (nothing to pick-fee) rather than silently falling back to the $20 keg
+      // default; edit their record to a flat fee instead if that's not the right outcome for them.
+      if (cartonQty <= 0) return 0;
+      const minUnits = Number(override.minCartons) || 0;
+      const perUnit = Number(override.perCartonFee) || 0;
+      const maxFeeRaw = override.maxFee;
+      const maxFee = (maxFeeRaw !== undefined && maxFeeRaw !== null && maxFeeRaw !== '') ? Number(maxFeeRaw) : Infinity;
+      const billedUnits = Math.max(cartonQty, minUnits);
+      return Math.round(Math.min(billedUnits * perUnit, maxFee) * 100) / 100;
+    }
+  }
+  if (kegQty > 0) return DEFAULT_KEG_DELIVERY_FEE;
+  if (cartonQty > 0) {
+    const billedUnits = Math.max(cartonQty, DEFAULT_CARTON_MIN_UNITS);
+    return Math.round(Math.min(billedUnits * DEFAULT_CARTON_FEE_PER_UNIT, DEFAULT_CARTON_MAX_FEE) * 100) / 100;
+  }
+  return 0;
+}
+function deliveryFeeRuleDescription(outletId) {
+  const override = deliveryFeeOverrideFor(outletId);
+  if (override && override.mode === 'flat') return `Flat fee: ${fmtMoney(Number(override.flatFee) || 0)} per delivery`;
+  if (override && override.mode === 'perCarton') {
+    const maxTxt = (override.maxFee !== undefined && override.maxFee !== null && override.maxFee !== '') ? `, max ${fmtMoney(Number(override.maxFee))}` : '';
+    return `${fmtMoney(Number(override.perCartonFee) || 0)}/carton, min ${Number(override.minCartons) || 0} cartons${maxTxt}`;
+  }
+  return `Default: keg orders $${DEFAULT_KEG_DELIVERY_FEE} flat (cartons free on top) · carton-only orders $${DEFAULT_CARTON_FEE_PER_UNIT.toFixed(2)}/carton, min ${DEFAULT_CARTON_MIN_UNITS} cartons, max $${DEFAULT_CARTON_MAX_FEE}`;
+}
+// Customer Summary panel — set/clear this one customer's delivery-fee override. Shows/hides the
+// flat-fee vs per-carton field groups with a plain DOM toggle, no full page re-render needed just
+// to switch modes while typing.
+function csDeliveryFeePanelHtml(outletId) {
+  const override = deliveryFeeOverrideFor(outletId);
+  const mode = override ? override.mode : '';
+  return `<div class="panel">
+    <h3>Delivery fee</h3>
+    <div class="hint" style="margin-bottom:10px;">Automatically suggested on every new order for this customer (still editable per order). Leave on "Default rules" unless this customer has their own agreed delivery pricing. Current rule in effect: <strong>${escapeHtml(deliveryFeeRuleDescription(outletId))}</strong></div>
+    <div class="formgrid">
+      <div class="fld">
+        <label>Fee type</label>
+        <select id="cs_df_mode" onchange="csDfModeChange(this.value)">
+          <option value="" ${mode===''?'selected':''}>Default rules</option>
+          <option value="flat" ${mode==='flat'?'selected':''}>Flat fee</option>
+          <option value="perCarton" ${mode==='perCarton'?'selected':''}>Per-carton pick fee (min &amp; max)</option>
+        </select>
+      </div>
+      <div class="fld" id="cs_df_flatWrap" style="display:${mode==='flat'?'':'none'};">
+        <label>Flat fee ($)</label>
+        <input id="cs_df_flat" type="number" step="0.01" min="0" value="${override && override.mode==='flat' ? (override.flatFee!=null?override.flatFee:'') : ''}">
+      </div>
+      <div class="fld" id="cs_df_perCartonWrap" style="display:${mode==='perCarton'?'':'none'};">
+        <label>$ per carton</label>
+        <input id="cs_df_perCarton" type="number" step="0.01" min="0" value="${override && override.mode==='perCarton' ? (override.perCartonFee!=null?override.perCartonFee:'') : ''}">
+      </div>
+      <div class="fld" id="cs_df_minWrap" style="display:${mode==='perCarton'?'':'none'};">
+        <label>Minimum cartons</label>
+        <input id="cs_df_minCartons" type="number" step="1" min="0" value="${override && override.mode==='perCarton' ? (override.minCartons!=null?override.minCartons:'') : ''}">
+      </div>
+      <div class="fld" id="cs_df_maxWrap" style="display:${mode==='perCarton'?'':'none'};">
+        <label>Max fee ($, optional)</label>
+        <input id="cs_df_maxFee" type="number" step="0.01" min="0" placeholder="No cap" value="${override && override.mode==='perCarton' && override.maxFee!=null ? override.maxFee : ''}">
+      </div>
+    </div>
+    <div class="rowflex no-print" style="margin-top:8px;">
+      <button class="btn small" onclick="saveCsDeliveryFee('${outletId}')">Save delivery fee</button>
+      ${override ? `<button class="btn small secondary" onclick="clearCsDeliveryFee('${outletId}')">Clear override (use default rules)</button>` : ''}
+      <span class="hint" id="cs_df_msg"></span>
+    </div>
+  </div>`;
+}
+function csDfModeChange(val) {
+  document.getElementById('cs_df_flatWrap').style.display = val === 'flat' ? '' : 'none';
+  document.getElementById('cs_df_perCartonWrap').style.display = val === 'perCarton' ? '' : 'none';
+  document.getElementById('cs_df_minWrap').style.display = val === 'perCarton' ? '' : 'none';
+  document.getElementById('cs_df_maxWrap').style.display = val === 'perCarton' ? '' : 'none';
+}
+function saveCsDeliveryFee(outletId) {
+  const mode = document.getElementById('cs_df_mode').value;
+  if (!mode) { clearCsDeliveryFee(outletId); return; }
+  if (mode === 'flat') {
+    const flatFee = parseFloat(document.getElementById('cs_df_flat').value);
+    if (isNaN(flatFee) || flatFee < 0) { toast('Enter a valid flat fee.'); return; }
+    saveDeliveryFeeOverride(outletId, 'flat', { flatFee });
+  } else if (mode === 'perCarton') {
+    const perCartonFee = parseFloat(document.getElementById('cs_df_perCarton').value);
+    const minCartons = parseFloat(document.getElementById('cs_df_minCartons').value);
+    const maxFeeRaw = document.getElementById('cs_df_maxFee').value;
+    const maxFee = maxFeeRaw === '' ? null : parseFloat(maxFeeRaw);
+    if (isNaN(perCartonFee) || perCartonFee < 0) { toast('Enter a valid $ per carton.'); return; }
+    if (isNaN(minCartons) || minCartons < 0) { toast('Enter a valid minimum carton count.'); return; }
+    if (maxFee !== null && (isNaN(maxFee) || maxFee < 0)) { toast('Enter a valid max fee, or leave it blank for no cap.'); return; }
+    saveDeliveryFeeOverride(outletId, 'perCarton', { perCartonFee, minCartons, maxFee });
+  }
+  toast('Delivery fee saved.');
+  renderCustomerSummaryPage(outletId);
+}
+function clearCsDeliveryFee(outletId) {
+  clearDeliveryFeeOverride(outletId);
+  toast('Delivery fee override cleared — back to default rules.');
+  renderCustomerSummaryPage(outletId);
+}
+
 // ---------- Contact info (per customer) — email(s) + family group, mostly seeded from the Feb'26
 // customer-list import (baked onto `outlets[id].email/email2/familyGroup`) but editable/overridable
 // here going forward. Shares the customerDeliveryDetails collection/record with the Delivery
@@ -9552,6 +9715,13 @@ let orderFormOutletId = '';
 let orderFormLines = {}; // groupId -> {qty, freeQty}
 let orderFormEditingId = null;
 let orderFormDeliveryFee = 0;
+// Round 87 — true once the delivery fee field has been hand-edited (this session, on THIS order),
+// or an existing order was loaded into the form. While false, changing the outlet or any line qty
+// auto-recomputes the suggested fee (this customer's own override, if set, else the company
+// default rule — see computeAutoDeliveryFee()). Once true, edits stop overwriting the field —
+// same "smart default until you touch it, then your edit always wins" pattern as elsewhere in this
+// app (FY Forecast vs the per-quarter Volume Target Calculator).
+let orderFormDeliveryFeeManual = false;
 function orderLineWeightKg(line) { return (Number(line.qty)||0) * weightKgFor(line.groupId); }
 function orderTotalWeightKg(order) { return order.lines.reduce((s,l)=>s+orderLineWeightKg(l),0); }
 function orderLinePaidQty(line) { return Math.max(0, (Number(line.qty)||0) - (Number(line.freeQty)||0)); }
@@ -9562,11 +9732,31 @@ function orderLinePriceExGst(outletId, line) {
 function orderTotalPriceExGst(order) {
   return order.lines.reduce((s,l)=>s+orderLinePriceExGst(order.outletId, l), 0);
 }
+// Round 87 — recomputes orderFormDeliveryFee from the current outlet + line quantities via
+// computeAutoDeliveryFee(), but only while the field hasn't been hand-edited on this order
+// (orderFormDeliveryFeeManual === false). Keeps the ord_deliveryFee <input> in sync directly,
+// since that field lives in the static form markup, not inside the ord_lines/ord_summary
+// innerHTML blocks that renderOrderForm() rebuilds each time.
+function orderFormAutoRecomputeDeliveryFee() {
+  if (orderFormDeliveryFeeManual) return;
+  const lines = Object.entries(orderFormLines).filter(([gid,l]) => l.qty > 0).map(([gid,l]) => ({ groupId: gid, qty: l.qty }));
+  orderFormDeliveryFee = orderFormOutletId ? computeAutoDeliveryFee(orderFormOutletId, lines) : 0;
+  const feeInput = document.getElementById('ord_deliveryFee');
+  if (feeInput) feeInput.value = orderFormDeliveryFee || '';
+}
+// Escape hatch for the "Recalculate" link shown once a fee has been marked manual (typed by hand,
+// or loaded from a saved order via editOrder) — re-enables auto mode and recomputes immediately.
+function orderFormRecalculateDeliveryFee() {
+  orderFormDeliveryFeeManual = false;
+  orderFormAutoRecomputeDeliveryFee();
+  renderOrderForm();
+}
 function orderFormOnQtyChange(groupId, val) {
   const num = parseInt(val, 10);
   const line = orderFormLines[groupId] || (orderFormLines[groupId] = { qty: 0, freeQty: 0 });
   line.qty = isNaN(num) || num < 0 ? 0 : num;
   if (line.freeQty > line.qty) line.freeQty = line.qty;
+  orderFormAutoRecomputeDeliveryFee();
   renderOrderForm();
 }
 function orderFormOnFreeQtyChange(groupId, val) {
@@ -9579,6 +9769,7 @@ function orderFormOnFreeQtyChange(groupId, val) {
 function orderFormOnDeliveryFeeChange(val) {
   const num = parseFloat(val);
   orderFormDeliveryFee = isNaN(num) || num < 0 ? 0 : num;
+  orderFormDeliveryFeeManual = true;
   renderOrderForm();
 }
 function resetOrderForm() {
@@ -9586,6 +9777,7 @@ function resetOrderForm() {
   orderFormLines = {};
   orderFormEditingId = null;
   orderFormDeliveryFee = 0;
+  orderFormDeliveryFeeManual = false;
   document.getElementById('ord_outletSearch').value = '';
   document.getElementById('ord_outletId').value = '';
   document.getElementById('ord_notes').value = '';
@@ -9669,10 +9861,13 @@ function renderOrderForm() {
   const totalWeight = activeLines.reduce((s,[gid,l]) => s + (l.qty*weightKgFor(gid)), 0);
   const totalFreeUnits = activeLines.reduce((s,[gid,l]) => s + (Number(l.freeQty)||0), 0);
   const deliveryFee = Number(orderFormDeliveryFee) || 0;
+  const dfStatusHtml = orderFormDeliveryFeeManual
+    ? `<span class="badge amber" style="font-size:9px;">manually set</span> <a href="#" onclick="orderFormRecalculateDeliveryFee(); return false;" style="font-size:11px;">Recalculate</a>`
+    : `<span class="badge blue" style="font-size:9px;">auto: ${escapeHtml(deliveryFeeRuleDescription(outletId))}</span>`;
   document.getElementById('ord_summary').innerHTML = `
     <div class="rowflex" style="gap:18px; flex-wrap:wrap;">
       <div class="fld" style="margin:0;"><label>Total price (ex GST/WET)</label><div class="kpi-num" style="font-size:18px;">${fmtMoney(totalPrice)}</div></div>
-      <div class="fld" style="margin:0;"><label>Delivery fee</label><div class="kpi-num" style="font-size:18px;">${fmtMoney(deliveryFee)}</div></div>
+      <div class="fld" style="margin:0;"><label>Delivery fee</label><div class="kpi-num" style="font-size:18px;">${fmtMoney(deliveryFee)}</div><div style="margin-top:2px;">${dfStatusHtml}</div></div>
       <div class="fld" style="margin:0;"><label>Order total incl. delivery</label><div class="kpi-num" style="font-size:18px;">${fmtMoney(totalPrice+deliveryFee)}</div></div>
       <div class="fld" style="margin:0;"><label>Total weight</label><div class="kpi-num" style="font-size:18px;">${fmtNum(totalWeight)} kg</div></div>
       <div class="fld" style="margin:0;"><label>Line items</label><div class="kpi-num" style="font-size:18px;">${activeLines.length}</div></div>
@@ -9719,6 +9914,10 @@ function editOrder(orderId) {
   orderFormLines = {};
   ord.lines.forEach(l => { orderFormLines[l.groupId] = { qty: l.qty, freeQty: l.freeQty || 0 }; });
   orderFormDeliveryFee = Number(ord.deliveryFee) || 0;
+  // Treat a loaded order's saved fee as manual/frozen — re-editing an order should never silently
+  // recompute (and change) a fee that was already agreed and saved. Use the Recalculate link if
+  // the current default rules/override should be re-applied instead.
+  orderFormDeliveryFeeManual = true;
   document.getElementById('ord_outletId').value = ord.outletId;
   document.getElementById('ord_outletSearch').value = outlets[ord.outletId] ? outletLabel(outlets[ord.outletId]) : ord.outletId;
   document.getElementById('ord_notes').value = ord.notes || '';
@@ -10586,6 +10785,7 @@ function confirmMergeOutlet() {
       if (data.customerPickFees) customerPickFees = data.customerPickFees;
       if (data.customerOffPremisePricing) customerOffPremisePricing = data.customerOffPremisePricing;
       if (data.customerCartonDeliveryFees) customerCartonDeliveryFees = data.customerCartonDeliveryFees;
+      if (data.customerDeliveryFeeOverrides) customerDeliveryFeeOverrides = data.customerDeliveryFeeOverrides;
       if (data.hlDismissals) hlDismissals = data.hlDismissals;
       if (data.customerDeals) customerDeals = data.customerDeals;
       if (data.wholesalerDeals) wholesalerDeals = data.wholesalerDeals;
@@ -12338,16 +12538,16 @@ function renderEverything() {
   // longer lives on the outlet record — see familyGroupOf().
   const familyGroupVals = familyGroupsData.map(g => g.name).sort();
   populateSelect('g_rsm', rsmVals);
-  populateSelect('g_zone', zoneVals);
   populateSelect('g_state', stateVals);
   populateSelect('g_familyGroup', familyGroupVals);
   populateSelect('g_whouse', whouseVals);
   populateSelect('cs_rsmFilter', rsmVals);
   gCustTypeMsel = initMultiSelect('g_custtype', typeVals, 'types', ()=>{gridPage=1;renderGrid();});
+  gZoneMsel = initMultiSelect('g_zone', zoneVals, 'zones', ()=>{gridPage=1;renderGrid();}); // Round 87 — was populateSelect('g_zone', ...) on a plain single-select
   csTypeMsel = initMultiSelect('cs_typeFilter', typeVals, 'types', ()=>{ if (csAcRef) csAcRef.refresh(); });
 
   ['g_search'].forEach(id => document.getElementById(id).addEventListener('input', ()=>{gridPage=1;renderGrid();}));
-  ['g_rsm','g_zone','g_state','g_familyGroup','g_active','g_sort','g_whouse','g_wsdeal','g_pricingupdated','g_contact'].forEach(id => document.getElementById(id).addEventListener('change', ()=>{gridPage=1;renderGrid();}));
+  ['g_rsm','g_state','g_familyGroup','g_active','g_sort','g_whouse','g_wsdeal','g_pricingupdated','g_contact'].forEach(id => document.getElementById(id).addEventListener('change', ()=>{gridPage=1;renderGrid();}));
   document.getElementById('g_pkgtype').addEventListener('change', ()=>{ renderGridHeader(); renderGrid(); });
 
   renderColCheckList();
@@ -12557,6 +12757,9 @@ function renderEverything() {
     document.getElementById('ord_outletId').value = id;
     document.getElementById('ord_outletSearch').value = outlets[id].name;
     orderFormOutletId = id;
+    // New customer picked for this order — re-arm auto delivery-fee suggestion (this customer's
+    // own override if they have one, else the default rules) unless the fee's already been hand-set.
+    orderFormAutoRecomputeDeliveryFee();
     renderOrderForm();
   });
   populateSelect('ord_rsmFilter', rsmVals);
@@ -12651,6 +12854,7 @@ function onInitialDataLoaded(data) {
   customerPickFees = data.customerPickFees || {};
   customerOffPremisePricing = data.customerOffPremisePricing || {};
   customerCartonDeliveryFees = data.customerCartonDeliveryFees || {};
+  customerDeliveryFeeOverrides = data.customerDeliveryFeeOverrides || {};
   rsmTargets = data.rsmTargets || {};
   rsmTargetProtected = data.rsmTargetProtected || {};
   activations = data.activations || [];
@@ -12704,6 +12908,7 @@ function refreshPricingFromServer() {
       customerPickFees = data.customerPickFees || {};
       customerOffPremisePricing = data.customerOffPremisePricing || {};
       customerCartonDeliveryFees = data.customerCartonDeliveryFees || {};
+      customerDeliveryFeeOverrides = data.customerDeliveryFeeOverrides || {};
       rsmTargets = data.rsmTargets || {};
       rsmTargetProtected = data.rsmTargetProtected || {};
       activations = data.activations || [];
