@@ -7179,6 +7179,44 @@ function tgLastYearQuarterlyVpl(fy, q, outletFilterFn) {
   const stats = perfRangeStats('CARTONS', dayIndexOf(hs), dayIndexOf(heIncl), outletFilterFn);
   return stats.listingsCount > 0 ? (stats.totalLitres / stats.listingsCount) / weeks / CARTON_UNIT_LITRES : null;
 }
+// Generalised versions of the two "last year" lookups above, parameterised by how many years back
+// (not hardcoded to 1) — used by the FY Listing Growth Forecast to show BOTH of the last two years'
+// actual VPL as reference alongside its per-quarter VPL override inputs, so a manager overriding the
+// model's multi-year-average assumption can see exactly what each of the last two years did, side by
+// side, rather than just a single blended number. Same "null means that period predates the sales
+// data" convention as tgLastYearMonthlyVpl/tgLastYearQuarterlyVpl.
+function tgYearsBackMonthlyVpl(y, m, back, outletFilterFn) {
+  const histDate = new Date(y - back, m, 1);
+  const [hs, heExcl] = calendarMonthBoundsOf(histDate);
+  if (dayIndexOf(hs) < 0) return null;
+  const heIncl = new Date(heExcl.getTime() - 86400000);
+  const weeks = (dayIndexOf(heIncl) - dayIndexOf(hs) + 1) / 7;
+  const stats = perfRangeStats('KEGS', dayIndexOf(hs), dayIndexOf(heIncl), outletFilterFn);
+  return stats.listingsCount > 0 ? (stats.totalLitres / stats.listingsCount) / weeks / KEG_UNIT_LITRES : null;
+}
+function tgYearsBackQuarterlyKegVplAvg(fy, q, back, outletFilterFn) {
+  const months = tgMonthsInQuarter(fy, q);
+  const vals = months.map(mo => tgYearsBackMonthlyVpl(mo.y, mo.m, back, outletFilterFn)).filter(v => v != null);
+  return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+}
+function tgYearsBackQuarterlyVpl(fy, q, back, outletFilterFn) {
+  const [hs, heExcl] = quarterBoundsOf(fy - back, q);
+  if (dayIndexOf(hs) < 0) return null;
+  const heIncl = new Date(heExcl.getTime() - 86400000);
+  const weeks = (dayIndexOf(heIncl) - dayIndexOf(hs) + 1) / 7;
+  const stats = perfRangeStats('CARTONS', dayIndexOf(hs), dayIndexOf(heIncl), outletFilterFn);
+  return stats.listingsCount > 0 ? (stats.totalLitres / stats.listingsCount) / weeks / CARTON_UNIT_LITRES : null;
+}
+// The model's own auto (unoverridden) VPL for one FY quarter — exactly the same averaging
+// tgComputeQuarterFromBaseline uses internally — exposed standalone so the FY Listing Growth
+// Forecast UI can show it as the input placeholder/tooltip regardless of whether a manual
+// override is currently set for that quarter.
+function fyQuarterAutoVpl(fy, q, outletFilterFn) {
+  const months = tgMonthsInQuarter(fy, q);
+  const kegAuto = months.reduce((s, mo) => s + tgHistoricalMonthlyVpl(mo.y, mo.m, outletFilterFn), 0) / 3;
+  const cartonAuto = tgHistoricalQuarterlyVpl(fy, q, outletFilterFn);
+  return { kegAuto, cartonAuto };
+}
 // Actual kegs+cartons litres for one FY quarter under an arbitrary outlet filter — the same
 // kegs+cartons-combined-into-litres pattern used by the Total Volume page's own charts (see
 // tvLitresSeries/tvTpLitresSeries), reused here so the Target Build-Up panel's "same quarter last
@@ -7328,8 +7366,17 @@ function fyForecastCompute(rsm, fy) {
   for (let q = 1; q <= 4; q++) {
     const newKeg = Number(input['newKegListingsQ' + q]) || 0;
     const newCarton = Number(input['newCartonListingsQ' + q]) || 0;
-    const r = tgComputeQuarterFromBaseline(fy, q, kegBaseline, cartonBaseline, null, null, newKeg, newCarton, outletFilterFn);
-    quarters.push({ ...r, newKeg, newCarton });
+    // Manual per-quarter VPL override (null/undefined = use the model's own multi-year-average
+    // historical VPL, exactly as before). Keg override applies uniformly across the quarter's 3
+    // months (the FY Forecast table offers one keg-VPL input per quarter, not per month, to keep
+    // the table usable) — matches the same shape tgComputeQuarterFromBaseline already accepts.
+    // Persisted via the existing generic updateFyForecastInput/saveFyForecastInput plumbing
+    // (kegVplQ1-4/cartonVplQ1-4 fields), same as the newKegListingsQ*/newCartonListingsQ* fields.
+    const kegVplOv = input['kegVplQ' + q];
+    const cartonVplOv = input['cartonVplQ' + q];
+    const kegVplOverrides = kegVplOv != null ? [kegVplOv, kegVplOv, kegVplOv] : null;
+    const r = tgComputeQuarterFromBaseline(fy, q, kegBaseline, cartonBaseline, kegVplOverrides, cartonVplOv != null ? cartonVplOv : null, newKeg, newCarton, outletFilterFn);
+    quarters.push({ ...r, newKeg, newCarton, kegVplOverride: kegVplOv != null ? kegVplOv : null, cartonVplOverride: cartonVplOv != null ? cartonVplOv : null });
     kegBaseline = r.kegListingsTargetFinal;
     cartonBaseline = r.cartonListingsTargetFinal;
   }
@@ -7531,13 +7578,42 @@ function renderFyForecastPanel() {
 
   const qtyInput = (rsm, bucket, q, val) =>
     `<input type="number" step="1" min="0" style="width:56px;" value="${val||''}" placeholder="0" title="New ${bucket} listings, Q${q}" onchange="fyForecastOnInputChange('${rsm}',${fy},'new${bucket}ListingsQ${q}',this.value)">`;
+  // Manual VPL override input for one quarter/bucket — blank/cleared falls back to the model's own
+  // multi-year-average historical VPL (shown as the placeholder and in the tooltip). Reuses the
+  // same fyForecastOnInputChange/updateFyForecastInput/saveFyForecastInput plumbing as the New
+  // Listings inputs above (already generic: parses decimals, treats blank as "clear the field").
+  const vplInput = (rsm, vplField, q, overrideVal, autoVal) =>
+    `<input type="number" step="0.01" min="0" style="width:56px; ${overrideVal!=null?'border-color:#c98a1b; background:#fff8ec;':''}" value="${overrideVal!=null?overrideVal:''}" placeholder="${autoVal.toFixed(2)}" title="Model auto (multi-yr avg): ${autoVal.toFixed(2)}. Leave blank to use it." onchange="fyForecastOnInputChange('${rsm}',${fy},'${vplField}',this.value)">`;
+  const vplRefLine = (ly1, ly2) =>
+    `<div class="muted" style="font-size:9.5px; white-space:nowrap; margin-top:1px;">LY ${ly1!=null?ly1.toFixed(2):'—'} · 2Y ${ly2!=null?ly2.toFixed(2):'—'}</div>`;
 
   const rows = rsmList.map(rsm => {
     const input = fyForecastInputFor(rsm, fy);
     const result = fyForecastCompute(rsm, fy);
     const lastQ = result.quarters[3];
-    const kegCells = [1,2,3,4].map(q => `<td>${qtyInput(rsm, 'Keg', q, input['newKegListingsQ'+q])}</td>`).join('');
-    const cartonCells = [1,2,3,4].map(q => `<td>${qtyInput(rsm, 'Carton', q, input['newCartonListingsQ'+q])}</td>`).join('');
+    const outletFilterFn = oid => outlets[oid] && outlets[oid].rsm === rsm;
+    const kegCells = [1,2,3,4].map(q => {
+      const { kegAuto } = fyQuarterAutoVpl(fy, q, outletFilterFn);
+      const ly1 = tgYearsBackQuarterlyKegVplAvg(fy, q, 1, outletFilterFn);
+      const ly2 = tgYearsBackQuarterlyKegVplAvg(fy, q, 2, outletFilterFn);
+      return `<td>${qtyInput(rsm, 'Keg', q, input['newKegListingsQ'+q])}
+        <div style="margin-top:4px; border-top:1px dashed #ddd; padding-top:3px;">
+          ${vplInput(rsm, 'kegVplQ'+q, q, input['kegVplQ'+q], kegAuto)}
+          ${vplRefLine(ly1, ly2)}
+        </div>
+      </td>`;
+    }).join('');
+    const cartonCells = [1,2,3,4].map(q => {
+      const { cartonAuto } = fyQuarterAutoVpl(fy, q, outletFilterFn);
+      const ly1 = tgYearsBackQuarterlyVpl(fy, q, 1, outletFilterFn);
+      const ly2 = tgYearsBackQuarterlyVpl(fy, q, 2, outletFilterFn);
+      return `<td>${qtyInput(rsm, 'Carton', q, input['newCartonListingsQ'+q])}
+        <div style="margin-top:4px; border-top:1px dashed #ddd; padding-top:3px;">
+          ${vplInput(rsm, 'cartonVplQ'+q, q, input['cartonVplQ'+q], cartonAuto)}
+          ${vplRefLine(ly1, ly2)}
+        </div>
+      </td>`;
+    }).join('');
     const protectedQs = [1,2,3,4].filter(q => isRsmTargetProtected(rsm, quarterKeyOf(fy, q)));
     const protectedNote = protectedQs.length
       ? `<div class="muted" style="font-size:10.5px; margin-top:2px;" title="These quarters were set via the Volume Target Calculator and will be skipped by Apply Q1–Q4, not overwritten.">
@@ -7562,11 +7638,11 @@ function renderFyForecastPanel() {
 
   el.innerHTML = `
     <h3 style="margin:0;">FY Listing Growth Forecast <span class="muted" style="font-weight:400; font-size:11px;">(FY${fy})</span></h3>
-    <div class="hint" style="margin-top:4px;">Enter each RSM's target new listings for each quarter individually (kegs and cartons, Q1–Q4). Q1 starts from real current listings; each later quarter starts from the previous quarter's own forecasted ending listings (that quarter's baseline plus that quarter's own growth number) — the system calculates the resulting final listings each quarter automatically. Volume is priced at that quarter's average historical Volume per listing per week, averaged across every prior year we have data for (not just last year), so seasonality carries through the whole year without one unusual year skewing a single quarter. Applying writes Q1–Q4 Listings and Volume targets into the table above, exactly as if set one quarter at a time — still fully editable afterward. A quarter set via the standalone Volume Target Calculator below is protected (🔒) and will be left untouched by Apply, rather than overwritten — clear the protection there if you want the forecast to take over again. The FY${String(fy-1).slice(-2)} and FY${String(fy-2).slice(-2)} Actual Volume columns show what this RSM actually sold in the two full financial years before this one, for a quick sanity check against the forecast total.</div>
+    <div class="hint" style="margin-top:4px;">Enter each RSM's target new listings for each quarter individually (kegs and cartons, Q1–Q4). Q1 starts from real current listings; each later quarter starts from the previous quarter's own forecasted ending listings (that quarter's baseline plus that quarter's own growth number) — the system calculates the resulting final listings each quarter automatically. Volume is priced at that quarter's average historical Volume per listing per week, averaged across every prior year we have data for (not just last year), so seasonality carries through the whole year without one unusual year skewing a single quarter. Under each quarter's listings box is a Volume per listing per week input, pre-filled with the model's own multi-year average as a placeholder (hover it to see the exact number) — override it with your own figure if a rep's recent trend should carry more weight than the multi-year blend, or leave it blank to keep using the model's average; either way, "LY" and "2Y" below the box show that quarter's actual VPL for the last two financial years so you can judge the override against real recent performance. Applying writes Q1–Q4 Listings and Volume targets into the table above, exactly as if set one quarter at a time — still fully editable afterward. A quarter set via the standalone Volume Target Calculator below is protected (🔒) and will be left untouched by Apply, rather than overwritten — clear the protection there if you want the forecast to take over again. The FY${String(fy-1).slice(-2)} and FY${String(fy-2).slice(-2)} Actual Volume columns show what this RSM actually sold in the two full financial years before this one, for a quick sanity check against the forecast total.</div>
     <div class="tablewrap" style="margin-top:10px;">
       <table class="datatable">
         <thead><tr>
-          <th rowspan="2">RSM</th><th colspan="4">New Keg Listings</th><th colspan="4">New Carton Listings</th>
+          <th rowspan="2">RSM</th><th colspan="4">New Keg Listings <span class="muted" style="font-weight:400;">+ VPL</span></th><th colspan="4">New Carton Listings <span class="muted" style="font-weight:400;">+ VPL</span></th>
           <th rowspan="2">Keg Listings,<br>end of FY</th><th rowspan="2">Carton Listings,<br>end of FY</th>
           <th rowspan="2">FY Keg<br>Volume</th><th rowspan="2">FY Carton<br>Volume</th><th rowspan="2">FY Total<br>Volume</th>
           <th rowspan="2">FY${String(fy-1).slice(-2)} Actual<br>Volume</th><th rowspan="2">FY${String(fy-2).slice(-2)} Actual<br>Volume</th>
