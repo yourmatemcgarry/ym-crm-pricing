@@ -152,6 +152,11 @@
   .lc-dot.lc-ly2 { background:rgba(20,24,34,.32); }
   .lc-monthrow { display:flex; margin-top:5px; }
   .lc-monthrow .lc-cell { flex:1; font-size:9.5px; color:var(--muted); text-align:center; white-space:nowrap; }
+  /* On-chart value labels (opt-in via showLabels) — kept to just 'actual'/'target' so a dense
+     12-point chart doesn't turn into a wall of tiny numbers; ly/ly2 stay hover-only tooltips. */
+  .lc-value-label { position:absolute; transform:translateX(-50%); font-size:8.5px; font-weight:700; white-space:nowrap; pointer-events:none; background:rgba(255,255,255,.82); padding:0 2px; border-radius:2px; line-height:1.4; z-index:2; }
+  .lc-value-label.lc-actual { color:var(--blue); }
+  .lc-value-label.lc-target { color:var(--red); }
   .delivery-details-box { background:var(--gold-bg,#fbf3e3); border:1px solid var(--gold); border-radius:6px; padding:6px 9px; margin-top:6px; }
   .delivery-details-box .ddb-title { font-size:9.5px; text-transform:uppercase; letter-spacing:.3px; color:var(--gold-dark); font-weight:700; margin-bottom:2px; }
   .delivery-details-box .ddb-line { font-size:11.5px; color:var(--text); margin-top:2px; }
@@ -7527,6 +7532,20 @@ function tgTargetBuildupQuarterRow(fy, q, rsmList) {
 // via the yearLabels mechanism (see vtBarChartHtml).
 let tgChartsRsm = null;
 function tgChangeChartsRsm(val) { tgChartsRsm = val; renderTgRsmCharts(); }
+// Per-chart show/hide state for the 6 RSM charts below — a user can turn off whichever ones they
+// don't need right now (e.g. hide the 3 carton charts while only reviewing keg growth) instead of
+// scrolling past all 6 every time. All visible by default; `false` hides, anything else (missing/
+// true) shows, matching this file's other visibility-state objects (vtSeriesVisible etc.).
+let tgRsmChartsVisible = {};
+const TG_RSM_CHART_ITEMS = [
+  { key: 'volKeg', label: 'Keg Volume' },
+  { key: 'listKeg', label: 'Keg Listings' },
+  { key: 'vplKeg', label: 'Keg VPL' },
+  { key: 'volCarton', label: 'Carton Volume' },
+  { key: 'listCarton', label: 'Carton Listings' },
+  { key: 'vplCarton', label: 'Carton VPL' },
+];
+function tgToggleRsmChart(key, checked) { tgRsmChartsVisible[key] = checked; renderTgRsmCharts(); }
 // Actual litres + listings for one FY quarter, one bucket, one RSM — the shared building block for
 // the CARTON chart series below (Volume uses litres directly, Listings uses listings directly, VPL
 // derives from both). Full calendar-quarter weeks are used (not clipped to elapsed data), matching
@@ -7606,21 +7625,29 @@ function tgRsmChartSeriesFor(rsm, bucket, outletFilterFn, fy) {
 // quarter in the first place) and scaling it so the 3 months sum back to exactly the SAVED quarter
 // target. That keeps faith with this panel's "chart reflects saved state" rule even for a quarter
 // set via the standalone Volume Target Calculator instead of this Forecast tool's own Apply.
-// Listings has no monthly split at all (only a quarter-end count is ever saved), so it's shown flat
-// across each quarter's 3 months — a step function, not a claim that listings grew mid-month.
+// Listings growth is STAGGERED across each quarter's 3 months (linear ramp from the quarter's
+// opening count to its saved closing count) rather than shown as a flat step that only jumps at
+// the quarter boundary — real new-listing sign-ups trickle in through a quarter, they don't all
+// land on day 1, so a step function overstated how sudden keg listings growth looks. The ramp's
+// starting point for Q1 is the RSM's actual current listings count (tgKegStartOfQuarterListings);
+// each later quarter ramps from the previous quarter's saved closing figure. If a quarter has no
+// saved kegListingsTarget, its 3 months push null (same "not set" behaviour as before) and the
+// ramp continues from the last known closing figure once data resumes.
 function tgRsmKegChartSeriesFor(rsm, outletFilterFn, fy) {
   const unitLitres = KEG_UNIT_LITRES;
   const labels = [], volume = [], volumeLy = [], volumeLy2 = [], volumeTarget = [];
   const listings = [], listingsLy = [], listingsLy2 = [], listingsTarget = [];
   const vpl = [], vplLy = [], vplLy2 = [], vplTarget = [];
   const model = fyForecastCompute(rsm, fy);
+  let rampFrom = tgKegStartOfQuarterListings(fy, 1, outletFilterFn);
   for (let q = 1; q <= 4; q++) {
     const r = model.quarters[q - 1];
     const t = rsmTargetFor(rsm, quarterKeyOf(fy, q));
     const savedVol = t.kegVolumeTarget != null ? Number(t.kegVolumeTarget) : null;
-    const savedListings = t.kegListingsTarget != null ? Number(t.kegListingsTarget) : null;
+    const savedListingsEnd = t.kegListingsTarget != null ? Number(t.kegListingsTarget) : null;
     const scale = (savedVol != null && r.kegTotal > 0) ? savedVol / r.kegTotal : null;
-    r.kegMonthly.forEach(mo => {
+    const rampStart = rampFrom;
+    r.kegMonthly.forEach((mo, mi) => {
       labels.push(mo.label.split(' ')[0]);
       const a = tgRsmMonthActual('KEGS', outletFilterFn, mo.y, mo.m);
       const ly = tgRsmMonthActual('KEGS', outletFilterFn, mo.y - 1, mo.m);
@@ -7633,12 +7660,16 @@ function tgRsmKegChartSeriesFor(rsm, outletFilterFn, fy) {
       listings.push(a ? a.listings : 0);
       listingsLy.push(ly ? ly.listings : null);
       listingsLy2.push(ly2 ? ly2.listings : null);
-      listingsTarget.push(savedListings);
+      const monthListingsTarget = savedListingsEnd != null
+        ? Math.round(rampStart + (mi + 1) / 3 * (savedListingsEnd - rampStart))
+        : null;
+      listingsTarget.push(monthListingsTarget);
       vpl.push(a && a.listings > 0 ? (a.litres / a.listings) / a.weeks / unitLitres : 0);
       vplLy.push(ly && ly.listings > 0 ? (ly.litres / ly.listings) / ly.weeks / unitLitres : null);
       vplLy2.push(ly2 && ly2.listings > 0 ? (ly2.litres / ly2.listings) / ly2.weeks / unitLitres : null);
-      vplTarget.push((monthTargetVol != null && savedListings) ? (monthTargetVol / savedListings) / mo.weeks / unitLitres : null);
+      vplTarget.push((monthTargetVol != null && monthListingsTarget) ? (monthTargetVol / monthListingsTarget) / mo.weeks / unitLitres : null);
     });
+    if (savedListingsEnd != null) rampFrom = savedListingsEnd;
   }
   return { labels, volume, volumeLy, volumeLy2, volumeTarget, listings, listingsLy, listingsLy2, listingsTarget, vpl, vplLy, vplLy2, vplTarget };
 }
@@ -7655,31 +7686,51 @@ function renderTgRsmCharts() {
 
   const kegSeries = tgRsmChartSeriesFor(rsm, 'KEGS', outletFilterFn, fy);
   const cartonSeries = tgRsmChartSeriesFor(rsm, 'CARTONS', outletFilterFn, fy);
+  const vis = tgRsmChartsVisible;
+  const show = key => vis[key] !== false;
+
+  const toggleHtml = `<div class="rowflex no-print" style="gap:14px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+    <span class="muted" style="font-size:11.5px;">Show charts:</span>
+    ${TG_RSM_CHART_ITEMS.map(it => `<label style="display:inline-flex; align-items:center; gap:5px; font-size:12.5px;">
+      <input type="checkbox" ${show(it.key) ? 'checked' : ''} onchange="tgToggleRsmChart('${it.key}', this.checked)">
+      ${it.label}
+    </label>`).join('')}
+  </div>`;
+
+  const kegCharts = ['volKeg', 'listKeg', 'vplKeg'].some(show)
+    ? `<h4 style="margin:16px 0 4px;">Kegs <span class="badge kegs" style="font-size:9px;">monthly</span></h4>
+      ${show('volKeg') ? '<div style="margin-top:10px;" id="tg_rsm_vol_keg"></div>' : ''}
+      ${show('listKeg') ? '<div style="margin-top:10px;" id="tg_rsm_list_keg"></div>' : ''}
+      ${show('vplKeg') ? '<div style="margin-top:10px;" id="tg_rsm_vpl_keg"></div>' : ''}`
+    : '';
+  const cartonCharts = ['volCarton', 'listCarton', 'vplCarton'].some(show)
+    ? `<h4 style="margin:20px 0 4px;">Cartons <span class="badge cartons" style="font-size:9px;">quarterly</span></h4>
+      ${show('volCarton') ? '<div style="margin-top:10px;" id="tg_rsm_vol_carton"></div>' : ''}
+      ${show('listCarton') ? '<div style="margin-top:10px;" id="tg_rsm_list_carton"></div>' : ''}
+      ${show('vplCarton') ? '<div style="margin-top:10px;" id="tg_rsm_vpl_carton"></div>' : ''}`
+    : '';
 
   el.innerHTML = `
     <h3 style="margin:0;">Volume, Listings &amp; VPL by RSM <span class="muted" style="font-weight:400; font-size:11px;">(FY${fy})</span></h3>
     <div class="hint" style="margin-top:4px;">One RSM's actual volume/listings/VPL against ${yearLabels.ly}, ${yearLabels.ly2}, and this FY's saved target. Keg charts are shown MONTHLY (Jul–Jun) rather than by quarter — kegs are priced by the FY Forecast tool per calendar month, and comparing a monthly-priced target against a quarterly "actual" understates the actual (a whole quarter's listings count includes anyone active even briefly during those 13 weeks, diluting the rate for a growing rep) — showing kegs monthly keeps the target and the actual measured over the same window, so a gap you see here is a real VPL gap, not a measurement artifact. Cartons are priced per quarter, so they stay Q1–Q4. If a keg target still looks meaningfully higher than ${yearLabels.ly}'s actual after that, check the VPL chart — the Keg Forecast tool's auto pricing is a MULTI-YEAR AVERAGE (not just ${yearLabels.ly}), so it can sit above last year specifically if an earlier year was unusually strong; override the month's VPL in the Keg Forecast tool above if this RSM's recent run-rate should carry more weight than the multi-year blend.</div>
     <div class="fld" style="margin:10px 0 12px; max-width:260px;"><label>RSM</label><select onchange="tgChangeChartsRsm(this.value)">${rsmList.map(r=>`<option value="${escapeHtml(r)}" ${r===rsm?'selected':''}>${escapeHtml(r)}</option>`).join('')}</select></div>
-    <div style="margin-top:10px;" id="tg_rsm_vol_keg"></div>
-    <div style="margin-top:10px;" id="tg_rsm_vol_carton"></div>
-    <div style="margin-top:10px;" id="tg_rsm_list_keg"></div>
-    <div style="margin-top:10px;" id="tg_rsm_list_carton"></div>
-    <div style="margin-top:10px;" id="tg_rsm_vpl_keg"></div>
-    <div style="margin-top:10px;" id="tg_rsm_vpl_carton"></div>
+    ${toggleHtml}
+    ${kegCharts}
+    ${cartonCharts}
   `;
 
-  veeRenderVolumeChart('tg_rsm_vol_keg', kegSeries.labels, kegSeries.volume, 'kegs', 'month', escapeHtml(rsm) + ' — Keg Volume (monthly)', 'litres', ' L', null,
-    { ly: kegSeries.volumeLy, ly2: kegSeries.volumeLy2, target: kegSeries.volumeTarget }, null, yearLabels);
-  veeRenderVolumeChart('tg_rsm_vol_carton', cartonSeries.labels, cartonSeries.volume, 'cartons', 'quarter', escapeHtml(rsm) + ' — Carton Volume (quarterly)', 'litres', ' L', null,
-    { ly: cartonSeries.volumeLy, ly2: cartonSeries.volumeLy2, target: cartonSeries.volumeTarget }, null, yearLabels);
-  veeRenderVolumeChart('tg_rsm_list_keg', kegSeries.labels, kegSeries.listings, 'kegs', 'month', escapeHtml(rsm) + ' — Keg Listings (monthly)', 'listings', '', 0,
-    { ly: kegSeries.listingsLy, ly2: kegSeries.listingsLy2, target: kegSeries.listingsTarget }, null, yearLabels);
-  veeRenderVolumeChart('tg_rsm_list_carton', cartonSeries.labels, cartonSeries.listings, 'cartons', 'quarter', escapeHtml(rsm) + ' — Carton Listings (quarterly)', 'listings', '', 0,
-    { ly: cartonSeries.listingsLy, ly2: cartonSeries.listingsLy2, target: cartonSeries.listingsTarget }, null, yearLabels);
-  veeRenderVolumeChart('tg_rsm_vpl_keg', kegSeries.labels, kegSeries.vpl, 'kegs', 'month', escapeHtml(rsm) + ' — Keg VPL (monthly)', 'units/listing/wk', '', 2,
-    { ly: kegSeries.vplLy, ly2: kegSeries.vplLy2, target: kegSeries.vplTarget }, null, yearLabels);
-  veeRenderVolumeChart('tg_rsm_vpl_carton', cartonSeries.labels, cartonSeries.vpl, 'cartons', 'quarter', escapeHtml(rsm) + ' — Carton VPL', 'units/listing/wk', '', 2,
-    { ly: cartonSeries.vplLy, ly2: cartonSeries.vplLy2, target: cartonSeries.vplTarget }, null, yearLabels);
+  if (show('volKeg')) veeRenderVolumeChart('tg_rsm_vol_keg', kegSeries.labels, kegSeries.volume, 'kegs', 'month', escapeHtml(rsm) + ' — Keg Volume (monthly)', 'litres', ' L', null,
+    { ly: kegSeries.volumeLy, ly2: kegSeries.volumeLy2, target: kegSeries.volumeTarget }, null, yearLabels, true);
+  if (show('volCarton')) veeRenderVolumeChart('tg_rsm_vol_carton', cartonSeries.labels, cartonSeries.volume, 'cartons', 'quarter', escapeHtml(rsm) + ' — Carton Volume (quarterly)', 'litres', ' L', null,
+    { ly: cartonSeries.volumeLy, ly2: cartonSeries.volumeLy2, target: cartonSeries.volumeTarget }, null, yearLabels, true);
+  if (show('listKeg')) veeRenderVolumeChart('tg_rsm_list_keg', kegSeries.labels, kegSeries.listings, 'kegs', 'month', escapeHtml(rsm) + ' — Keg Listings (monthly)', 'listings', '', 0,
+    { ly: kegSeries.listingsLy, ly2: kegSeries.listingsLy2, target: kegSeries.listingsTarget }, null, yearLabels, true);
+  if (show('listCarton')) veeRenderVolumeChart('tg_rsm_list_carton', cartonSeries.labels, cartonSeries.listings, 'cartons', 'quarter', escapeHtml(rsm) + ' — Carton Listings (quarterly)', 'listings', '', 0,
+    { ly: cartonSeries.listingsLy, ly2: cartonSeries.listingsLy2, target: cartonSeries.listingsTarget }, null, yearLabels, true);
+  if (show('vplKeg')) veeRenderVolumeChart('tg_rsm_vpl_keg', kegSeries.labels, kegSeries.vpl, 'kegs', 'month', escapeHtml(rsm) + ' — Keg VPL (monthly)', 'units/listing/wk', '', 2,
+    { ly: kegSeries.vplLy, ly2: kegSeries.vplLy2, target: kegSeries.vplTarget }, null, yearLabels, true);
+  if (show('vplCarton')) veeRenderVolumeChart('tg_rsm_vpl_carton', cartonSeries.labels, cartonSeries.vpl, 'cartons', 'quarter', escapeHtml(rsm) + ' — Carton VPL', 'units/listing/wk', '', 2,
+    { ly: cartonSeries.vplLy, ly2: cartonSeries.vplLy2, target: cartonSeries.vplTarget }, null, yearLabels, true);
 }
 function renderTgTargetBuildup() {
   const el = document.getElementById('tg_buildup');
@@ -8185,7 +8236,7 @@ function vtChartModeFor(granularity) {
 // as visible — only `false` hides it) lets the caller hide individual series so the page can offer a
 // "just this year" or "this year vs last year" view without recomputing any data. Omit it entirely
 // (or pass null) for the pre-existing "show everything" behaviour.
-function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries, visibleSeries, granularity, yearLabels) {
+function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries, visibleSeries, granularity, yearLabels, showLabels) {
   const vis = visibleSeries || {};
   const showActual = vis.actual !== false;
   // Optional caller-supplied exact labels for the ly/ly2 series (e.g. {ly:'FY26', ly2:'FY25'}) —
@@ -8252,7 +8303,24 @@ function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries,
   }
   const scaleVals = (showActual ? values.filter(v => v != null) : []).concat(...activeExtra.map(k => seriesVals[k].filter(v => v != null)));
   const max = Math.max(1, ...scaleVals);
-  const heightPx = v => Math.max(0, Math.min(100, Math.round((v / max) * 100)));
+  // When on-chart value labels are showing, cap the tallest bar/dot below the plot's full height —
+  // leaving headroom above so a label sitting just above the tallest point never gets pushed off
+  // the top of the chart. Every series scales down together, so shapes stay proportionally correct.
+  const heightCap = showLabels ? 82 : 100;
+  const heightPx = v => Math.max(0, Math.min(heightCap, Math.round((v / max) * heightCap)));
+  // On-chart labels are deliberately limited to 'actual' and 'target' — the two series a rep is
+  // actually deciding against — never 'ly'/'ly2', which stay hover-only (via the existing tooltip
+  // below). Labelling every series on a 12-point chart would be unreadable clutter; this keeps each
+  // visible label meaningful. Large volume figures are abbreviated ("41.2k") so a label never has to
+  // wrap or spill out of its narrow column.
+  const labelFmt = v => {
+    if (v == null) return '';
+    if (decimals == null && Math.abs(v) >= 1000) {
+      const k = v / 1000;
+      return (Math.abs(k) >= 10 ? Math.round(k) : k.toFixed(1)) + 'k' + (suffix || '');
+    }
+    return fmt(v) + (suffix || '');
+  };
 
   const legend = `<div class="bar-legend">${activeKeys.map(k => {
     const meta = VT_SERIES_META[k];
@@ -8308,6 +8376,24 @@ function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries,
     }).join('');
   }).join('');
 
+  // Nudge a bar label right-of-centre when its cell holds a grouped set of bars (ly2/ly/actual side
+  // by side) so the label sits over the specific bar it belongs to (barKeys always ends with
+  // 'actual' last/rightmost) rather than floating over the middle of the whole group.
+  const barLabelXFrac = barKeys.length > 1 ? 0.8 : 0.5;
+  const labelsHtml = showLabels ? ['actual', 'target'].filter(k => activeKeys.includes(k)).map(k => {
+    const arr = seriesVals[k];
+    if (!arr) return '';
+    const isBar = barKeys.includes(k);
+    const xFrac = isBar ? barLabelXFrac : 0.5;
+    const meta = VT_SERIES_META[k];
+    return arr.map((v, i) => {
+      if (v == null) return '';
+      const leftPct = ((i + xFrac) / n * 100).toFixed(3);
+      const bottomPx = heightPx(v) + (isBar ? 3 : 10);
+      return `<div class="lc-value-label ${meta.lineClass}" style="left:${leftPct}%; bottom:${bottomPx}px;">${labelFmt(v)}</div>`;
+    }).join('');
+  }).join('') : '';
+
   const monthLabelsHtml = labels.map(l => `<div class="lc-cell">${l}</div>`).join('');
 
   return `${legend}<div class="bar-chart line-chart" style="height:150px;">
@@ -8315,6 +8401,7 @@ function vtBarChartHtml(labels, values, cssClass, suffix, decimals, extraSeries,
       <div class="lc-bars">${barsHtml}</div>
       <svg class="lc-svg" viewBox="0 0 ${n} 100" preserveAspectRatio="none">${svgLines}</svg>
       ${dotsHtml}
+      ${labelsHtml}
     </div>
     <div class="lc-monthrow">${monthLabelsHtml}</div>
   </div>`;
@@ -8991,11 +9078,11 @@ function veeScrollChart(html) {
 // One volume-only chart (no listings) — shared by both tabs below, which each show a single
 // combined series (cartons only for Coles & Woolworths; keg+carton litres, optionally filtered to
 // just one bucket, for Total Volume) rather than a separate keg/carton pair.
-function veeRenderVolumeChart(elId, labels, values, cssClass, granularity, titlePrefix, unitLabel, tooltipSuffix, decimals, extraSeries, visibleSeries, yearLabels) {
+function veeRenderVolumeChart(elId, labels, values, cssClass, granularity, titlePrefix, unitLabel, tooltipSuffix, decimals, extraSeries, visibleSeries, yearLabels, showLabels) {
   const gLabel = veeGranularityLabel(granularity);
   const unitTag = unitLabel ? `<span class="muted" style="font-weight:400; font-size:11px;">(${unitLabel})</span>` : '';
   document.getElementById(elId).innerHTML = `
-    <div class="panel"><h3>${titlePrefix} by ${gLabel} ${unitTag}</h3>${veeScrollChart(vtBarChartHtml(labels, values, cssClass, tooltipSuffix || '', decimals != null ? decimals : null, extraSeries || null, visibleSeries || null, granularity, yearLabels || null))}</div>
+    <div class="panel"><h3>${titlePrefix} by ${gLabel} ${unitTag}</h3>${veeScrollChart(vtBarChartHtml(labels, values, cssClass, tooltipSuffix || '', decimals != null ? decimals : null, extraSeries || null, visibleSeries || null, granularity, yearLabels || null, !!showLabels))}</div>
   `;
 }
 
