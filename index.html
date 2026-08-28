@@ -949,7 +949,7 @@
           <button class="btn small secondary" onclick="jumpTargetsCurrentQuarter()">Current quarter</button>
         </div>
       </div>
-      <div class="hint" style="margin-top:6px;">Enter each RSM's target for this quarter directly in the table below — saves automatically, shared live with your team. Leave a cell blank to clear that target. Total Volume is calculated automatically as Keg Volume + Carton Volume and can't be edited directly. Keg/Carton Listings targets are also calculated automatically — baseline listings at the start of the quarter plus whatever "new listings" goal is set in the Volume Target Calculator below — and can't be typed in directly here. The Sales Team row is the sum of every RSM and is read-only.</div>
+      <div class="hint" style="margin-top:6px;">Enter each RSM's target for this quarter directly in the table below — saves automatically, shared live with your team. Leave a cell blank to clear that target. Total Volume is calculated automatically as Keg Volume + Carton Volume and can't be edited directly. Keg/Carton Listings targets are also calculated automatically — baseline listings at the start of the quarter plus whatever "new listings" growth is set in the Keg/Carton Forecast tools below — and can't be typed in directly here. The Sales Team row is the sum of every RSM and is read-only.</div>
       <div class="tablewrap" style="margin-top:10px;">
         <table class="datatable" id="tg_table">
           <thead><tr>
@@ -965,7 +965,6 @@
     <div class="panel no-print" id="tg_carton_forecast" style="margin-top:14px;"></div>
     <div class="panel no-print" id="tg_rsm_charts" style="margin-top:14px;"></div>
     <div class="panel no-print" id="tg_buildup" style="margin-top:14px;"></div>
-    <div id="tg_calc"></div>
   </div>
 
   <!-- ================= RSM ZONES ================= -->
@@ -2787,7 +2786,7 @@ let customerCartonDeliveryFees = {}; // keyed by outletId: {wholesaler, direct, 
 // charge the customer for delivery). Absent means "use the company default rules".
 let customerDeliveryFeeOverrides = {};
 let rsmTargets = {}; // keyed by "rsm|quarterKey": {totalVolumeTarget, kegVolumeTarget, cartonVolumeTarget, kegListingsTarget, cartonListingsTarget, kegActivationsTarget, cartonActivationsTarget, directDeliveryTarget, updatedBy, updatedAt} — shared
-let rsmTargetProtected = {}; // keyed by "rsm|quarterKey": true — shared; set whenever a quarter's targets are set via the standalone per-quarter Volume Target Calculator, so fyForecastApply() knows to skip it. See tgApplyTarget()/tgSetNewListingsTarget()/fyForecastApply() in netlify_part4.js.
+let rsmTargetProtected = {}; // keyed by "rsm|quarterKey": true — shared; marks a quarter as manually protected, so fyForecastApplyKeg/fyForecastApplyCarton know to skip it. See isRsmTargetProtected()/tgClearProtection() in netlify_part4.js. (Round 93: read/clear-only now — the standalone calculator that used to set this flag was removed.)
 let activations = []; // [ {id, outletId, productType, activationType, start, end, dealX, groupId, tempDealId, bonusStock, pos, consumerPricing, photos:[{dataUrl,takenAt,takenBy}], updatedBy, updatedAt} ] — shared
 let trucks = []; // [ {id, name, maxWeightKg, updatedBy, updatedAt} ] — shared
 let orders = []; // [ {id, outletId, lines, notes, status, runId, delivery, createdBy, createdAt, updatedBy, updatedAt} ] — shared
@@ -5818,8 +5817,8 @@ function perfNewListingsPerWeek(bucket, startDayIdx, endDayIdx, outletFilterFn) 
 // and Carton Volume targets, computed on the fly via totalVolumeTargetOf() below, so it can
 // never drift out of sync with its two sub-targets.
 // Keg/Carton Listings targets are NOT directly editable — they're computed automatically as
-// (start-of-quarter baseline listings) + (new listings target entered in the Volume Target
-// Calculator below), and saved as soon as that number changes. See tgSetNewListingsTarget().
+// (start-of-quarter baseline listings) + (new listings growth entered in the Keg/Carton Forecast
+// tools below), and saved as soon as that Apply runs. See fyForecastApplyKeg()/fyForecastApplyCarton().
 const PERF_TARGET_FIELDS = [
   {key:'kegVolumeTarget', label:'Keg Volume target (L)'},
   {key:'cartonVolumeTarget', label:'Carton Volume target (L)'},
@@ -5864,17 +5863,16 @@ function updateRsmTarget(rsm, quarterKey, field, val) {
   renderPerfPage();
   callServer('saveRsmTarget', [rsm, quarterKey, field, value, currentUserEmail], () => toast('Target saved.'));
 }
-// A quarter's targets are "protected" once they've been deliberately set via the standalone
-// per-quarter Volume Target Calculator (tgApplyTarget for Volume targets, tgSetNewListingsTarget
-// for Listings targets) — see markRsmTargetProtected() call sites. fyForecastApply() then skips
-// writing any protected quarter, so a manager's calculator-driven figures always win over the FY
-// Listing Growth Forecast's bulk cascade, instead of silently being overwritten by "Apply Q1-Q4".
+// A quarter's targets can be manually "protected" — fyForecastApplyKeg/fyForecastApplyCarton then
+// skip writing any protected quarter, so a manually-set figure always wins over the FY Listing
+// Growth Forecast's bulk "Apply Q1-Q4" cascade instead of silently being overwritten. (Round 93:
+// the standalone Volume Target Calculator that used to be the only way to set this flag was
+// removed — the Keg/Carton Forecast tools now cover the same ground with their own per-quarter
+// overrides, so there's no new way to protect a quarter going forward. isRsmTargetProtected/
+// tgClearProtection are kept as a read/clear-only safety net for any quarter a manager protected
+// before this round, both surfaced via the 🔒 badge + "clear Q" link on the Forecast panels below.)
 function isRsmTargetProtected(rsm, quarterKey) { return !!rsmTargetProtected[targetKey(rsm, quarterKey)]; }
-function markRsmTargetProtected(rsm, quarterKey) {
-  rsmTargetProtected[targetKey(rsm, quarterKey)] = true;
-  callServer('saveRsmTargetProtected', [rsm, quarterKey, true, currentUserEmail]);
-}
-// Escape hatch: lets a manager hand a quarter back to the FY Forecast if the manual figure was
+// Escape hatch: lets a manager hand a quarter back to the FY Forecast if the manual protection was
 // set in error or is no longer wanted.
 function tgClearProtection(rsm, quarterKey) {
   delete rsmTargetProtected[targetKey(rsm, quarterKey)];
@@ -7029,7 +7027,7 @@ function renderTargetsPage() {
     const t = rsmTargetFor(rsm, qKey);
     const totalVol = totalVolumeTargetOf(t);
     const cells = PERF_TARGET_FIELDS.map(f => f.computed
-      ? `<td class="mono" title="Baseline listings + new listings target, set in the Volume Target Calculator below.">${t[f.key]!=null?fmtNum(t[f.key]):'—'}</td>`
+      ? `<td class="mono" title="Baseline listings + new listings target, set in the Keg/Carton Forecast tools below.">${t[f.key]!=null?fmtNum(t[f.key]):'—'}</td>`
       : `<td><input type="number" step="1" min="0" value="${t[f.key]!=null?t[f.key]:''}" placeholder="—" style="width:100px;" onchange="onTargetsCellChange('${rsm}','${qKey}','${f.key}',this.value)"></td>`
     ).join('');
     return `<tr><td>${escapeHtml(rsm)}</td><td class="mono">${totalVol!=null?fmtNum(totalVol):'—'}</td>${cells}</tr>`;
@@ -7093,27 +7091,20 @@ function renderTargetsPage() {
     </div>
   `;
 
-  renderTgCalculator();
   renderKegForecastPanel();
   renderCartonForecastPanel();
   renderTgRsmCharts();
   renderTgTargetBuildup();
 }
 
-// ===================== VOLUME TARGET CALCULATOR =====================
-// Suggests a keg/carton volume target for one RSM's quarter, built from two components:
-//   1. Existing listings: (listings at start of quarter) x (historical VPL for the matching
-//      calendar period last year) — kegs computed per calendar MONTH (3 months summed, since
-//      keg VPL is seasonal month to month), cartons computed once for the whole quarter.
-//   2. New listings: a manually-entered "how many new listings are we aiming for this quarter"
-//      number, valued at the same VPL as the existing listings, but staggered evenly across the
-//      quarter (a listing added in week 1 contributes ~13 weeks of volume, one added in the
-//      last week contributes ~0 — averaging to roughly half the quarter per listing) rather than
-//      naively assuming every new listing was active for the full quarter from day one.
-// All the historical data is pulled automatically; every VPL and the new-listings numbers are
-// editable so a rep can override the model with their own judgement.
-let tgCalcRsm = null;
-let tgCalcOverrides = {}; // keyed by "rsm|quarterKey" -> {kegVpl:[m1,m2,m3]|null per slot, cartonVpl, newKegListings, newCartonListings}
+// ===================== TARGET MATH HELPERS =====================
+// This block of tg*/fy* helpers computes VPL (volume per listing per week), start-of-quarter
+// listings baselines, and quarter volume math shared by the Keg/Carton Listing Growth Forecast
+// tools below (renderKegForecastPanel/renderCartonForecastPanel, fyForecastCompute,
+// fyForecastApplyKeg/fyForecastApplyCarton). (Round 93: the standalone Volume Target Calculator
+// that used to be the only consumer of some of these was removed — the Forecast tools below now
+// cover the same ground with their own per-quarter VPL overrides, so there's just one tool for
+// setting targets. Every function still here is load-bearing for those Forecast tools.)
 
 function tgMonthsInQuarter(fy, q) {
   const [qStart] = quarterBoundsOf(fy, q);
@@ -7305,26 +7296,8 @@ function tgCartonStartOfQuarterListings(fy, q, outletFilterFn) {
   const prevQEndIncl = new Date(prevQEndExcl.getTime() - 86400000);
   return perfRangeStats('CARTONS', dayIndexOf(prevQStart), dayIndexOf(prevQEndIncl), outletFilterFn).listingsCount;
 }
-// `fy`/`q` are optional and only used the first time a given RSM/quarter is touched this
-// session, to back-derive the "new listings" figure from whatever Keg/Carton Listings target is
-// already saved (baseline + new = saved target, so new = saved target − baseline) — so reopening
-// the calculator shows the right number instead of resetting to 0.
-function tgOverridesFor(rsm, qKey, fy, q) {
-  const key = `${rsm}|${qKey}`;
-  if (!tgCalcOverrides[key]) {
-    let newKegListings = 0, newCartonListings = 0;
-    if (fy != null && q != null) {
-      const t = rsmTargetFor(rsm, qKey);
-      const outletFilterFn = oid => outlets[oid] && outlets[oid].rsm === rsm;
-      if (t.kegListingsTarget != null) newKegListings = Math.max(0, Math.round(t.kegListingsTarget - tgKegStartOfQuarterListings(fy, q, outletFilterFn)));
-      if (t.cartonListingsTarget != null) newCartonListings = Math.max(0, Math.round(t.cartonListingsTarget - tgCartonStartOfQuarterListings(fy, q, outletFilterFn)));
-    }
-    tgCalcOverrides[key] = { kegVpl: [null, null, null], cartonVpl: null, newKegListings, newCartonListings };
-  }
-  return tgCalcOverrides[key];
-}
-// Core quarter math, factored out of tgComputeSuggestion so the FY Listing Growth Forecast (below)
-// can reuse the exact same existing-listings + new-listings model with an explicit, possibly
+// Core quarter math, used by the Keg/Carton Listing Growth Forecast tools below, which reuse the
+// exact same existing-listings + new-listings model with an explicit, possibly
 // forecasted (not-yet-real) starting listings count instead of always reading real invoice data —
 // needed because Q2/Q3/Q4 of a forward-looking FY forecast don't have real "start of quarter"
 // data yet; their baseline is last quarter's own forecasted ending listings count instead.
@@ -7362,24 +7335,11 @@ function tgComputeQuarterFromBaseline(fy, q, kegStartListings, cartonStartListin
     cartonStartListings, cartonAutoVpl, cartonVpl, cartonWeeks, cartonExistingVolume, cartonNewVolume, cartonTotal, cartonListingsTargetFinal,
   };
 }
-// Full computation for one RSM's quarter — returns every intermediate figure so the UI can show
-// its working, plus the two final suggested totals. Real "start of quarter" listings, read from
-// actual invoice data (as opposed to the FY Forecast's cascaded/forecasted baseline below).
-function tgComputeSuggestion(rsm, fy, q) {
-  const qKey = quarterKeyOf(fy, q);
-  const outletFilterFn = oid => outlets[oid] && outlets[oid].rsm === rsm;
-  const ov = tgOverridesFor(rsm, qKey, fy, q);
-  const kegStartListings = tgKegStartOfQuarterListings(fy, q, outletFilterFn);
-  const cartonStartListings = tgCartonStartOfQuarterListings(fy, q, outletFilterFn);
-  const result = tgComputeQuarterFromBaseline(fy, q, kegStartListings, cartonStartListings, ov.kegVpl, ov.cartonVpl, ov.newKegListings, ov.newCartonListings, outletFilterFn);
-  return { ...result, overrides: ov };
-}
-
 // ===================== FY LISTING GROWTH FORECAST =====================
 // One "new listings" growth number per RSM PER QUARTER (kegs + cartons separately, 8 inputs total
 // across the FY) — each quarter's own growth target is entered manually, rather than one number
-// reused four times. Q1 starts from the real, actual start-of-quarter listings count (same as the
-// per-quarter calculator above); Q2/Q3/Q4 then cascade — each quarter's starting listings is the
+// reused four times. Q1 starts from the real, actual start-of-quarter listings count; Q2/Q3/Q4
+// then cascade — each quarter's starting listings is the
 // PREVIOUS quarter's own forecasted ending count (that quarter's baseline + that quarter's own
 // entered growth), since future quarters don't have real invoice data yet. Every quarter still
 // prices its volume at that quarter's own historical Volume-per-listing-per-week, averaged across
@@ -7526,7 +7486,7 @@ function tgTargetBuildupQuarterRow(fy, q, rsmList) {
 // User's own words: "Do a volume, listings and VPL chart for each RSM on the set targets page for
 // keg & carton customers as I'm still not getting how my targets are so much higher than last
 // year. Charts should just show the FY with prior years, actuals and targets." One RSM at a time
-// (dropdown, same pattern as the Volume Target Calculator's tgCalcRsm), 6 charts total (3 metrics
+// (dropdown, same pattern used elsewhere on this page), 6 charts total (3 metrics
 // x keg/carton), fixed FY Q1-Q4 view — not a rolling window — so every bar in every chart is
 // unambiguously anchored to this one selected FY, safe to label with exact FY26/FY25/FY24 wording
 // via the yearLabels mechanism (see vtBarChartHtml).
@@ -7618,7 +7578,7 @@ function tgRsmChartSeriesFor(rsm, bucket, outletFilterFn, fy) {
 // own month-by-month seasonal shape (fyForecastCompute's kegMonthly, the same shape that priced the
 // quarter in the first place) and scaling it so the 3 months sum back to exactly the SAVED quarter
 // target. That keeps faith with this panel's "chart reflects saved state" rule even for a quarter
-// set via the standalone Volume Target Calculator instead of this Forecast tool's own Apply.
+// set some other way (typed directly) instead of this Forecast tool's own Apply.
 // Listings growth is STAGGERED across each quarter's 3 months (linear ramp from the quarter's
 // opening count to its saved closing count) rather than shown as a flat step that only jumps at
 // the quarter boundary — real new-listing sign-ups trickle in through a quarter, they don't all
@@ -7755,7 +7715,7 @@ function renderTgTargetBuildup() {
       const statusBadge = !isSet
         ? '<span class="badge grey" title="No target entered for this RSM/quarter yet.">not set</span>'
         : isProtected
-          ? '<span class="badge amber" title="Set via the standalone Volume Target Calculator and protected from being overwritten by the FY Forecast Apply button.">calculator</span>'
+          ? '<span class="badge amber" title="Manually protected — this quarter is skipped by the FY Forecast Apply button.">protected</span>'
           : '<span class="badge blue" title="Set via (or matches) the FY Listing Growth Forecast model shown here.">FY Forecast</span>';
       return `<td style="vertical-align:top; border-left:1px solid var(--border);">
         <div class="mono" style="font-weight:600;">${saved != null ? fmtNum(saved) + ' L' : '—'}</div>
@@ -7781,7 +7741,7 @@ function renderTgTargetBuildup() {
 
   el.innerHTML = `
     <h3 style="margin:0;">Sales Team Target Build-Up <span class="muted" style="font-weight:400; font-size:11px;">(FY${fy}) — why a quarter's target looks the way it does</span></h3>
-    <div class="hint" style="margin-top:4px;">Each RSM's quarterly Keg/Carton Volume target is a plain, independently-editable number — typed in directly, generated by the standalone Volume Target Calculator, or applied in bulk from the Keg/Carton Forecast tools above. The table below compares the Sales Team's saved total for each quarter to the same quarter in FY${String(fy-1).slice(-2)}, and shows how many RSMs actually have a number entered — a quarter looking low against FY${String(fy-1).slice(-2)} is very often simply that not every RSM's target has been set or applied for it yet. Expand an RSM to see the forecast model's own components for each quarter: the new listings growth assumed, the historical average Volume-per-Listing-per-Week it priced volume at (an average across every prior year with data, not just FY${String(fy-1).slice(-2)}), and FY${String(fy-1).slice(-2)}'s actual VPL and volume set directly alongside it — a below-average target is very often just that multi-year average sitting below an unusually strong prior year, rather than a mistake in the model. This is a read-only view; edit actual targets in the table above, the Volume Target Calculator, or the Keg/Carton Forecast tools.</div>
+    <div class="hint" style="margin-top:4px;">Each RSM's quarterly Keg/Carton Volume target is a plain, independently-editable number — typed in directly, or applied in bulk from the Keg/Carton Forecast tools above. The table below compares the Sales Team's saved total for each quarter to the same quarter in FY${String(fy-1).slice(-2)}, and shows how many RSMs actually have a number entered — a quarter looking low against FY${String(fy-1).slice(-2)} is very often simply that not every RSM's target has been set or applied for it yet. Expand an RSM to see the forecast model's own components for each quarter: the new listings growth assumed, the historical average Volume-per-Listing-per-Week it priced volume at (an average across every prior year with data, not just FY${String(fy-1).slice(-2)}), and FY${String(fy-1).slice(-2)}'s actual VPL and volume set directly alongside it — a below-average target is very often just that multi-year average sitting below an unusually strong prior year, rather than a mistake in the model. This is a read-only view; edit actual targets in the table above or the Keg/Carton Forecast tools.</div>
     <div class="tablewrap" style="margin-top:10px;">
       <table class="datatable">
         <thead><tr><th>Quarter</th><th>Sales Team Target</th><th>Same Qtr FY${String(fy-1).slice(-2)} (actual)</th><th>vs FY${String(fy-1).slice(-2)}</th><th>RSM coverage</th></tr></thead>
@@ -7896,7 +7856,7 @@ function renderKegForecastPanel() {
     }).join('');
     const protectedQs = [1,2,3,4].filter(q => isRsmTargetProtected(rsm, quarterKeyOf(fy, q)));
     const protectedNote = protectedQs.length
-      ? `<div class="muted" style="font-size:10.5px; margin-top:2px;" title="These quarters were set via the Volume Target Calculator and will be skipped by Apply Q1–Q4, not overwritten.">
+      ? `<div class="muted" style="font-size:10.5px; margin-top:2px;" title="These quarters were manually protected and will be skipped by Apply Q1–Q4, not overwritten.">
            🔒 Q${protectedQs.join(', Q')} protected
            ${protectedQs.map(q => `<a href="#" style="margin-left:4px;" onclick="tgClearProtection('${rsm}','${quarterKeyOf(fy,q)}'); return false;">clear Q${q}</a>`).join('')}
          </div>`
@@ -7914,7 +7874,7 @@ function renderKegForecastPanel() {
 
   el.innerHTML = `
     <h3 style="margin:0;">Keg Listing Growth Forecast <span class="muted" style="font-weight:400; font-size:11px;">(FY${fy})</span></h3>
-    <div class="hint" style="margin-top:4px;">Enter each RSM's target new keg listings for each quarter (Q1–Q4). Q1 starts from real current listings; each later quarter starts from the previous quarter's own forecasted ending listings — the system calculates the resulting final listings each quarter automatically. Volume is priced per CALENDAR MONTH (kegs are seasonal month to month), at that month's average historical Volume per listing per week, averaged across every prior year we have data for. Each month has its own VPL input, pre-filled with the model's multi-year average as a placeholder — override any month you want to price differently, or leave it blank to keep the model's average. Below each input, ${fy1}/${fy2}/${fy3} show that exact calendar month's actual VPL for the last three financial years, so you can judge an override against real recent performance rather than a single blended number. Applying writes Q1–Q4 Keg Listings and Volume targets into the table above — carton targets are untouched (set those in the Carton Forecast tool below). A quarter set via the standalone Volume Target Calculator further down is protected (🔒) and left untouched by Apply — clear the protection there if you want the forecast to take over again.</div>
+    <div class="hint" style="margin-top:4px;">Enter each RSM's target new keg listings for each quarter (Q1–Q4). Q1 starts from real current listings; each later quarter starts from the previous quarter's own forecasted ending listings — the system calculates the resulting final listings each quarter automatically. Volume is priced per CALENDAR MONTH (kegs are seasonal month to month), at that month's average historical Volume per listing per week, averaged across every prior year we have data for. Each month has its own VPL input, pre-filled with the model's multi-year average as a placeholder — override any month you want to price differently, or leave it blank to keep the model's average. Below each input, ${fy1}/${fy2}/${fy3} show that exact calendar month's actual VPL for the last three financial years, so you can judge an override against real recent performance rather than a single blended number. Applying writes Q1–Q4 Keg Listings and Volume targets into the table above — carton targets are untouched (set those in the Carton Forecast tool below). A manually protected quarter (🔒, shown next to the RSM's name below) is left untouched by Apply — use its "clear" link if you want the forecast to take over again.</div>
     <div class="tablewrap" style="margin-top:10px;">
       <table class="datatable">
         <thead><tr>
@@ -7971,7 +7931,7 @@ function renderCartonForecastPanel() {
     }).join('');
     const protectedQs = [1,2,3,4].filter(q => isRsmTargetProtected(rsm, quarterKeyOf(fy, q)));
     const protectedNote = protectedQs.length
-      ? `<div class="muted" style="font-size:10.5px; margin-top:2px;" title="These quarters were set via the Volume Target Calculator and will be skipped by Apply Q1–Q4, not overwritten.">
+      ? `<div class="muted" style="font-size:10.5px; margin-top:2px;" title="These quarters were manually protected and will be skipped by Apply Q1–Q4, not overwritten.">
            🔒 Q${protectedQs.join(', Q')} protected
            ${protectedQs.map(q => `<a href="#" style="margin-left:4px;" onclick="tgClearProtection('${rsm}','${quarterKeyOf(fy,q)}'); return false;">clear Q${q}</a>`).join('')}
          </div>`
@@ -7989,7 +7949,7 @@ function renderCartonForecastPanel() {
 
   el.innerHTML = `
     <h3 style="margin:0;">Carton Listing Growth Forecast <span class="muted" style="font-weight:400; font-size:11px;">(FY${fy})</span></h3>
-    <div class="hint" style="margin-top:4px;">Enter each RSM's target new carton listings for each quarter (Q1–Q4). Q1 starts from real current listings; each later quarter starts from the previous quarter's own forecasted ending listings — the system calculates the resulting final listings each quarter automatically. Volume is priced per FISCAL QUARTER, at that quarter's average historical Volume per listing per week, averaged across every prior year we have data for. Each quarter has its own VPL input, pre-filled with the model's multi-year average as a placeholder — override it with your own figure if a rep's recent trend should carry more weight than the multi-year blend, or leave it blank to keep the model's average. Below the input, ${fy1}/${fy2}/${fy3} show that quarter's actual VPL for the last three financial years, so you can judge an override against real recent performance. Applying writes Q1–Q4 Carton Listings and Volume targets into the table above — keg targets are untouched (set those in the Keg Forecast tool above). A quarter set via the standalone Volume Target Calculator further down is protected (🔒) and left untouched by Apply — clear the protection there if you want the forecast to take over again.</div>
+    <div class="hint" style="margin-top:4px;">Enter each RSM's target new carton listings for each quarter (Q1–Q4). Q1 starts from real current listings; each later quarter starts from the previous quarter's own forecasted ending listings — the system calculates the resulting final listings each quarter automatically. Volume is priced per FISCAL QUARTER, at that quarter's average historical Volume per listing per week, averaged across every prior year we have data for. Each quarter has its own VPL input, pre-filled with the model's multi-year average as a placeholder — override it with your own figure if a rep's recent trend should carry more weight than the multi-year blend, or leave it blank to keep the model's average. Below the input, ${fy1}/${fy2}/${fy3} show that quarter's actual VPL for the last three financial years, so you can judge an override against real recent performance. Applying writes Q1–Q4 Carton Listings and Volume targets into the table above — keg targets are untouched (set those in the Keg Forecast tool above). A manually protected quarter (🔒, shown next to the RSM's name below) is left untouched by Apply — use its "clear" link if you want the forecast to take over again.</div>
     <div class="tablewrap" style="margin-top:10px;">
       <table class="datatable">
         <thead><tr>
@@ -8008,104 +7968,6 @@ function renderCartonForecastPanel() {
     </div>
   `;
 }
-function tgSetKegVplOverride(rsm, qKey, idx, val) {
-  const ov = tgOverridesFor(rsm, qKey);
-  const trimmed = (val || '').trim();
-  ov.kegVpl[idx] = trimmed === '' ? null : Math.max(0, parseFloat(trimmed) || 0);
-  renderTgCalculator();
-}
-function tgSetCartonVplOverride(rsm, qKey, val) {
-  const ov = tgOverridesFor(rsm, qKey);
-  const trimmed = (val || '').trim();
-  ov.cartonVpl = trimmed === '' ? null : Math.max(0, parseFloat(trimmed) || 0);
-  renderTgCalculator();
-}
-// Setting the "new listings" goal is the only thing a rep enters for Listings targets — the
-// final Keg/Carton Listings target (baseline + new) is computed and saved automatically here,
-// no separate Apply step needed (unlike the Volume targets below, which are a suggestion the
-// rep reviews before applying).
-function tgSetNewListingsTarget(rsm, qKey, bucket, val) {
-  const ov = tgOverridesFor(rsm, qKey);
-  const num = Math.max(0, parseInt(val, 10) || 0);
-  const { fy, q } = targetsQuarter;
-  const outletFilterFn = oid => outlets[oid] && outlets[oid].rsm === rsm;
-  if (bucket === 'KEGS') {
-    ov.newKegListings = num;
-    const baseline = tgKegStartOfQuarterListings(fy, q, outletFilterFn);
-    updateRsmTarget(rsm, qKey, 'kegListingsTarget', String(baseline + num));
-  } else {
-    ov.newCartonListings = num;
-    const baseline = tgCartonStartOfQuarterListings(fy, q, outletFilterFn);
-    updateRsmTarget(rsm, qKey, 'cartonListingsTarget', String(baseline + num));
-  }
-  markRsmTargetProtected(rsm, qKey); // this quarter's Listings target was set via the calculator — protect it from the FY Forecast's bulk cascade
-  renderTargetsPage();
-}
-function tgApplyTarget(rsm, qKey, field, value) {
-  updateRsmTarget(rsm, qKey, field, String(Math.round(value))); // updateRsmTarget expects a string (it's normally wired from an <input>.value)
-  markRsmTargetProtected(rsm, qKey); // this quarter's Volume target was set via the calculator — protect it from the FY Forecast's bulk cascade
-  toast(`Applied to ${field === 'kegVolumeTarget' ? 'Keg' : 'Carton'} Volume target.`);
-  renderTargetsPage();
-}
-function tgChangeRsm(val) { tgCalcRsm = val; renderTgCalculator(); }
-function renderTgCalculator() {
-  const el = document.getElementById('tg_calc');
-  if (!el) return;
-  const rsmList = uniqueVals('rsm', outlets);
-  if (!rsmList.length) { el.innerHTML = ''; return; }
-  if (!tgCalcRsm || !rsmList.includes(tgCalcRsm)) tgCalcRsm = rsmList[0];
-  const { fy, q } = targetsQuarter;
-  const s = tgComputeSuggestion(tgCalcRsm, fy, q);
-
-  const kegMonthRows = s.kegMonthly.map((mo, i) => `
-    <tr>
-      <td>${mo.label}</td>
-      <td class="num-cell mono">${s.kegStartListings}</td>
-      <td class="num-cell"><input type="number" step="0.1" min="0" style="width:80px; text-align:right;" value="${mo.vpl.toFixed(2)}" title="Auto (historical): ${mo.autoVpl.toFixed(2)}" onchange="tgSetKegVplOverride('${tgCalcRsm}','${s.qKey}',${i},this.value)"></td>
-      <td class="num-cell mono">${fmtNum(mo.weeks)}</td>
-      <td class="num-cell mono">${fmtNum(mo.volume)} L</td>
-    </tr>`).join('');
-
-  el.innerHTML = `
-    <div class="panel">
-      <h3 style="margin:0 0 4px;">Volume Target Calculator</h3>
-      <div class="hint" style="margin-bottom:10px;">Builds a suggested keg + carton volume target from listings at the start of the quarter, priced at last year's same-period Volume per listing per week — always expressed as whole units (50L kegs / 6L cartons), never raw litres — then adds whatever new-listings goal you enter, spread evenly across the quarter rather than assumed active from day one. Every Volume per listing per week figure is editable if you want to override the historical figure. The Keg/Carton <strong>Listings</strong> targets in the table above are set automatically as baseline + new listings and save the moment you type a number — only the Volume targets need the Apply button below, since those are a suggestion worth reviewing first. Setting a target here <strong>protects</strong> this RSM's quarter from being overwritten by the FY Listing Growth Forecast's bulk "Apply Q1–Q4" further down the page.</div>
-      <div class="fld" style="margin:0 0 12px; max-width:260px;"><label>RSM</label><select onchange="tgChangeRsm(this.value)">${rsmList.map(r=>`<option value="${escapeHtml(r)}" ${r===tgCalcRsm?'selected':''}>${escapeHtml(r)}</option>`).join('')}</select></div>
-      ${isRsmTargetProtected(tgCalcRsm, s.qKey) ? `<div class="hint" style="margin:0 0 12px; color:var(--gold-dark);">🔒 ${escapeHtml(tgCalcRsm)}'s ${s.qKey} is protected — the FY Forecast's Apply will skip it. <a href="#" onclick="tgClearProtection('${tgCalcRsm}','${s.qKey}'); return false;">Clear protection</a></div>` : ''}
-
-      <h4 style="margin:10px 0 4px;">Kegs <span class="badge kegs" style="font-size:9px;">per month</span></h4>
-      <div class="tablewrap">
-        <table class="datatable">
-          <thead><tr><th>Month</th><th class="num-cell">Start-of-qtr listings</th><th class="num-cell">Volume per listing per week, in 50L kegs <span class="muted" style="font-weight:400;">(editable)</span></th><th class="num-cell">Weeks</th><th class="num-cell">Volume</th></tr></thead>
-          <tbody>${kegMonthRows}</tbody>
-        </table>
-      </div>
-      <div class="rowflex" style="gap:18px; margin-top:8px; flex-wrap:wrap; align-items:flex-end;">
-        <div><div class="muted" style="font-size:11px;">Existing-listings volume</div><div class="mono" style="font-weight:600;">${fmtNum(s.kegExistingVolume)} L</div></div>
-        <div class="fld" style="margin:0;"><label>New keg listings target (this qtr)</label><input type="number" step="1" min="0" style="width:90px;" value="${s.overrides.newKegListings||''}" placeholder="0" onchange="tgSetNewListingsTarget('${tgCalcRsm}','${s.qKey}','KEGS',this.value)"></div>
-        <div><div class="muted" style="font-size:11px;">Keg Listings target <span title="Baseline + new listings — saved automatically">(auto)</span></div><div class="mono" style="font-weight:600;">${s.kegStartListings} + ${s.overrides.newKegListings||0} = ${s.kegListingsTargetFinal}</div></div>
-        <div><div class="muted" style="font-size:11px;">New-listings volume <span title="staggered evenly across the quarter">(staggered)</span></div><div class="mono" style="font-weight:600;">${fmtNum(s.kegNewVolume)} L</div></div>
-        <div><div class="muted" style="font-size:11px;">Suggested Keg Volume target</div><div class="mono" style="font-weight:700; font-size:16px;">${fmtNum(s.kegTotal)} L</div></div>
-        <button class="btn small" onclick="tgApplyTarget('${tgCalcRsm}','${s.qKey}','kegVolumeTarget',${s.kegTotal})">Apply to Keg Volume target</button>
-      </div>
-
-      <h4 style="margin:18px 0 4px;">Cartons <span class="badge cartons" style="font-size:9px;">per quarter</span></h4>
-      <div class="rowflex" style="gap:18px; flex-wrap:wrap; align-items:flex-end;">
-        <div><div class="muted" style="font-size:11px;">Start-of-qtr listings</div><div class="mono" style="font-weight:600;">${s.cartonStartListings}</div></div>
-        <div class="fld" style="margin:0;"><label>Volume per listing per week, in 6L cartons <span class="muted" style="font-weight:400;">(editable)</span></label><input type="number" step="0.1" min="0" style="width:90px;" value="${s.cartonVpl.toFixed(2)}" title="Auto (historical): ${s.cartonAutoVpl.toFixed(2)}" onchange="tgSetCartonVplOverride('${tgCalcRsm}','${s.qKey}',this.value)"></div>
-        <div><div class="muted" style="font-size:11px;">Weeks in quarter</div><div class="mono">${fmtNum(s.cartonWeeks)}</div></div>
-        <div><div class="muted" style="font-size:11px;">Existing-listings volume</div><div class="mono" style="font-weight:600;">${fmtNum(s.cartonExistingVolume)} L</div></div>
-      </div>
-      <div class="rowflex" style="gap:18px; margin-top:8px; flex-wrap:wrap; align-items:flex-end;">
-        <div class="fld" style="margin:0;"><label>New carton listings target (this qtr)</label><input type="number" step="1" min="0" style="width:90px;" value="${s.overrides.newCartonListings||''}" placeholder="0" onchange="tgSetNewListingsTarget('${tgCalcRsm}','${s.qKey}','CARTONS',this.value)"></div>
-        <div><div class="muted" style="font-size:11px;">Carton Listings target <span title="Baseline + new listings — saved automatically">(auto)</span></div><div class="mono" style="font-weight:600;">${s.cartonStartListings} + ${s.overrides.newCartonListings||0} = ${s.cartonListingsTargetFinal}</div></div>
-        <div><div class="muted" style="font-size:11px;">New-listings volume <span title="staggered evenly across the quarter">(staggered)</span></div><div class="mono" style="font-weight:600;">${fmtNum(s.cartonNewVolume)} L</div></div>
-        <div><div class="muted" style="font-size:11px;">Suggested Carton Volume target</div><div class="mono" style="font-weight:700; font-size:16px;">${fmtNum(s.cartonTotal)} L</div></div>
-        <button class="btn small" onclick="tgApplyTarget('${tgCalcRsm}','${s.qKey}','cartonVolumeTarget',${s.cartonTotal})">Apply to Carton Volume target</button>
-      </div>
-    </div>`;
-}
-
 // Unit sizes used to express volume-per-listing (VPL) as whole units on the Volume Trends page.
 const KEG_UNIT_LITRES = 50;    // 1 keg = 50L
 const CARTON_UNIT_LITRES = 6;  // 1 carton = 6L
@@ -9469,7 +9331,7 @@ function tvTpFyYearPeriod(fy) {
   return [{ label: `FY${String(fy).slice(-2)}`, startDayIdx: dayIndexOf(start), endDayIdx: dayIndexOf(endExcl) - 1, fy }];
 }
 // Populates the Financial Year picker with every FY the sales data spans, plus one FY ahead (so a
-// target set for next FY via the Volume Target Calculator/FY Forecast is visible even before any
+// target set for next FY via the FY Forecast (or typed directly) is visible even before any
 // actuals exist for it) — most recent first, defaulting to the current FY.
 function populateTvTpFySelect() {
   const el = document.getElementById('tv_tp_fy');
@@ -9839,7 +9701,7 @@ function ceComputeAllOutletStats(startDayIdx, endDayIdx, groupFilterFn) {
   return map;
 }
 // VPL is always expressed as whole units — 50L kegs / 6L cartons — per listing per week, matching
-// the rule used everywhere else in the app (Volume Trends, Volume Target Calculator).
+// the rule used everywhere else in the app (Volume Trends, Set Targets).
 function ceVplPerWeek(stats, weeks, unitLitres) {
   if (!stats || !stats.listingsCount || !weeks) return null;
   return (stats.totalLitres / stats.listingsCount) / weeks / (unitLitres || 1);
@@ -10197,7 +10059,7 @@ let orderFormDeliveryFee = 0;
 // auto-recomputes the suggested fee (this customer's own override, if set, else the company
 // default rule — see computeAutoDeliveryFee()). Once true, edits stop overwriting the field —
 // same "smart default until you touch it, then your edit always wins" pattern as elsewhere in this
-// app (FY Forecast vs the per-quarter Volume Target Calculator).
+// app (e.g. the FY Forecast tools' own manual VPL/growth overrides).
 let orderFormDeliveryFeeManual = false;
 function orderLineWeightKg(line) { return (Number(line.qty)||0) * weightKgFor(line.groupId); }
 function orderTotalWeightKg(order) { return order.lines.reduce((s,l)=>s+orderLineWeightKg(l),0); }
