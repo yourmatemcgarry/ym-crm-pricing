@@ -7528,7 +7528,7 @@ function tgTargetBuildupQuarterRow(fy, q, rsmList) {
 let tgChartsRsm = null;
 function tgChangeChartsRsm(val) { tgChartsRsm = val; renderTgRsmCharts(); }
 // Actual litres + listings for one FY quarter, one bucket, one RSM — the shared building block for
-// all 3 chart types below (Volume uses litres directly, Listings uses listings directly, VPL
+// the CARTON chart series below (Volume uses litres directly, Listings uses listings directly, VPL
 // derives from both). Full calendar-quarter weeks are used (not clipped to elapsed data), matching
 // the same convention tgHistoricalQuarterlyVpl/tgYearsBackMonthlyVpl already use elsewhere in this
 // panel, so a still-in-progress current quarter simply shows its partial actual rather than being
@@ -7542,21 +7542,45 @@ function tgRsmQuarterActual(bucket, outletFilterFn, fy, q) {
   const stats = perfRangeStats(bucket, startDayIdx, endDayIdx, outletFilterFn);
   return { litres: stats.totalLitres, listings: stats.listingsCount, weeks };
 }
-// Builds the Volume / Listings / VPL series (actual + FYfy-1 + FYfy-2 + target) for one bucket —
-// shared by all 3 chart-building calls below so the FY-quarter walk and null-when-predates-data
-// convention only lives in one place.
+// Same as tgRsmQuarterActual but for one calendar MONTH — the KEG chart series' building block.
+// Mirrors tgHistoricalMonthlyVpl's own window logic exactly (calendarMonthBoundsOf + perfRangeStats)
+// so a keg chart's "actual" bars are measured over the SAME window length the forecast model prices
+// keg volume at. This matters: perfRangeStats' listingsCount counts any listing active ANYWHERE in
+// the window once, regardless of how much of the window it was active for — over a wide window
+// (a whole 13-week quarter) that dilutes the rate for a territory with listings churn/growth mid-
+// quarter (new listings ramping in, common for a growing rep), understating quarterly VPL well
+// below the monthly figure the model actually uses to price the forecast. Using the same monthly
+// window on both sides (this function for "actual", tgHistoricalMonthlyVpl for the model's "auto")
+// removes that artifact so a "target looks way higher than actual" read is a genuine VPL gap, not a
+// measurement-window mismatch. See renderTgRsmCharts below — this is why keg charts are monthly.
+function tgRsmMonthActual(bucket, outletFilterFn, y, m) {
+  const [start, endExcl] = calendarMonthBoundsOf(new Date(y, m, 1));
+  const startDayIdx = dayIndexOf(start);
+  if (startDayIdx < 0) return null;
+  const endDayIdx = dayIndexOf(endExcl) - 1;
+  const weeks = (endDayIdx - startDayIdx + 1) / 7;
+  const stats = perfRangeStats(bucket, startDayIdx, endDayIdx, outletFilterFn);
+  return { litres: stats.totalLitres, listings: stats.listingsCount, weeks };
+}
+// Builds the Volume / Listings / VPL series (actual + FYfy-1 + FYfy-2 + target) for one bucket.
+// CARTONS stay quarterly (4 points) — cartons are genuinely priced per fiscal quarter, one VPL
+// figure per quarter, so a quarterly actual is the right comparison. KEGS are monthly (12 points)
+// — kegs are priced per CALENDAR MONTH (tgHistoricalMonthlyVpl/tgComputeQuarterFromBaseline's
+// kegMonthly loop), so the keg "actual" must use the same monthly window (see tgRsmMonthActual
+// above) or "target vs actual" silently compares two different measurement windows.
 function tgRsmChartSeriesFor(rsm, bucket, outletFilterFn, fy) {
-  const unitLitres = bucket === 'KEGS' ? KEG_UNIT_LITRES : CARTON_UNIT_LITRES;
-  const volField = bucket === 'KEGS' ? 'kegVolumeTarget' : 'cartonVolumeTarget';
-  const listField = bucket === 'KEGS' ? 'kegListingsTarget' : 'cartonListingsTarget';
+  if (bucket === 'KEGS') return tgRsmKegChartSeriesFor(rsm, outletFilterFn, fy);
+  const unitLitres = CARTON_UNIT_LITRES;
+  const volField = 'cartonVolumeTarget';
+  const listField = 'cartonListingsTarget';
   const labels = [], volume = [], volumeLy = [], volumeLy2 = [], volumeTarget = [];
   const listings = [], listingsLy = [], listingsLy2 = [], listingsTarget = [];
   const vpl = [], vplLy = [], vplLy2 = [], vplTarget = [];
   for (let q = 1; q <= 4; q++) {
     labels.push('Q' + q);
-    const a = tgRsmQuarterActual(bucket, outletFilterFn, fy, q);
-    const ly = tgRsmQuarterActual(bucket, outletFilterFn, fy - 1, q);
-    const ly2 = tgRsmQuarterActual(bucket, outletFilterFn, fy - 2, q);
+    const a = tgRsmQuarterActual('CARTONS', outletFilterFn, fy, q);
+    const ly = tgRsmQuarterActual('CARTONS', outletFilterFn, fy - 1, q);
+    const ly2 = tgRsmQuarterActual('CARTONS', outletFilterFn, fy - 2, q);
     const t = rsmTargetFor(rsm, quarterKeyOf(fy, q));
     volume.push(a ? a.litres : 0);
     volumeLy.push(ly ? ly.litres : null);
@@ -7572,6 +7596,49 @@ function tgRsmChartSeriesFor(rsm, bucket, outletFilterFn, fy) {
     const targetVol = t[volField] != null ? Number(t[volField]) : null;
     const targetList = t[listField] != null ? Number(t[listField]) : null;
     vplTarget.push((targetVol != null && targetList) ? (targetVol / targetList) / (a ? a.weeks : 13) / unitLitres : null);
+  }
+  return { labels, volume, volumeLy, volumeLy2, volumeTarget, listings, listingsLy, listingsLy2, listingsTarget, vpl, vplLy, vplLy2, vplTarget };
+}
+// KEG monthly series (12 points, Q1's 3 months through Q4's 3 months). The Target series can't
+// just read rsmTargetFor's per-quarter kegVolumeTarget directly — that figure is a whole-quarter
+// total with no monthly split saved anywhere — so it's rebuilt by taking the FY Forecast model's
+// own month-by-month seasonal shape (fyForecastCompute's kegMonthly, the same shape that priced the
+// quarter in the first place) and scaling it so the 3 months sum back to exactly the SAVED quarter
+// target. That keeps faith with this panel's "chart reflects saved state" rule even for a quarter
+// set via the standalone Volume Target Calculator instead of this Forecast tool's own Apply.
+// Listings has no monthly split at all (only a quarter-end count is ever saved), so it's shown flat
+// across each quarter's 3 months — a step function, not a claim that listings grew mid-month.
+function tgRsmKegChartSeriesFor(rsm, outletFilterFn, fy) {
+  const unitLitres = KEG_UNIT_LITRES;
+  const labels = [], volume = [], volumeLy = [], volumeLy2 = [], volumeTarget = [];
+  const listings = [], listingsLy = [], listingsLy2 = [], listingsTarget = [];
+  const vpl = [], vplLy = [], vplLy2 = [], vplTarget = [];
+  const model = fyForecastCompute(rsm, fy);
+  for (let q = 1; q <= 4; q++) {
+    const r = model.quarters[q - 1];
+    const t = rsmTargetFor(rsm, quarterKeyOf(fy, q));
+    const savedVol = t.kegVolumeTarget != null ? Number(t.kegVolumeTarget) : null;
+    const savedListings = t.kegListingsTarget != null ? Number(t.kegListingsTarget) : null;
+    const scale = (savedVol != null && r.kegTotal > 0) ? savedVol / r.kegTotal : null;
+    r.kegMonthly.forEach(mo => {
+      labels.push(mo.label.split(' ')[0]);
+      const a = tgRsmMonthActual('KEGS', outletFilterFn, mo.y, mo.m);
+      const ly = tgRsmMonthActual('KEGS', outletFilterFn, mo.y - 1, mo.m);
+      const ly2 = tgRsmMonthActual('KEGS', outletFilterFn, mo.y - 2, mo.m);
+      volume.push(a ? a.litres : 0);
+      volumeLy.push(ly ? ly.litres : null);
+      volumeLy2.push(ly2 ? ly2.litres : null);
+      const monthTargetVol = scale != null ? mo.volume * scale : null;
+      volumeTarget.push(monthTargetVol);
+      listings.push(a ? a.listings : 0);
+      listingsLy.push(ly ? ly.listings : null);
+      listingsLy2.push(ly2 ? ly2.listings : null);
+      listingsTarget.push(savedListings);
+      vpl.push(a && a.listings > 0 ? (a.litres / a.listings) / a.weeks / unitLitres : 0);
+      vplLy.push(ly && ly.listings > 0 ? (ly.litres / ly.listings) / ly.weeks / unitLitres : null);
+      vplLy2.push(ly2 && ly2.listings > 0 ? (ly2.litres / ly2.listings) / ly2.weeks / unitLitres : null);
+      vplTarget.push((monthTargetVol != null && savedListings) ? (monthTargetVol / savedListings) / mo.weeks / unitLitres : null);
+    });
   }
   return { labels, volume, volumeLy, volumeLy2, volumeTarget, listings, listingsLy, listingsLy2, listingsTarget, vpl, vplLy, vplLy2, vplTarget };
 }
@@ -7591,31 +7658,25 @@ function renderTgRsmCharts() {
 
   el.innerHTML = `
     <h3 style="margin:0;">Volume, Listings &amp; VPL by RSM <span class="muted" style="font-weight:400; font-size:11px;">(FY${fy})</span></h3>
-    <div class="hint" style="margin-top:4px;">One RSM's Q1–Q4 for this financial year, kegs and cartons side by side, actual volume/listings/VPL against ${yearLabels.ly}, ${yearLabels.ly2}, and this FY's saved target. If a target here looks much higher than ${yearLabels.ly}'s actual, check the VPL chart first — the FY Forecast tools price new volume off a MULTI-YEAR AVERAGE VPL (not just ${yearLabels.ly}), so a target can sit well above last year specifically if an earlier year (e.g. ${yearLabels.ly2}) was unusually strong; that's a feature, not a bug, but it's worth overriding the VPL in the Keg/Carton Forecast tools above if this RSM's recent run-rate should carry more weight than the multi-year blend.</div>
+    <div class="hint" style="margin-top:4px;">One RSM's actual volume/listings/VPL against ${yearLabels.ly}, ${yearLabels.ly2}, and this FY's saved target. Keg charts are shown MONTHLY (Jul–Jun) rather than by quarter — kegs are priced by the FY Forecast tool per calendar month, and comparing a monthly-priced target against a quarterly "actual" understates the actual (a whole quarter's listings count includes anyone active even briefly during those 13 weeks, diluting the rate for a growing rep) — showing kegs monthly keeps the target and the actual measured over the same window, so a gap you see here is a real VPL gap, not a measurement artifact. Cartons are priced per quarter, so they stay Q1–Q4. If a keg target still looks meaningfully higher than ${yearLabels.ly}'s actual after that, check the VPL chart — the Keg Forecast tool's auto pricing is a MULTI-YEAR AVERAGE (not just ${yearLabels.ly}), so it can sit above last year specifically if an earlier year was unusually strong; override the month's VPL in the Keg Forecast tool above if this RSM's recent run-rate should carry more weight than the multi-year blend.</div>
     <div class="fld" style="margin:10px 0 12px; max-width:260px;"><label>RSM</label><select onchange="tgChangeChartsRsm(this.value)">${rsmList.map(r=>`<option value="${escapeHtml(r)}" ${r===rsm?'selected':''}>${escapeHtml(r)}</option>`).join('')}</select></div>
-    <div class="rowflex" style="gap:12px; flex-wrap:wrap;">
-      <div style="flex:1; min-width:320px;" id="tg_rsm_vol_keg"></div>
-      <div style="flex:1; min-width:320px;" id="tg_rsm_vol_carton"></div>
-    </div>
-    <div class="rowflex" style="gap:12px; flex-wrap:wrap; margin-top:10px;">
-      <div style="flex:1; min-width:320px;" id="tg_rsm_list_keg"></div>
-      <div style="flex:1; min-width:320px;" id="tg_rsm_list_carton"></div>
-    </div>
-    <div class="rowflex" style="gap:12px; flex-wrap:wrap; margin-top:10px;">
-      <div style="flex:1; min-width:320px;" id="tg_rsm_vpl_keg"></div>
-      <div style="flex:1; min-width:320px;" id="tg_rsm_vpl_carton"></div>
-    </div>
+    <div style="margin-top:10px;" id="tg_rsm_vol_keg"></div>
+    <div style="margin-top:10px;" id="tg_rsm_vol_carton"></div>
+    <div style="margin-top:10px;" id="tg_rsm_list_keg"></div>
+    <div style="margin-top:10px;" id="tg_rsm_list_carton"></div>
+    <div style="margin-top:10px;" id="tg_rsm_vpl_keg"></div>
+    <div style="margin-top:10px;" id="tg_rsm_vpl_carton"></div>
   `;
 
-  veeRenderVolumeChart('tg_rsm_vol_keg', kegSeries.labels, kegSeries.volume, 'kegs', 'quarter', escapeHtml(rsm) + ' — Keg Volume', 'litres', ' L', null,
+  veeRenderVolumeChart('tg_rsm_vol_keg', kegSeries.labels, kegSeries.volume, 'kegs', 'month', escapeHtml(rsm) + ' — Keg Volume (monthly)', 'litres', ' L', null,
     { ly: kegSeries.volumeLy, ly2: kegSeries.volumeLy2, target: kegSeries.volumeTarget }, null, yearLabels);
-  veeRenderVolumeChart('tg_rsm_vol_carton', cartonSeries.labels, cartonSeries.volume, 'cartons', 'quarter', escapeHtml(rsm) + ' — Carton Volume', 'litres', ' L', null,
+  veeRenderVolumeChart('tg_rsm_vol_carton', cartonSeries.labels, cartonSeries.volume, 'cartons', 'quarter', escapeHtml(rsm) + ' — Carton Volume (quarterly)', 'litres', ' L', null,
     { ly: cartonSeries.volumeLy, ly2: cartonSeries.volumeLy2, target: cartonSeries.volumeTarget }, null, yearLabels);
-  veeRenderVolumeChart('tg_rsm_list_keg', kegSeries.labels, kegSeries.listings, 'kegs', 'quarter', escapeHtml(rsm) + ' — Keg Listings', 'listings', '', 0,
+  veeRenderVolumeChart('tg_rsm_list_keg', kegSeries.labels, kegSeries.listings, 'kegs', 'month', escapeHtml(rsm) + ' — Keg Listings (monthly)', 'listings', '', 0,
     { ly: kegSeries.listingsLy, ly2: kegSeries.listingsLy2, target: kegSeries.listingsTarget }, null, yearLabels);
-  veeRenderVolumeChart('tg_rsm_list_carton', cartonSeries.labels, cartonSeries.listings, 'cartons', 'quarter', escapeHtml(rsm) + ' — Carton Listings', 'listings', '', 0,
+  veeRenderVolumeChart('tg_rsm_list_carton', cartonSeries.labels, cartonSeries.listings, 'cartons', 'quarter', escapeHtml(rsm) + ' — Carton Listings (quarterly)', 'listings', '', 0,
     { ly: cartonSeries.listingsLy, ly2: cartonSeries.listingsLy2, target: cartonSeries.listingsTarget }, null, yearLabels);
-  veeRenderVolumeChart('tg_rsm_vpl_keg', kegSeries.labels, kegSeries.vpl, 'kegs', 'quarter', escapeHtml(rsm) + ' — Keg VPL', 'units/listing/wk', '', 2,
+  veeRenderVolumeChart('tg_rsm_vpl_keg', kegSeries.labels, kegSeries.vpl, 'kegs', 'month', escapeHtml(rsm) + ' — Keg VPL (monthly)', 'units/listing/wk', '', 2,
     { ly: kegSeries.vplLy, ly2: kegSeries.vplLy2, target: kegSeries.vplTarget }, null, yearLabels);
   veeRenderVolumeChart('tg_rsm_vpl_carton', cartonSeries.labels, cartonSeries.vpl, 'cartons', 'quarter', escapeHtml(rsm) + ' — Carton VPL', 'units/listing/wk', '', 2,
     { ly: cartonSeries.vplLy, ly2: cartonSeries.vplLy2, target: cartonSeries.vplTarget }, null, yearLabels);
