@@ -62,7 +62,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, customerDeliveryFeeOverrides, rsmTargets, rsmTargetProtected, activations, trucks, orders, deliveryRuns, manualOutletsRaw, customerDeliveryDetails, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlDismissals, postcodeZoneOverrides, customerRsmOverrides, groupLastUpdated] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, customerDeliveryFeeOverrides, rsmTargets, rsmTargetProtected, activations, callNotes, trucks, orders, deliveryRuns, manualOutletsRaw, customerDeliveryDetails, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlDismissals, postcodeZoneOverrides, customerRsmOverrides, groupLastUpdated, journeyPlans, jpRsmSettings, jpCadenceOverrides] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -79,6 +79,7 @@ async function readAll(s) {
     s.get('rsmTargets', { type: 'json' }),
     s.get('rsmTargetProtected', { type: 'json' }),
     s.get('activations', { type: 'json' }),
+    s.get('callNotes', { type: 'json' }),
     s.get('trucks', { type: 'json' }),
     s.get('orders', { type: 'json' }),
     s.get('deliveryRuns', { type: 'json' }),
@@ -96,6 +97,9 @@ async function readAll(s) {
     s.get('postcodeZoneOverrides', { type: 'json' }),
     s.get('customerRsmOverrides', { type: 'json' }),
     s.get('groupLastUpdated', { type: 'json' }),
+    s.get('journeyPlans', { type: 'json' }),
+    s.get('jpRsmSettings', { type: 'json' }),
+    s.get('jpCadenceOverrides', { type: 'json' }), // Round 100 — editable per-tier visit cadence, see saveJpCadence action below
   ]);
   // vipContacts is seeded exactly once — the first time anyone loads the app after this feature
   // ships, the blob won't exist yet (null, not just empty), so we seed it from VIP_CONTACTS_SEED
@@ -212,6 +216,7 @@ async function readAll(s) {
     rsmTargets: rsmTargets || {},
     rsmTargetProtected: rsmTargetProtected || {},
     activations: activations || [],
+    callNotes: callNotes || [],
     trucks: trucks || [],
     orders: orders || [],
     deliveryRuns: deliveryRuns || [],
@@ -232,6 +237,9 @@ async function readAll(s) {
     groupLastUpdated: groupLastUpdated || {},
     familyGroupsData: familyGroupsData || [],
     familyGroupDeals: familyGroupDeals || {},
+    journeyPlans: journeyPlans || {},
+    jpRsmSettings: jpRsmSettings || {},
+    jpCadenceOverrides: jpCadenceOverrides || {},
   };
 }
 
@@ -623,6 +631,56 @@ export default async (req) => {
       return json({ ok: true, activations: current });
     }
 
+    if (action === 'saveCallNote') {
+      // Round 94 — visit logging, mirrors the saveActivation shape above.
+      const { id, outletId, rsm, visitDate, outcome, notes, competitorNote, nextAction, nextActionDue, geo, updatedBy, photos, pricing } = payload;
+      const current = (await s.get('callNotes', { type: 'json' })) || [];
+      const newId = id || ('cn_' + Date.now() + '_' + Math.round(Math.random() * 10000));
+      const idx = current.findIndex((c) => c.id === newId);
+      const rec = {
+        id: newId, outletId, rsm, visitDate, outcome,
+        notes: notes || '', competitorNote: competitorNote || '', nextAction: nextAction || '', nextActionDue: nextActionDue || null,
+        geo: geo || null,
+        photos: Array.isArray(photos) ? photos : [],
+        pricing: pricing || {},
+        updatedBy, updatedAt: now,
+      };
+      if (idx >= 0) current[idx] = rec; else current.push(rec);
+      await s.setJSON('callNotes', current);
+      return json({ ok: true, id: newId, callNotes: current });
+    }
+
+    if (action === 'deleteCallNote') {
+      const { id } = payload;
+      const current = (await s.get('callNotes', { type: 'json' })) || [];
+      const next = current.filter((c) => c.id !== id);
+      await s.setJSON('callNotes', next);
+      return json({ ok: true, callNotes: next });
+    }
+
+    if (action === 'addCallNotePhoto') {
+      const { id, photo } = payload;
+      const current = (await s.get('callNotes', { type: 'json' })) || [];
+      const idx = current.findIndex((c) => c.id === id);
+      if (idx >= 0) {
+        if (!Array.isArray(current[idx].photos)) current[idx].photos = [];
+        current[idx].photos.push(photo);
+        await s.setJSON('callNotes', current);
+      }
+      return json({ ok: true, callNotes: current });
+    }
+
+    if (action === 'removeCallNotePhoto') {
+      const { id, photoIdx } = payload;
+      const current = (await s.get('callNotes', { type: 'json' })) || [];
+      const idx = current.findIndex((c) => c.id === id);
+      if (idx >= 0 && Array.isArray(current[idx].photos)) {
+        current[idx].photos.splice(photoIdx, 1);
+        await s.setJSON('callNotes', current);
+      }
+      return json({ ok: true, callNotes: current });
+    }
+
     if (action === 'saveWeightKg') {
       // Weight per sale unit (per keg, or per carton) — used by the Orders/Delivery tools to
       // work out a load's total weight and check it against a truck's capacity.
@@ -852,7 +910,7 @@ export default async (req) => {
       }
 
       const arrayResults = {};
-      for (const blobKey of ['tempDeals', 'activations', 'orders']) {
+      for (const blobKey of ['tempDeals', 'activations', 'orders', 'callNotes']) {
         const cur = (await s.get(blobKey, { type: 'json' })) || [];
         let acChanged = false;
         cur.forEach((rec) => { if (rec.outletId === oldId) { rec.outletId = newId; acChanged = true; } });
@@ -878,6 +936,7 @@ export default async (req) => {
         tempDeals: arrayResults.tempDeals,
         activations: arrayResults.activations,
         orders: arrayResults.orders,
+        callNotes: arrayResults.callNotes,
       });
     }
 
@@ -984,6 +1043,51 @@ export default async (req) => {
       else delete current[key];
       await s.setJSON('groupLastUpdated', current);
       return json({ ok: true, groupLastUpdated: current });
+    }
+
+    if (action === 'saveJourneyPlan') {
+      // Round 97 — Journey Planner. The client already computed the whole updated plan for one
+      // rsm+quarter (wkAssign/wAssign/tierSnapshot maps — Round 98 replaced the old 3-month
+      // qAssign board with a 13-week wkAssign board and added tierSnapshot, this quarter's frozen
+      // Mate-tier per customer; Round 99 added selectedHitlist, the explicit opt-in set of hitlist
+      // prospects added to this quarter's plan; Round 100 changed wkAssign from one weekIdx per
+      // outlet to an array (a customer can now be scheduled more than once a quarter), changed
+      // wAssign from one {weekIdx,day} per outlet to a weekIdx->day map to match, and added
+      // weekNotes, a free-text note per week) locally before calling this, since a click-to-assign
+      // board can be clicked many times in a row and re-sending the full journeyPlans collection (or
+      // reloading the page, like saveRsmZoneOverride does) on every click would be unusable.
+      // Read-modify-write just this one rsm+quarterKey slot of the shared journeyPlans blob.
+      const { rsm, quarterKey, plan } = payload;
+      const current = (await s.get('journeyPlans', { type: 'json' })) || {};
+      if (!current[rsm]) current[rsm] = {};
+      current[rsm][quarterKey] = plan || { wkAssign: {}, wAssign: {}, tierSnapshot: {}, selectedHitlist: {}, weekNotes: {} };
+      await s.setJSON('journeyPlans', current);
+      return json({ ok: true, journeyPlans: current });
+    }
+
+    if (action === 'saveJpRsmSettings') {
+      // Round 98 — per-RSM weekly call target + hitlist quota ("based upon each RSM's growth
+      // strategy"). Server-backed (unlike the static build's plain localStorage) so a manager and
+      // an RSM on different devices see the same numbers. Read-modify-write just this one rsm's
+      // slot of the shared jpRsmSettings blob, same pattern as saveJourneyPlan above.
+      const { rsm, settings } = payload;
+      const current = (await s.get('jpRsmSettings', { type: 'json' })) || {};
+      current[rsm] = settings || { weeklyTarget: 35, hitlistQuota: 5 };
+      await s.setJSON('jpRsmSettings', current);
+      return json({ ok: true, jpRsmSettings: current });
+    }
+
+    if (action === 'saveJpCadence') {
+      // Round 100 — editable "cadence key": how often each Mate tier should be visited
+      // ({tierKey: freqDays}), overriding JP_MATE_TIERS' built-in defaults. Like jpRsmSettings above,
+      // this is a shared business decision (the whole team's visit cadence), not personal UI state,
+      // so it's synced through the server. Unlike the read-modify-write pattern above, the client
+      // always holds the FULL jpCadenceOverrides object (it's a small, single flat map — at most 4
+      // keys), so this simply overwrites the whole blob each time rather than merging one key.
+      const { cadence } = payload;
+      const next = cadence || {};
+      await s.setJSON('jpCadenceOverrides', next);
+      return json({ ok: true, jpCadenceOverrides: next });
     }
 
     if (action === 'saveNaTarget') {
