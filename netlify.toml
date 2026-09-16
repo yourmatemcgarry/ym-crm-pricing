@@ -1,3 +1,10 @@
 [build]
   publish = "."
   functions = "netlify/functions"
+
+# Round 104: automated weekly data refresh. Checks the FTP mailbox daily at 5am AEST (7pm UTC the
+# day before, since Netlify cron runs in UTC) and only actually publishes when a genuinely newer
+# export has landed - most days this is a fast no-op. Change the cron string below to adjust the
+# check time; see https://docs.netlify.com/functions/scheduled-functions/ for syntax.
+[functions."scheduled-data-refresh"]
+  schedule = "0 19 * * *"

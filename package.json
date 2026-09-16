@@ -4,6 +4,7 @@
   "private": true,
   "description": "Your Mates Brewing customer pricing CRM — static site + Netlify Function backed by Netlify Blobs.",
   "dependencies": {
-    "@netlify/blobs": "^8.0.0"
+    "@netlify/blobs": "^8.0.0",
+    "basic-ftp": "^5.0.5"
   }
 }
