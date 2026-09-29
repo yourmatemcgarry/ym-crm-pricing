@@ -1,6 +1,7 @@
 [build]
   publish = "."
   functions = "netlify/functions"
+  edge_functions = "netlify/edge-functions"
 
 # Round 104: automated weekly data refresh. Checks the FTP mailbox daily at 5am AEST (7pm UTC the
 # day before, since Netlify cron runs in UTC) and only actually publishes when a genuinely newer
@@ -8,3 +9,12 @@
 # check time; see https://docs.netlify.com/functions/scheduled-functions/ for syntax.
 [functions."scheduled-data-refresh"]
   schedule = "0 19 * * *"
+
+# Round 106: shared team-password login. This Edge Function runs in front of every request (the
+# site itself and every Netlify Function) and only lets it through if the visitor has a valid
+# signed session cookie - see netlify/edge-functions/auth-gate.mjs for the full explanation and
+# the two environment variables (SITE_PASSWORD, SESSION_SECRET) it needs set in Netlify site
+# settings before login will work.
+[[edge_functions]]
+  function = "auth-gate"
+  path = "/*"

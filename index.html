@@ -508,6 +508,8 @@
   <div class="rowflex no-print">
     <span class="sub" id="whoAmI" style="margin-right:6px; cursor:pointer; text-decoration:underline dotted;" onclick="changeUserName()" title="Click to change your name"></span>
     <button class="btn secondary" onclick="exportAllCSV()">Export pricing CSV</button>
+    <button class="btn secondary" onclick="exportWholesalerDealsCSV()">Export wholesaler deals CSV</button>
+    <a class="btn secondary" href="/.netlify/functions/logout" style="text-decoration:none; margin-left:6px;" title="Sign out of the Sales Hub">Sign out</a>
   </div>
 </header>
 
@@ -4842,6 +4844,28 @@ function exportAllCSV() {
     lines.push(row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','));
   });
   downloadFile('YMT_Pricing_All_Customers.csv', lines.join('\n'), 'text/csv');
+}
+function exportWholesalerDealsCSV() {
+  if (!dataReady) { toast('Still loading data — try again in a moment.'); return; }
+  const header = ['Customer','Customer ID','SKU Group','Format','Sale Unit','List Price','Wholesaler Deal','Effective Wholesaler Price','Wholesaler','Updated By','Updated At'];
+  const rows = [];
+  Object.keys(wholesalerDeals).forEach(key => {
+    const rec = wholesalerDeals[key];
+    if (!rec || !rec.dealX) return;
+    const [outletId, groupId] = key.split('|');
+    const o = outlets[outletId]; const g = groups[groupId];
+    if (!o || !g) return;
+    const listPrice = listPriceFor(groupId);
+    const eff = effPrice(listPrice, rec.dealX);
+    rows.push({
+      name: o.name,
+      row: [o.name, outletId, g.label, g.formatLabel||g.format, saleUnitLabelFor(groupId), listPrice??'', dealLabel(rec.dealX), listPrice!=null?eff.toFixed(2):'', rec.wholesaler||'', rec.updatedBy||'', rec.updatedAt||'']
+    });
+  });
+  rows.sort((a,b) => a.name.localeCompare(b.name) || String(a.row[2]).localeCompare(String(b.row[2])));
+  const lines = [header.join(',')];
+  rows.forEach(r => lines.push(r.row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')));
+  downloadFile('YMT_Wholesaler_Deals_All_Customers.csv', lines.join('\n'), 'text/csv');
 }
 
 // ===================== MARGIN CALCULATORS (Venues / On Premise + Off Premise / Bottleshops) =====================
