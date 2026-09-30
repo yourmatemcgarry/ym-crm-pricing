@@ -202,6 +202,40 @@ async function readAll(s) {
     if (patchedCount > 0) await s.setJSON('manualOutlets', manualOutlets);
     await s.setJSON('slgMajorGroupBackfillAppliedV1', { applied: true, appliedAt: new Date().toISOString(), count: patchedCount });
   }
+  // One-time cleanup (Round 110): 23 of the legacy slg:XXXXXXXX manualOutlets records above (real
+  // Star Liquor/Bob's Bulk Booze/Sense Of Taste stores from Round 49's original import that were
+  // never confidently reassigned to a real outlet id by Round 50) have now been address-matched
+  // against the current SLG/IBA banner files and PROMOTED into permanent crm_data.outlets records
+  // (new_slg_*/new_iba_* ids -- see crm_data33.json / Banner_Lists_Review_Round110.xlsx). Leaving
+  // the old slg: keys in manualOutlets after that promotion would create a phantom duplicate of
+  // each store forever (this exact bug is why Christen's Banner Bottleshop Analysis page was
+  // showing 164 Star Liquor stores against Star Liquor's own count of ~114) -- so this migration
+  // deletes just those 23 specific superseded keys, once, and never touches any other manualOutlets
+  // entry (including the other ~30 legacy slg: records not matched this round, or any lmg:/new_
+  // record, which are all out of scope for this fix).
+  const SLG_R110_STALE_KEYS = ['slg:73329381','slg:73454055','slg:73451942','slg:73454047','slg:73338526','slg:73365612','slg:73349242','slg:73362444','slg:73348709','slg:73364187','slg:73372677','slg:73399768','slg:None','slg:73338592','slg:73439437','slg:73452401','slg:73437126','slg:73404165','slg:73373704','slg:73343911','slg:73343929','slg:73372724','slg:73452485'];
+  const slgR110CleanupApplied = await s.get('slgR110CleanupAppliedV1', { type: 'json' });
+  if (!slgR110CleanupApplied || !slgR110CleanupApplied.applied) {
+    let deletedCount = 0;
+    SLG_R110_STALE_KEYS.forEach((k) => {
+      if (manualOutlets[k]) { delete manualOutlets[k]; deletedCount++; }
+    });
+    if (deletedCount > 0) await s.setJSON('manualOutlets', manualOutlets);
+    await s.setJSON('slgR110CleanupAppliedV1', { applied: true, appliedAt: new Date().toISOString(), count: deletedCount });
+  }
+  // One-time cleanup (Round 111): 2 more legacy slg: keys were promoted this round while resolving
+  // Christen's Ambiguous-tab review (Bobs Maroochydore, Bobs Mt Pleasant) -- same pattern as the
+  // Round 110 cleanup above, just a separate flag/list since it shipped one round later.
+  const SLG_R111_STALE_KEYS = ['slg:73454746','slg:73437079'];
+  const slgR111CleanupApplied = await s.get('slgR111CleanupAppliedV1', { type: 'json' });
+  if (!slgR111CleanupApplied || !slgR111CleanupApplied.applied) {
+    let deletedCount2 = 0;
+    SLG_R111_STALE_KEYS.forEach((k) => {
+      if (manualOutlets[k]) { delete manualOutlets[k]; deletedCount2++; }
+    });
+    if (deletedCount2 > 0) await s.setJSON('manualOutlets', manualOutlets);
+    await s.setJSON('slgR111CleanupAppliedV1', { applied: true, appliedAt: new Date().toISOString(), count: deletedCount2 });
+  }
   return {
     groupPrices: groupPrices || {},
     customerDeals: customerDeals || {},
