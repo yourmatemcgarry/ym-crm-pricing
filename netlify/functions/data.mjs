@@ -62,7 +62,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, customerDeliveryFeeOverrides, rsmTargets, rsmTargetProtected, activations, callNotes, trucks, orders, deliveryRuns, manualOutletsRaw, customerDeliveryDetails, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlDismissals, postcodeZoneOverrides, customerRsmOverrides, groupLastUpdated, journeyPlans, jpRsmSettings, jpCadenceOverrides] = await Promise.all([
+  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, customerDeliveryFeeOverrides, rsmTargets, rsmTargetProtected, activations, callNotes, trucks, orders, deliveryRuns, manualOutletsRaw, customerDeliveryDetails, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlDismissals, postcodeZoneOverrides, customerRsmOverrides, groupLastUpdated, journeyPlans, jpRsmSettings, jpCadenceOverrides, customerSegmentOverrides, postcodeEditLog] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -100,6 +100,8 @@ async function readAll(s) {
     s.get('journeyPlans', { type: 'json' }),
     s.get('jpRsmSettings', { type: 'json' }),
     s.get('jpCadenceOverrides', { type: 'json' }), // Round 100 — editable per-tier visit cadence, see saveJpCadence action below
+    s.get('customerSegmentOverrides', { type: 'json' }), // Round 114 — Hub-managed segment labels
+    s.get('postcodeEditLog', { type: 'json' }), // Round 115 — who changed which postcode/zone/RSM, and when
   ]);
   // vipContacts is seeded exactly once — the first time anyone loads the app after this feature
   // ships, the blob won't exist yet (null, not just empty), so we seed it from VIP_CONTACTS_SEED
@@ -274,7 +276,17 @@ async function readAll(s) {
     journeyPlans: journeyPlans || {},
     jpRsmSettings: jpRsmSettings || {},
     jpCadenceOverrides: jpCadenceOverrides || {},
+    customerSegmentOverrides: customerSegmentOverrides || {},
+    postcodeEditLog: Array.isArray(postcodeEditLog) ? postcodeEditLog : [],
   };
+}
+
+// Round 115: append entries to the postcode/zone/RSM change history (newest last, capped).
+async function appendEditLog(s, entries, by) {
+  const cur = (await s.get('postcodeEditLog', { type: 'json' })) || [];
+  const ts = new Date().toISOString();
+  entries.forEach(e => cur.push({ ts, by: by || 'Unknown', kind: e.kind, key: String(e.key || ''), from: String(e.from || ''), to: String(e.to || '') }));
+  await s.setJSON('postcodeEditLog', cur.slice(-3000));
 }
 
 export default async (req) => {
@@ -857,6 +869,24 @@ export default async (req) => {
       return json({ ok: true, manualOutlets: current });
     }
 
+    if (action === 'saveCustomerSegments') {
+      // Round 114: Hub-managed segment labels. items = [{oid, key, val}] — val '' clears that field
+      // (falls back to Ontap's value). Whole-batch read-modify-write so a bulk "apply suggestions"
+      // is one call, not hundreds racing each other.
+      const { items, updatedBy } = payload;
+      const FIELDS = ['custType', 'ownerGroup', 'segVenueType', 'volumeStream', 'bannerSource'];
+      const current = (await s.get('customerSegmentOverrides', { type: 'json' })) || {};
+      (items || []).forEach(({ oid, key, val }) => {
+        if (!oid || !FIELDS.includes(key)) return;
+        const rec = { ...(current[oid] || {}) };
+        const clean = String(val || '').trim();
+        if (clean) rec[key] = clean; else delete rec[key];
+        if (FIELDS.some((f) => rec[f])) { rec.updatedBy = updatedBy; rec.updatedAt = now; current[oid] = rec; } else delete current[oid];
+      });
+      await s.setJSON('customerSegmentOverrides', current);
+      return json({ ok: true, customerSegmentOverrides: current });
+    }
+
     if (action === 'assignRealOutletId') {
       // Renames a manualOutlets record's key (and its internal .id) from oldId to newId — the same
       // mechanical rename the OTD batch reassignment performs in readAll() above, just single-record
@@ -872,7 +902,14 @@ export default async (req) => {
       delete current[oldId];
       current[newId] = rec;
       await s.setJSON('manualOutlets', current);
-      return json({ ok: true, manualOutlets: current });
+      // Round 114: keep per-customer Hub overrides (segment labels, RSM pin) with the customer.
+      const moved = {};
+      for (const blobKey of ['customerSegmentOverrides', 'customerRsmOverrides']) {
+        const cur = (await s.get(blobKey, { type: 'json' })) || {};
+        if (cur[oldId] !== undefined) { if (cur[newId] === undefined) cur[newId] = cur[oldId]; delete cur[oldId]; await s.setJSON(blobKey, cur); }
+        moved[blobKey] = cur;
+      }
+      return json({ ok: true, manualOutlets: current, customerSegmentOverrides: moved.customerSegmentOverrides, customerRsmOverrides: moved.customerRsmOverrides });
     }
 
     if (action === 'mergeOutletRecords') {
@@ -900,7 +937,7 @@ export default async (req) => {
       } else {
         const targetRec = { ...(manualOutletsCur[newId] || { id: newId, name: source.name }) };
         let profileChanged = !manualOutletsCur[newId];
-        ['address', 'suburb', 'state', 'postcode', 'phone', 'email', 'rsm', 'custType', 'zone', 'familyGroup'].forEach((k) => {
+        ['address', 'suburb', 'state', 'postcode', 'phone', 'email', 'rsm', 'custType', 'zone', 'familyGroup', 'ownerGroup', 'segVenueType', 'volumeStream'].forEach((k) => {
           if (!targetRec[k] && source[k]) { targetRec[k] = source[k]; profileChanged = true; }
         });
         if (profileChanged) {
@@ -914,6 +951,23 @@ export default async (req) => {
       }
       delete dd[oldId];
       await s.setJSON('customerDeliveryDetails', dd);
+
+      // Round 114: segment labels typed at New Customer (or set on the Segments tab) follow the customer
+      // field-by-field; the target's own Hub-set labels always win.
+      const SEG_FIELDS_SRV = ['custType', 'ownerGroup', 'segVenueType', 'volumeStream'];
+      const segCur = (await s.get('customerSegmentOverrides', { type: 'json' })) || {};
+      const segTarget = { ...(segCur[newId] || {}) };
+      let segChanged = false;
+      SEG_FIELDS_SRV.forEach((f) => {
+        if (segTarget[f]) return;
+        const v = (segCur[oldId] && segCur[oldId][f]) || ((source[f] && source[f] !== 'Unallocated') ? source[f] : '');
+        if (v) { segTarget[f] = v; segChanged = true; }
+      });
+      if (segChanged) { segTarget.updatedBy = updatedBy; segTarget.updatedAt = now; segCur[newId] = segTarget; }
+      if (segCur[oldId] !== undefined) delete segCur[oldId];
+      await s.setJSON('customerSegmentOverrides', segCur);
+      const rsmPins = (await s.get('customerRsmOverrides', { type: 'json' })) || {};
+      if (rsmPins[oldId] !== undefined) { if (rsmPins[newId] === undefined) rsmPins[newId] = rsmPins[oldId]; delete rsmPins[oldId]; await s.setJSON('customerRsmOverrides', rsmPins); }
 
       const simpleBlobKeys = ['customerFlags', 'customerGlassPricing', 'customerPickFees', 'customerOffPremisePricing', 'customerCartonDeliveryFees', 'customerDeliveryFeeOverrides', 'hlDismissals'];
       const simpleResults = {};
@@ -965,6 +1019,8 @@ export default async (req) => {
         customerOffPremisePricing: simpleResults.customerOffPremisePricing,
         customerCartonDeliveryFees: simpleResults.customerCartonDeliveryFees,
         hlDismissals: simpleResults.hlDismissals,
+        customerSegmentOverrides: segCur,
+        customerRsmOverrides: rsmPins,
         customerDeals: compositeResults.customerDeals,
         wholesalerDeals: compositeResults.wholesalerDeals,
         tempDeals: arrayResults.tempDeals,
@@ -1035,6 +1091,7 @@ export default async (req) => {
       const clean = (rsm || '').trim();
       if (clean) current[zone] = clean; else delete current[zone];
       await s.setJSON('rsmZoneOverrides', current);
+      await appendEditLog(s, [{ kind: 'zoneRsm', key: zone, from: payload.from, to: payload.to }], payload.updatedBy);
       return json({ ok: true, rsmZoneOverrides: current });
     }
 
@@ -1049,6 +1106,25 @@ export default async (req) => {
       const clean = (zone || '').trim();
       if (clean) current[postcode] = clean; else delete current[postcode];
       await s.setJSON('postcodeZoneOverrides', current);
+      await appendEditLog(s, [{ kind: 'postcode', key: postcode, from: payload.from, to: payload.to }], payload.updatedBy);
+      return json({ ok: true, postcodeZoneOverrides: current });
+    }
+
+    if (action === 'savePostcodeZones') {
+      // Round 115: batch postcode -> zone edits (move several postcodes at once). items: [{postcode, zone, from, to, key}];
+      // a blank zone drops the edit (postcode reverts to its imported zone). Keys are stored without leading zeros.
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      const norm = p => String(p == null ? '' : p).trim().replace(/^0+(?=\d)/, '');
+      const current = (await s.get('postcodeZoneOverrides', { type: 'json' })) || {};
+      items.forEach(it => {
+        const n = norm(it.postcode);
+        if (!n) return;
+        Object.keys(current).forEach(k => { if (norm(k) === n) delete current[k]; });
+        const z = String(it.zone || '').trim();
+        if (z) current[n] = z;
+      });
+      await s.setJSON('postcodeZoneOverrides', current);
+      await appendEditLog(s, items.filter(it => norm(it.postcode)).map(it => ({ kind: 'postcode', key: it.key || it.postcode, from: it.from, to: it.to })), payload.updatedBy);
       return json({ ok: true, postcodeZoneOverrides: current });
     }
 
@@ -1062,6 +1138,7 @@ export default async (req) => {
       const clean = (rsm || '').trim();
       if (clean) current[outletId] = clean; else delete current[outletId];
       await s.setJSON('customerRsmOverrides', current);
+      await appendEditLog(s, [{ kind: 'customerRsm', key: payload.name || outletId, from: payload.from, to: payload.to }], payload.updatedBy);
       return json({ ok: true, customerRsmOverrides: current });
     }
 

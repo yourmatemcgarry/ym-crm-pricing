@@ -249,6 +249,8 @@
         license: row['OTDOutletLicenseNo'],
         majorGroup: row['OTDLastMajorGroup'],
         banner: row['OTDLastBanner'],
+        ontapMajorGroup: row['OTDLastMajorGroup'], // Round 114: Ontap's own banner values, kept separately from the Hub-reviewed banner/majorGroup
+        ontapBanner: row['OTDLastBanner'],
         address: row['OTDOutletAddress'],
         suburb: row['OTDOutletSuburb'],
         state: row['OTDOutletState'],
@@ -902,18 +904,40 @@
     const fresh = buildCrmData(outletCsvText, productCsvText, salesCsvText, previousCrmData);
     const prev = previousCrmData || {};
     const outlets = mergeContactOverlay(fresh.outlets, prev.outlets);
-    return {
+    const outletSummary = fresh.outletSummary;
+    // Round 114: carry forward what the Hub owns that a plain CSV rebuild would silently drop.
+    //  (1) customers the Hub already knows (reviewed/promoted records, e.g. new_slg_*/new_iba_*, or customers
+    //      Ontap has stopped listing but who still have sales history) — kept, never deleted by a refresh;
+    //  (2) the Hub-reviewed banner / banner group (Rounds 110-112 address re-match, incl. banners the review
+    //      deliberately cleared) — the previous value wins for any customer already in the Hub;
+    //  (3) every other top-level key the previous data carried (postcodeZoneSeed, zoneDefsSeed, the LMG/SLG/LLG
+    //      seed batches...) — these are not derived from the 3 CSVs at all, and dropping them silently
+    //      disabled the postcode -> zone -> RSM logic after the Round 105 refresh.
+    const prevOutlets = prev.outlets || {};
+    for (const oid in prevOutlets) {
+      const p = prevOutlets[oid];
+      if (!Object.prototype.hasOwnProperty.call(outlets, oid)) {
+        outlets[oid] = p;
+        if (prev.outletSummary && prev.outletSummary[oid] && !outletSummary[oid]) outletSummary[oid] = prev.outletSummary[oid];
+      } else if (p) {
+        const f = outlets[oid];
+        if (f.banner !== p.banner || f.majorGroup !== p.majorGroup) { f.banner = p.banner; f.majorGroup = p.majorGroup; }
+      }
+    }
+    const result = {
       meta: fresh.meta,
       outlets,
       products: fresh.products,
       groups: fresh.groups,
       groupOrder: fresh.groupOrder,
       groupSummary: fresh.groupSummary,
-      outletSummary: fresh.outletSummary,
+      outletSummary,
       dailyVolume: fresh.dailyVolume,
       familyGroups: prev.familyGroups,
       vipContactsSeed: prev.vipContactsSeed,
     };
+    Object.keys(prev).forEach((k) => { if (!(k in result)) result[k] = prev[k]; });
+    return result;
   }
 
   const DataRefresh = {
