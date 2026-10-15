@@ -874,7 +874,7 @@ export default async (req) => {
       // (falls back to Ontap's value). Whole-batch read-modify-write so a bulk "apply suggestions"
       // is one call, not hundreds racing each other.
       const { items, updatedBy } = payload;
-      const FIELDS = ['custType', 'ownerGroup', 'segVenueType', 'volumeStream', 'bannerSource'];
+      const FIELDS = ['custType', 'ownerGroup', 'segVenueType', 'volumeStream', 'bannerSource', 'reviewed'];
       const current = (await s.get('customerSegmentOverrides', { type: 'json' })) || {};
       (items || []).forEach(({ oid, key, val }) => {
         if (!oid || !FIELDS.includes(key)) return;

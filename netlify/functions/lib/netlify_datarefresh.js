@@ -273,6 +273,25 @@
     return { outlets, allOutletsCount, salesTeamCount, volumeStreamCounts, ownerGroupCounts };
   }
 
+  // ---------- HUB-OWNED SEGMENT LABELS (Round 119) ----------
+  const HUB_SEGMENT_FIELDS = ['custType', 'ownerGroup', 'segVenueType', 'volumeStream'];
+  const HUB_SEGMENT_DEFAULTS = { custType: '', ownerGroup: 'Unallocated', segVenueType: 'Unallocated', volumeStream: 'Sales Team' };
+  function segHasValue(v, f) { if (v === undefined || v === null || String(v).trim() === '') return false; return f === 'volumeStream' ? true : String(v).trim() !== 'Unallocated'; } // volume stream 'Unallocated' is a real Ontap value (excluded from Sales Team)
+  // For each outlet: a real value already held by the Hub (previous dataset) wins; otherwise a real value in the
+  // Ontap file is used (while Ontap still sends them); otherwise the default. 'Unallocated'/blank count as "no value".
+  function applyHubSegments(outlets, prevOutlets) {
+    const prev = prevOutlets || {};
+    for (const oid in outlets) {
+      const o = outlets[oid];
+      const p = Object.prototype.hasOwnProperty.call(prev, oid) ? prev[oid] : null;
+      for (const f of HUB_SEGMENT_FIELDS) {
+        if (p && segHasValue(p[f], f)) o[f] = p[f];
+        else if (segHasValue(o[f], f)) { /* keep Ontap's value */ }
+        else o[f] = (p && p[f]) ? p[f] : HUB_SEGMENT_DEFAULTS[f];
+      }
+    }
+  }
+
   // ---------- PRODUCTS + GROUPS ----------
   const CORE_ORDER = ['Your Mates Dave', 'Your Mates Donnie', 'Your Mates Lager', 'Your Mates Larry Jr', 'Your Mates Larry', 'Your Mates Sally', 'Your Mates Tilly'];
 
@@ -803,7 +822,21 @@
     const productRows = parseCsv(productCsvText);
     const salesRows = parseCsv(salesCsvText);
 
-    const { outlets, allOutletsCount, salesTeamCount, volumeStreamCounts, ownerGroupCounts } = buildOutlets(outletRows);
+    const built = buildOutlets(outletRows);
+    const { outlets, allOutletsCount, volumeStreamCounts, ownerGroupCounts } = built;
+    // Round 119: the Hub owns the segment labels (customer type, ownership group, premise sub-type, volume stream).
+    // Ontap is about to stop sending them, so a refresh must never blank them out: customers the Hub already knows keep
+    // their Hub value; brand-new customers get a default and are queued on the Segments tab to be labelled.
+    applyHubSegments(outlets, previousCrmData && previousCrmData.outlets);
+    for (const k of Object.keys(volumeStreamCounts)) delete volumeStreamCounts[k];
+    for (const k of Object.keys(ownerGroupCounts)) delete ownerGroupCounts[k];
+    let salesTeamCount = 0;
+    for (const oid in outlets) {
+      const o = outlets[oid];
+      volumeStreamCounts[o.volumeStream] = (volumeStreamCounts[o.volumeStream] || 0) + 1;
+      ownerGroupCounts[o.ownerGroup] = (ownerGroupCounts[o.ownerGroup] || 0) + 1;
+      if (o.volumeStream === 'Sales Team') salesTeamCount++;
+    }
     const { products, groups, groupOrder, productToGroup } = buildProductsAndGroups(productRows);
     const prevData = buildPrevDataForMerge(previousCrmData);
     const sales = buildSalesAggregates(salesRows, outlets, products, productToGroup, prevData);
@@ -914,6 +947,16 @@
     //      seed batches...) — these are not derived from the 3 CSVs at all, and dropping them silently
     //      disabled the postcode -> zone -> RSM logic after the Round 105 refresh.
     const prevOutlets = prev.outlets || {};
+    // Round 117: stamp customers that are NEW in Ontap's outlet file (not in the previous dataset) so the Segments tab can
+    // queue them for labelling; the stamp is carried forward on later refreshes. Skipped when there is no previous dataset.
+    const _firstSeen = new Date().toISOString().slice(0, 10);
+    if (Object.keys(prevOutlets).length) {
+      for (const oid in fresh.outlets) {
+        const f = outlets[oid], p0 = prevOutlets[oid];
+        if (!p0) f.segFirstSeen = _firstSeen;
+        else if (p0.segFirstSeen) f.segFirstSeen = p0.segFirstSeen;
+      }
+    }
     for (const oid in prevOutlets) {
       const p = prevOutlets[oid];
       if (!Object.prototype.hasOwnProperty.call(outlets, oid)) {
