@@ -138,8 +138,19 @@ export default async (req) => {
     if (!getRes.ok) {
       return json({ error: `Could not read ${GITHUB_FILE_PATH} from GitHub (status ${getRes.status}): ${getRes.body && getRes.body.message ? getRes.body.message : 'unknown error'}` }, 502);
     }
-    const { sha: currentSha, content: currentContentB64 } = getRes.body;
-    const currentHtml = Buffer.from(currentContentB64, 'base64').toString('utf8');
+    const currentSha = getRes.body.sha;
+    // The Contents API only returns the file body for files up to 1 MB; index.html is ~8 MB, so
+    // `content` comes back empty. Read it through the Git Blobs API instead (supports up to 100 MB).
+    let currentHtml = '';
+    if (getRes.body.content && getRes.body.encoding === 'base64') {
+      currentHtml = Buffer.from(getRes.body.content, 'base64').toString('utf8');
+    } else {
+      const blobRes = await githubRequest(`/repos/${GITHUB_REPO}/git/blobs/${currentSha}`, GITHUB_TOKEN);
+      if (!blobRes.ok) {
+        return json({ error: `Could not read ${GITHUB_FILE_PATH} contents from GitHub (blob status ${blobRes.status}): ${blobRes.body && blobRes.body.message ? blobRes.body.message : 'unknown error'}` }, 502);
+      }
+      currentHtml = Buffer.from(blobRes.body.content || '', blobRes.body.encoding || 'base64').toString('utf8');
+    }
 
     // ---- 2. Swap the CRM_DATA blob between the sentinel markers ----
     // Deliberately done via indexOf + string slicing/concatenation, NOT String.replace()
