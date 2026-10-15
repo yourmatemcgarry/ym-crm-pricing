@@ -277,17 +277,19 @@
   const HUB_SEGMENT_FIELDS = ['custType', 'ownerGroup', 'segVenueType', 'volumeStream'];
   const HUB_SEGMENT_DEFAULTS = { custType: '', ownerGroup: 'Unallocated', segVenueType: 'Unallocated', volumeStream: 'Sales Team' };
   function segHasValue(v, f) { if (v === undefined || v === null || String(v).trim() === '') return false; return f === 'volumeStream' ? true : String(v).trim() !== 'Unallocated'; } // volume stream 'Unallocated' is a real Ontap value (excluded from Sales Team)
-  // For each outlet: a real value already held by the Hub (previous dataset) wins; otherwise a real value in the
-  // Ontap file is used (while Ontap still sends them); otherwise the default. 'Unallocated'/blank count as "no value".
+  // Round 121: the Hub OWNS these four labels (hard-coded in the previous dataset). Ontap's own segment columns are ignored.
+  // Existing outlet -> keep the Hub's value. Brand-new outlet -> default (Sales Team, unlabelled) until someone labels it on the Segments page.
+  // Only when there is no previous dataset at all (very first build) is Ontap's value used, so nothing is blanked.
   function applyHubSegments(outlets, prevOutlets) {
     const prev = prevOutlets || {};
+    const havePrev = Object.keys(prev).length > 0;
     for (const oid in outlets) {
       const o = outlets[oid];
       const p = Object.prototype.hasOwnProperty.call(prev, oid) ? prev[oid] : null;
       for (const f of HUB_SEGMENT_FIELDS) {
-        if (p && segHasValue(p[f], f)) o[f] = p[f];
-        else if (segHasValue(o[f], f)) { /* keep Ontap's value */ }
-        else o[f] = (p && p[f]) ? p[f] : HUB_SEGMENT_DEFAULTS[f];
+        if (p && p[f] !== undefined && p[f] !== null && String(p[f]).trim() !== '') o[f] = p[f];
+        else if (!havePrev && segHasValue(o[f], f)) { /* first build only: keep Ontap's value */ }
+        else o[f] = HUB_SEGMENT_DEFAULTS[f];
       }
     }
   }

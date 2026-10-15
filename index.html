@@ -1380,21 +1380,18 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
   <!-- ================= SEGMENTS (Round 114) ================= -->
   <div class="tabpage" id="tab-segments">
     <div class="panel no-print">
-      <h2 style="margin:0;">Segments <span class="muted" id="seg_count" style="font-weight:400;"></span></h2>
-      <div class="hint" style="margin-top:6px;"><strong>Weekly job:</strong> after each data refresh, the customers that are new in Ontap's outlet file are listed under <em>New from Ontap — to label</em>. For each one either <strong>set its labels</strong> (Customer type, Ownership group, Premise sub-type, Volume stream — use the keyword suggestion or the Google link for the sub-type), or, if you already entered it in the Hub, <strong>merge it with that Hub entry</strong> (your labels, deals, contacts and pricing carry across). A customer drops off the list when its labels are complete or you press Done. Zone, RSM and Backyard/Country come automatically from the postcode (Postcode Database tab). A value you set overrides what Ontap sent. This tab only covers customers from Ontap's outlet file.</div>
-      <div class="cards" id="seg_summary" style="margin-top:10px;"></div>
+      <h2 style="margin:0;">Segments — Ontap outlets <span class="muted" id="seg_count" style="font-weight:400;"></span></h2>
+      <div class="hint" style="margin-top:6px;">Every customer in the Ontap outlet file, in one table. <strong>Zone, RSM and Backyard/Country</strong> come from the Postcode Database tab (change them there). The four labels — <strong>Customer type, Ownership group, Premise sub-type, Volume stream</strong> — are the Hub's own data: edit them here and they stick; data refreshes never overwrite them. Name, address, postcode, banner group and sales only change when Ontap data is refreshed. A brand-new Ontap customer starts as Sales Team with no other labels — use <em>Only outlets missing a label</em> to find them.</div>
       <div class="rowflex" style="margin-top:10px; gap:14px; flex-wrap:wrap; align-items:flex-end;">
-        <div class="fld" style="margin:0;"><label>Show</label><select id="seg_view"><option value="new">New from Ontap — to label</option><option value="needs">Older customers still unlabelled</option><option value="diff">Hub differs from Ontap</option><option value="banner">Banner group differs from Ontap</option><option value="overrides">Hub-set labels</option><option value="all">All Ontap outlet customers</option></select></div>
-        <div class="fld" style="margin:0;"><label>Stream</label><select id="seg_stream"><option value="all">All streams</option><option value="sales">Sales Team only</option></select></div>
+        <div class="fld" style="margin:0;"><label>Show</label><select id="seg_view"><option value="all">All Ontap outlets</option><option value="needs">Only outlets missing a label</option></select></div>
+        <div class="fld" style="margin:0;"><label>Volume stream</label><select id="seg_stream"><option value="all">All streams</option><option value="Sales Team">Sales Team</option><option value="National Accounts">National Accounts</option><option value="Online Distributor">Online Distributor</option><option value="Events">Events</option><option value="Taproom">Taproom</option></select></div>
         <div class="fld" style="margin:0;"><label>Rows</label><select id="seg_pageSize"><option value="all">All on one page</option><option value="100">100 per page</option><option value="40">40 per page</option></select></div>
         <div class="fld" style="margin:0;"><label>RSM</label><select id="seg_rsm"><option value="">All RSMs</option></select></div>
-        <div class="fld" style="margin:0;"><label>Search</label><input id="seg_search" placeholder="name, id, suburb, postcode" style="min-width:220px;"></div>
+        <div class="fld" style="margin:0;"><label>Search</label><input id="seg_search" placeholder="name, id, suburb, postcode, banner" style="min-width:220px;"></div>
       </div>
       <div class="rowflex" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
         <button class="btn small" onclick="segApplyAllSuggestions()">Apply name-keyword suggestions to blank sub-types shown</button>
-        <button class="btn secondary small" onclick="exportSegmentsCSV()">Export all segments (Ontap layout) CSV</button>
-        <span id="seg_bannerBtns" style="display:none;"><button class="btn small" onclick="segBannerBulk('ontap')">Use Ontap for all in this list</button> <button class="btn small secondary" onclick="segBannerBulk('')">Use Hub for all in this list</button></span>
-        <button class="btn secondary small" onclick="exportSegmentDiffsCSV()">Export Hub-vs-Ontap differences CSV</button>
+        <button class="btn secondary small" onclick="exportSegmentsCSV()">Export table CSV</button>
       </div>
     </div>
     <div class="panel">
@@ -1403,30 +1400,7 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
         <span class="muted" id="seg_pageInfo" style="font-size:12px;"></span>
         <button class="btn small secondary" id="seg_nextPage">▶</button>
       </div>
-      <div class="tablewrap"><table class="datatable"><thead id="seg_thead"><tr><th>Customer</th><th>Zone · RSM · Backyard/Country<br><span class="muted" style="font-weight:400;">(from postcode)</span></th><th>Customer type</th><th>Ownership group</th><th>Premise sub-type</th><th>Volume stream</th><th>Checks</th><th>New customer</th></tr></thead><tbody id="seg_body"></tbody></table></div>
-    </div>
-
-    <div class="panel no-print" style="margin-top:14px;">
-      <h2 style="margin:0;">Pin a customer to a different RSM</h2>
-      <div class="hint" style="margin-top:6px;">For the exception cases — e.g. one RSM looks after a special account that's in a zone the other RSM normally covers. This overrides the zone's RSM for that one customer only.</div>
-      <div class="rowflex" style="margin-top:12px; gap:10px; align-items:flex-end; flex-wrap:wrap;">
-        <div class="fld autocomplete" style="margin:0; min-width:280px;">
-          <label>Customer</label>
-          <input id="pdb_custSearch" placeholder="Search Ontap customers by name…" autocomplete="off">
-          <div class="ac-results" id="pdb_custResults"></div>
-        </div>
-        <div class="fld" style="margin:0;"><label>Pin to RSM</label><select id="pdb_custRsmSelect" style="min-width:220px;"></select></div>
-        <button class="btn small" onclick="pdbSaveCustomerRsm()">Save override</button>
-      </div>
-      <div class="hint" style="margin-top:8px;" id="pdb_custSelectedInfo"></div>
-
-      <h2 style="margin:18px 0 4px;">Your customer overrides <span class="muted" id="pdb_custOverridesCount" style="font-weight:400;"></span></h2>
-      <div class="tablewrap" style="margin-top:6px;">
-        <table class="datatable">
-          <thead><tr><th>Customer</th><th>Zone</th><th>Pinned RSM</th><th class="no-print">Action</th></tr></thead>
-          <tbody id="pdb_custOverridesBody"></tbody>
-        </table>
-      </div>
+      <div class="tablewrap"><table class="datatable"><thead id="seg_thead"><tr><th>Customer</th><th>Banner group / sub banner</th><th>Postcode</th><th>Zone</th><th>RSM</th><th>Backyard / Country</th><th>Customer type</th><th>Ownership group</th><th>Premise sub-type</th><th>Volume stream</th><th>Checks</th></tr></thead><tbody id="seg_body"></tbody></table></div>
     </div>
   </div>
 
@@ -2293,17 +2267,19 @@ const CRM_DATA = {"meta":{"salesDataFrom":"2023-07-11","salesDataTo":"2026-10-03
   const HUB_SEGMENT_FIELDS = ['custType', 'ownerGroup', 'segVenueType', 'volumeStream'];
   const HUB_SEGMENT_DEFAULTS = { custType: '', ownerGroup: 'Unallocated', segVenueType: 'Unallocated', volumeStream: 'Sales Team' };
   function segHasValue(v, f) { if (v === undefined || v === null || String(v).trim() === '') return false; return f === 'volumeStream' ? true : String(v).trim() !== 'Unallocated'; } // volume stream 'Unallocated' is a real Ontap value (excluded from Sales Team)
-  // For each outlet: a real value already held by the Hub (previous dataset) wins; otherwise a real value in the
-  // Ontap file is used (while Ontap still sends them); otherwise the default. 'Unallocated'/blank count as "no value".
+  // Round 121: the Hub OWNS these four labels (hard-coded in the previous dataset). Ontap's own segment columns are ignored.
+  // Existing outlet -> keep the Hub's value. Brand-new outlet -> default (Sales Team, unlabelled) until someone labels it on the Segments page.
+  // Only when there is no previous dataset at all (very first build) is Ontap's value used, so nothing is blanked.
   function applyHubSegments(outlets, prevOutlets) {
     const prev = prevOutlets || {};
+    const havePrev = Object.keys(prev).length > 0;
     for (const oid in outlets) {
       const o = outlets[oid];
       const p = Object.prototype.hasOwnProperty.call(prev, oid) ? prev[oid] : null;
       for (const f of HUB_SEGMENT_FIELDS) {
-        if (p && segHasValue(p[f], f)) o[f] = p[f];
-        else if (segHasValue(o[f], f)) { /* keep Ontap's value */ }
-        else o[f] = (p && p[f]) ? p[f] : HUB_SEGMENT_DEFAULTS[f];
+        if (p && p[f] !== undefined && p[f] !== null && String(p[f]).trim() !== '') o[f] = p[f];
+        else if (!havePrev && segHasValue(o[f], f)) { /* first build only: keep Ontap's value */ }
+        else o[f] = HUB_SEGMENT_DEFAULTS[f];
       }
     }
   }
@@ -13391,8 +13367,9 @@ function rsmForZone(zone) {
   const zoneDef = ZONE_DEFS_SEED[zone];
   return rsmZoneOverrides[zone] || (zoneDef && zoneDef.rsm) || '';
 }
-function pdbResolveZones() { Object.values(outlets).forEach(o => { o.zone = zoneForPostcode(o.postcode); }); }
-function pdbResolveRsms() { Object.values(outlets).forEach(o => { o.rsm = customerRsmOverrides[o.id] || rsmForZone(o.zone) || 'Sales MGR'; }); }
+function pdbAllOntap() { return [...new Set([...Object.values(outlets), ...Object.values(allOutlets)])]; }
+function pdbResolveZones() { pdbAllOntap().forEach(o => { o.zone = zoneForPostcode(o.postcode); }); }
+function pdbResolveRsms() { pdbAllOntap().forEach(o => { o.rsm = rsmForZone(o.zone) || 'Sales MGR'; }); } // Round 121: postcode DB -> zone -> RSM only (no per-customer pins)
 function pdbRsmChoices() { return [...new Set([...(rsmRosterBaked || []), 'Sales MGR'])].filter(Boolean).sort(); }
 
 // ---- edit tracking (postcodeEditLog: [{ts, by, kind: postcode|zoneRsm|customerRsm, key, from, to}], oldest first) ----
@@ -13634,15 +13611,10 @@ function renderPostcodeDbPage() {
   document.getElementById('pdb_totalCount').textContent = `(${Object.keys(POSTCODE_ZONE_SEED).length.toLocaleString()} postcodes, ${Object.keys(ZONE_DEFS_SEED).length} zones)`;
   document.getElementById('pdb_zoneSelect').innerHTML = pdbZoneOptionsHtml('');
   pdbRenderOverridesTable();
-  document.getElementById('pdb_custRsmSelect').innerHTML = pdbRsmOptionsHtml('');
-  pdbRenderCustomerOverridesTable();
 }
 // Called once from init() — wires up the postcode search input and the customer autocomplete.
 function pdbInitPage() {
   document.getElementById('pdb_search').addEventListener('input', pdbLookupPostcode);
-  pdbCustAc = setupAutocomplete('pdb_custSearch', 'pdb_custResults', outletList, outletLabel, id => {
-    pdbSelectCustomer(id);
-  }, [item => !!allOutlets[item.id] && !isPlaceholderOutletId(item.id)]);
   renderPostcodeDbPage();
 }
 function pdbSelectCustomer(id) {
@@ -14732,7 +14704,7 @@ function segSyncMembership(o) {
     outlets[o.id] = o;
     if (originalOutletRsm[o.id] === undefined) originalOutletRsm[o.id] = o.rsm || '';
     o.zone = zoneForPostcode(o.postcode);
-    o.rsm = customerRsmOverrides[o.id] || rsmForZone(o.zone) || 'Sales MGR';
+    o.rsm = rsmForZone(o.zone) || 'Sales MGR';
     if (typeof outletList !== 'undefined' && !outletList.includes(o)) outletList.push(o);
   } else if (outlets[o.id] === o) {
     delete outlets[o.id];
@@ -14759,7 +14731,8 @@ function segCaptureBaked() {
 function applySegments() {
   segPool().forEach(o => {
     if (o.rsm === 'Unassigned') o.rsm = 'Sales MGR';
-    if (outlets[o.id] !== o) { o.zone = zoneForPostcode(o.postcode); } // non-Sales-Team streams: geography from the postcode DB too (RSM left as Ontap has it)
+    o.zone = zoneForPostcode(o.postcode);
+    o.rsm = rsmForZone(o.zone) || 'Sales MGR'; // Round 121: postcode database is the master for every Ontap outlet
     const pc = String(o.postcode || '').trim();
     const zoneFromDb = pc && zoneForPostcode(pc);
     const zd = ZONE_DEFS_SEED[o.zone];
@@ -14893,90 +14866,51 @@ function segBuildRows() {
   segPool().forEach(o => {
     if (o.excluded) return;
     if (rsm && o.rsm !== rsm) return;
-    if (stream === 'sales' && (o.volumeStream || 'Sales Team') !== 'Sales Team') return;
-    if (q && !((o.name || '') + ' ' + o.id + ' ' + (o.postcode || '') + ' ' + (o.suburb || '')).toLowerCase().includes(q)) return;
-    const issues = segIssues(o), diffs = segDiffs(o), manual = segIsPending(o);
+    if (stream && stream !== 'all' && (o.volumeStream || 'Sales Team') !== stream) return;
+    if (q && !((o.name || '') + ' ' + o.id + ' ' + (o.postcode || '') + ' ' + (o.suburb || '') + ' ' + (o.banner || '') + ' ' + (o.majorGroup || '')).toLowerCase().includes(q)) return;
+    const issues = segIssues(o);
     if (view === 'needs' && !issues.length) return;
-    if (view === 'diff' && !diffs.length) return;
-    if (view === 'new' && !segIsPending(o)) return;
-    if (view === 'overrides' && !segHasLabelOv(o.id)) return;
-    if (view === 'banner' && !segBannerDiffers(o)) return;
-    rows.push({ o, issues, diffs, manual });
+    rows.push({ o, issues });
   });
-  rows.sort((a, b) => (b.manual - a.manual) || (b.issues.length - a.issues.length) || (a.o.name || '').localeCompare(b.o.name || ''));
+  rows.sort((a, b) => (a.o.name || '').localeCompare(b.o.name || ''));
   return rows;
 }
+// Round 121: the Segments page is one table of the Ontap outlet file. Zone / RSM / Backyard-Country are read-only
+// (they come from the Postcode Database); the four labels are the Hub's own hard-coded data and are edited inline.
 function renderSegmentsPage(keepPage) {
   if (!document.getElementById('seg_body')) return;
   if (!keepPage) segPage = 1;
   segOptCache = {};
   const all = segPool().filter(o => !o.excluded);
-  const sales = all.filter(o => (o.volumeStream || 'Sales Team') === 'Sales Team');
-  const needs = sales.filter(o => segIssues(o).length).length;
-  const diffs = all.filter(o => segDiffs(o).length).length;
-  const manual = all.filter(segIsPending).length;
-  const ovCount = Object.keys(customerSegmentOverrides).filter(segHasLabelOv).length;
-  document.getElementById('seg_summary').innerHTML = [
-    ['New from Ontap — to label', manual, manual ? 'warn' : ''], ['Older customers still unlabelled', needs, ''], ['Hub differs from Ontap', diffs, ''], ['Banner group differs from Ontap', all.filter(segBannerDiffers).length, ''], ['Hub-set labels (overrides)', ovCount, ''],
-  ].map(([l, n, c]) => `<div class="card ${c}"><div class="num">${n.toLocaleString()}</div><div class="lbl">${l}</div></div>`).join('');
+  const needs = all.filter(o => segIssues(o).length).length;
   const rows = segBuildRows();
   segLastRows = rows;
   const PS = segPageSize();
   const pages = PS === Infinity ? 1 : Math.max(1, Math.ceil(rows.length / PS));
   if (segPage > pages) segPage = pages;
   const slice = PS === Infinity ? rows : rows.slice((segPage - 1) * PS, segPage * PS);
-  document.getElementById('seg_count').textContent = `(${rows.length.toLocaleString()} customers)`;
+  document.getElementById('seg_count').textContent = `(${rows.length.toLocaleString()} of ${all.length.toLocaleString()} Ontap outlets · ${needs.toLocaleString()} missing a label)`;
   document.getElementById('seg_pageInfo').textContent = PS === Infinity ? `Showing all ${rows.length.toLocaleString()}` : `Page ${segPage} of ${pages}`;
   document.getElementById('seg_prevPage').disabled = segPage <= 1;
   document.getElementById('seg_nextPage').disabled = segPage >= pages;
-  const bannerView = document.getElementById('seg_view').value === 'banner';
-  document.getElementById('seg_thead').innerHTML = bannerView
-    ? '<tr><th>Customer</th><th>Hub banner group / sub banner</th><th>Ontap banner group / sub banner</th><th>Use</th></tr>'
-    : '<tr><th>Customer</th><th>Zone · RSM · Backyard/Country<br><span class="muted" style="font-weight:400;">(from postcode)</span></th><th>Customer type</th><th>Ownership group</th><th>Premise sub-type</th><th>Volume stream</th><th>Checks</th><th>New customer</th></tr>';
-  document.getElementById('seg_bannerBtns').style.display = bannerView ? '' : 'none';
-  if (bannerView) {
-    document.getElementById('seg_body').innerHTML = slice.map(({ o }) => {
-      const b = bakedSegments[o.id] || {};
-      const useOntap = (customerSegmentOverrides[o.id] || {}).bannerSource === 'ontap';
-      const fmt = (g, s) => `${escapeHtml(g || '— none —')}<br><span class="muted">${escapeHtml(s || '—')}</span>`;
-      return `<tr><td><b>${escapeHtml(o.name || '')}</b><br><span class="muted">${escapeHtml(o.id)} · ${escapeHtml(o.suburb || '')} ${escapeHtml(o.postcode || '')}</span></td>
-        <td${useOntap ? '' : ' style="background:#eef6ff;"'}>${fmt(b.majorGroup, b.banner)}</td><td${useOntap ? ' style="background:#eef6ff;"' : ''}>${fmt(o.ontapMajorGroup, o.ontapBanner)}</td>
-        <td><select class="seg-sel${useOntap ? ' seg-ov' : ''}" data-oid="${escapeHtml(o.id)}" data-key="bannerSource"><option value=""${useOntap ? '' : ' selected'}>Use Hub</option><option value="ontap"${useOntap ? ' selected' : ''}>Use Ontap</option></select></td></tr>`;
-    }).join('') || '<tr><td colspan="4" class="muted" style="padding:14px;">No customers where the Hub and Ontap banner groups differ.</td></tr>';
-    return;
-  }
-  document.getElementById('seg_body').innerHTML = slice.map(({ o, issues, diffs, manual }) => {
+  document.getElementById('seg_body').innerHTML = slice.map(({ o, issues }) => {
     const sug = segSuggestVenueType(o.name);
     const needsSub = !o.segVenueType || o.segVenueType === 'Unallocated';
-    const diffTxt = diffs.map(d => `${SEG_LABELS[d.key]}: Ontap “${escapeHtml(d.ontap)}” → Hub “${escapeHtml(d.hub || '—')}”`).join('<br>');
+    const pcOk = !!(o.postcode && zoneForPostcode(o.postcode));
     return `<tr>
-      <td><b>${escapeHtml(o.name || '')}</b>${manual ? ' <span class="pill">NEW</span>' : ''}<br><span class="muted">${escapeHtml(o.id)} · ${escapeHtml(o.suburb || '')} ${escapeHtml(o.state || '')} ${escapeHtml(o.postcode || '')}</span></td>
-      <td>${escapeHtml(o.zone || '—')}<br><span class="muted">${escapeHtml(o.rsm || '—')} · ${escapeHtml(o.geoTier || '—')}</span></td>
+      <td><b>${escapeHtml(o.name || '')}</b><br><span class="muted">${escapeHtml(o.id)} · ${escapeHtml(o.suburb || '')} ${escapeHtml(o.state || '')}</span></td>
+      <td>${escapeHtml(o.majorGroup || '—')}<br><span class="muted">${escapeHtml(o.banner || '—')}</span></td>
+      <td>${escapeHtml(o.postcode || '—')}</td>
+      <td>${pcOk ? escapeHtml(o.zone || '—') : '<span class="muted">⚠ not in postcode DB</span>'}</td>
+      <td>${escapeHtml(o.rsm || '—')}</td>
+      <td>${escapeHtml(o.geoTier || '—')}</td>
       <td>${segSelectHtml(o, 'custType')}</td>
       <td>${segSelectHtml(o, 'ownerGroup')}</td>
       <td>${segSelectHtml(o, 'segVenueType')}${needsSub && sug ? `<br><a href="#" class="seg-sug" data-oid="${escapeHtml(o.id)}" data-val="${escapeHtml(sug)}">Use “${escapeHtml(sug)}”</a>` : ''} <a href="${segGoogleUrl(o)}" target="_blank" rel="noopener">Google ↗</a></td>
       <td>${segSelectHtml(o, 'volumeStream')}</td>
-      <td class="muted" style="font-size:11px;">${issues.map(i => '⚠ ' + escapeHtml(i)).join('<br>')}${diffTxt ? (issues.length ? '<br>' : '') + diffTxt : ''}</td>
-      <td style="font-size:11px;">${manual ? segPendingActionsHtml(o) : ''}</td>
+      <td class="muted" style="font-size:11px;">${issues.map(i => '⚠ ' + escapeHtml(i)).join('<br>')}</td>
     </tr>`;
-  }).join('') || '<tr><td colspan="8" class="muted" style="padding:14px;">Nothing to show for these filters.</td></tr>';
-}
-function segPendingActionsHtml(o) {
-  const cands = segMergeCandidates(o);
-  const id = escapeHtml(o.id);
-  const merge = cands.length
-    ? `<div>Same as a Hub entry?<br><select id="segm_${id}" style="max-width:170px;"><option value="">— pick —</option>${cands.map(c => `<option value="${escapeHtml(c.m.id)}">${escapeHtml(c.m.name || c.m.id)} ${escapeHtml(c.m.postcode || '')}</option>`).join('')}</select> <button class="btn small secondary" onclick="segMergeInto('${id}')">Merge</button></div>`
-    : '';
-  return `${merge}<div style="margin-top:4px;"><button class="btn small" onclick="segMarkDone('${id}')">Done</button></div>`;
-}
-function segBannerBulk(source) {
-  const rows = segLastRows.filter(r => segBannerDiffers(r.o));
-  if (!rows.length) return;
-  if (!confirm(`Use ${source === 'ontap' ? 'Ontap' : 'the Hub'} banner group for all ${rows.length} customers in this list?`)) return;
-  const items = [];
-  rows.forEach(r => { if (_segWriteLocal(r.o.id, 'bannerSource', source)) items.push({ oid: r.o.id, key: 'bannerSource', val: source }); });
-  segPersistBulk(items);
-  renderSegmentsPage(true);
+  }).join('') || '<tr><td colspan="11" class="muted" style="padding:14px;">Nothing to show for these filters.</td></tr>';
 }
 function segApplyAllSuggestions() {
   const targets = segLastRows.filter(r => (!r.o.segVenueType || r.o.segVenueType === 'Unallocated') && segSuggestVenueType(r.o.name));
@@ -15003,14 +14937,6 @@ function exportSegmentsCSV() {
     lines.push([o.id, o.name, o.postcode, o.volumeStream, o.custType, o.zone, o.ownerGroup, o.geoTier, o.segVenueType, o.rsm, set].map(segCsvEsc).join(','));
   });
   downloadFile('YMT_Segments.csv', lines.join('\n'), 'text/csv');
-}
-function exportSegmentDiffsCSV() {
-  const lines = [['OTDOutletId', 'Name', 'Field', 'Ontap value', 'Hub value'].map(segCsvEsc).join(',')];
-  segPool().filter(o => !o.excluded).forEach(o => {
-    segDiffs(o).forEach(d => lines.push([o.id, o.name, SEG_LABELS[d.key], d.ontap, d.hub].map(segCsvEsc).join(',')));
-    if (segBannerDiffers(o)) { const b = bakedSegments[o.id]; lines.push([o.id, o.name, 'Banner group / sub banner (Hub value shown; using ' + (((customerSegmentOverrides[o.id] || {}).bannerSource === 'ontap') ? 'Ontap' : 'Hub') + ')', (o.ontapMajorGroup || '') + ' / ' + (o.ontapBanner || ''), (b.majorGroup || '') + ' / ' + (b.banner || '')].map(segCsvEsc).join(',')); }
-  });
-  downloadFile('YMT_Segments_Hub_vs_Ontap.csv', lines.join('\n'), 'text/csv');
 }
 function initSegmentsPage(rsmVals) {
   if (!document.getElementById('seg_body')) return;
