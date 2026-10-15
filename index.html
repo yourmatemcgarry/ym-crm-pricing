@@ -1423,7 +1423,7 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
       <div class="cards" id="seg_summary" style="margin-top:10px;"></div>
       <div class="rowflex" style="margin-top:10px; gap:14px; flex-wrap:wrap; align-items:flex-end;">
         <div class="fld" style="margin:0;"><label>Show</label><select id="seg_view"><option value="needs">Needs labelling</option><option value="new">New customers (awaiting Ontap ID)</option><option value="diff">Hub differs from Ontap</option><option value="banner">Banner group differs from Ontap</option><option value="overrides">Hub-set labels</option><option value="all">All customers</option></select></div>
-        <div class="fld" style="margin:0;"><label>Stream</label><select id="seg_stream"><option value="sales">Sales Team only</option><option value="all">All streams</option></select></div>
+        <div class="fld" style="margin:0;"><label>Stream</label><select id="seg_stream"><option value="all">All streams</option><option value="sales">Sales Team only</option></select></div>
         <div class="fld" style="margin:0;"><label>RSM</label><select id="seg_rsm"><option value="">All RSMs</option></select></div>
         <div class="fld" style="margin:0;"><label>Search</label><input id="seg_search" placeholder="name, id, suburb, postcode" style="min-width:220px;"></div>
       </div>
@@ -14689,8 +14689,16 @@ let segPage = 1;
 const SEG_PAGE_SIZE = 40;
 let segLastRows = [];
 
+// Round 116: Segments cover EVERY stream (Sales Team, National Accounts, Online Distributor, Events, Taproom), not just Sales Team.
+// `outlets` is Sales Team only, so the pool is allOutlets plus any manual customers that live only in `outlets`.
+function segGet(id) { return allOutlets[id] || outlets[id]; }
+function segPool() {
+  const m = Object.assign({}, allOutlets);
+  Object.keys(outlets).forEach(id => { if (!m[id]) m[id] = segGet(id); });
+  return Object.values(m);
+}
 function segCaptureBaked() {
-  Object.values(outlets).forEach(o => {
+  segPool().forEach(o => {
     if (bakedSegments[o.id]) return;
     bakedSegments[o.id] = {
       zone: o.zone || '', rsm: (typeof originalOutletRsm !== 'undefined' && originalOutletRsm[o.id]) || o.rsm || '',
@@ -14702,8 +14710,9 @@ function segCaptureBaked() {
 }
 // Applied AFTER the postcode/zone/RSM resolution. Idempotent.
 function applySegments() {
-  Object.values(outlets).forEach(o => {
+  segPool().forEach(o => {
     if (o.rsm === 'Unassigned') o.rsm = 'Sales MGR';
+    if (outlets[o.id] !== o) { o.zone = zoneForPostcode(o.postcode); } // non-Sales-Team streams: geography from the postcode DB too (RSM left as Ontap has it)
     const pc = String(o.postcode || '').trim();
     const zoneFromDb = pc && zoneForPostcode(pc);
     const zd = ZONE_DEFS_SEED[o.zone];
@@ -14729,7 +14738,7 @@ function segApplyBanner(o) {
 function segOptions(key) {
   const f = SEG_FIELDS.find(x => x.key === key);
   const seen = new Set(f.base);
-  Object.values(outlets).forEach(o => { if (o[key]) seen.add(o[key]); });
+  segPool().forEach(o => { if (o[key]) seen.add(o[key]); });
   return [...seen].filter(v => !(key === 'segVenueType' && v === 'Unallocated'));
 }
 // Keyword guess for the premise sub-type from the customer's name. Deliberately conservative —
@@ -14770,7 +14779,7 @@ function segDiffs(o) {
   return SEG_COMPARE_KEYS.filter(k => b[k] && String(b[k]) !== String(o[k] || '')).map(k => ({ key: k, ontap: b[k], hub: o[k] || '' }));
 }
 function _segWriteLocal(oid, key, val) {
-  const o = outlets[oid]; if (!o) return false;
+  const o = segGet(oid); if (!o) return false;
   const baked = key === 'bannerSource' ? '' : ((bakedSegments[oid] || {})[key] || '');
   const ov = { ...(customerSegmentOverrides[oid] || {}) };
   if (val && val !== baked) ov[key] = val; else delete ov[key];
@@ -14800,7 +14809,7 @@ function segBuildRows() {
   const view = document.getElementById('seg_view').value;
   const stream = document.getElementById('seg_stream').value;
   const rows = [];
-  Object.values(outlets).forEach(o => {
+  segPool().forEach(o => {
     if (o.excluded) return;
     if (rsm && o.rsm !== rsm) return;
     if (stream === 'sales' && (o.volumeStream || 'Sales Team') !== 'Sales Team') return;
@@ -14819,7 +14828,7 @@ function segBuildRows() {
 function renderSegmentsPage(keepPage) {
   if (!document.getElementById('seg_body')) return;
   if (!keepPage) segPage = 1;
-  const all = Object.values(outlets).filter(o => !o.excluded);
+  const all = segPool().filter(o => !o.excluded);
   const sales = all.filter(o => (o.volumeStream || 'Sales Team') === 'Sales Team');
   const needs = sales.filter(o => segIssues(o).length).length;
   const diffs = all.filter(o => segDiffs(o).length).length;
@@ -14897,7 +14906,7 @@ function segCsvEsc(v) { return `"${String(v == null ? '' : v).replace(/"/g, '""'
 function exportSegmentsCSV() {
   const head = ['OTDOutletId', 'Name', 'Postcode', 'Segment3 (Volume stream)', 'Segment5 (Customer type)', 'Segment7 (Zone)', 'Segment8 (Ownership group)', 'Segment9 (Backyard/Country)', 'Segment10 (Premise sub-type)', 'CustZoneDesc (RSM)', 'Hub-set fields'];
   const lines = [head.map(segCsvEsc).join(',')];
-  Object.values(outlets).filter(o => !o.excluded).sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true })).forEach(o => {
+  segPool().filter(o => !o.excluded).sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true })).forEach(o => {
     const ov = customerSegmentOverrides[o.id] || {};
     const set = SEG_FIELDS.filter(f => ov[f.key]).map(f => f.label).join('; ');
     lines.push([o.id, o.name, o.postcode, o.volumeStream, o.custType, o.zone, o.ownerGroup, o.geoTier, o.segVenueType, o.rsm, set].map(segCsvEsc).join(','));
@@ -14906,7 +14915,7 @@ function exportSegmentsCSV() {
 }
 function exportSegmentDiffsCSV() {
   const lines = [['OTDOutletId', 'Name', 'Field', 'Ontap value', 'Hub value'].map(segCsvEsc).join(',')];
-  Object.values(outlets).filter(o => !o.excluded).forEach(o => {
+  segPool().filter(o => !o.excluded).forEach(o => {
     segDiffs(o).forEach(d => lines.push([o.id, o.name, SEG_LABELS[d.key], d.ontap, d.hub].map(segCsvEsc).join(',')));
     if (segBannerDiffers(o)) { const b = bakedSegments[o.id]; lines.push([o.id, o.name, 'Banner group / sub banner (Hub value shown; using ' + (((customerSegmentOverrides[o.id] || {}).bannerSource === 'ontap') ? 'Ontap' : 'Hub') + ')', (o.ontapMajorGroup || '') + ' / ' + (o.ontapBanner || ''), (b.majorGroup || '') + ' / ' + (b.banner || '')].map(segCsvEsc).join(',')); }
   });
