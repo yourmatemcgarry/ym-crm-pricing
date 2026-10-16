@@ -475,6 +475,7 @@
     // with history, further below).
     const tx = {};
     const txOrder = [];
+    const whouseByLine = {};
     // outletTotals: oid -> accumulator, only created on first units>0 row for that outlet (mirrors
     // Python's defaultdict(...) which only materializes an entry when first accessed/written).
     // Round 84: also tracks inc* — the portion of this batch's activity that's genuinely NEW since
@@ -573,7 +574,8 @@
             const pricePerSaleableUnit = (dollars / units) * productPackQty;
             const key = oid + '|' + gid;
             if (!tx[key]) { tx[key] = []; txOrder.push(key); }
-            tx[key].push([d, pricePerSaleableUnit, dollars, units, row['InvoiceNo'], pid, productPackQty]);
+            tx[key].push([d, pricePerSaleableUnit, dollars, units, row['InvoiceNo'], pid, productPackQty, row['Whouse'] || '']);
+            whouseByLine[oid + '|' + row['InvoiceNo'] + '|' + pid] = row['Whouse'] || ''; // Round 123: wholesaler per invoice line (Sales Journal)
           }
 
           let unitSizeMl = parseFloat(products[pid].unitSizeMl);
@@ -613,7 +615,7 @@
 
     // ---- group_summary: merge each outlet+SKU combo's price/order history with its previous record ----
     function mergeRecentLists(oldRecent, newRecentDesc) {
-      const combined = (oldRecent || []).concat(newRecentDesc || []);
+      const combined = (newRecentDesc || []).concat(oldRecent || []); // Round 123: fresh rows first so they win the de-dupe (they carry the wholesaler)
       const seen = new Set();
       const deduped = [];
       for (const r of combined) {
@@ -675,7 +677,7 @@
       // Capped at 25 (not just a handful) so the Customer Details Sales Journal has real
       // trace-back depth — matches aggregate14.py's Python pipeline (kept in sync).
       const recentNew = sorted.slice(Math.max(0, sorted.length - 25)).slice().reverse().map((r) => ({
-        date: fmtDateISO(r[0]), price: pyRound(r[1], 2), units: r[3], invoice: r[4], productId: r[5], packQty: r[6],
+        date: fmtDateISO(r[0]), price: pyRound(r[1], 2), units: r[3], invoice: r[4], productId: r[5], packQty: r[6], whouse: r[7] || '',
       }));
       const mergedRecent = old ? mergeRecentLists(old.recent, recentNew) : recentNew;
 
@@ -694,6 +696,16 @@
         firstDate: mergedFirstDate,
         recent: mergedRecent,
       };
+    }
+
+    // Round 123: back-fill the wholesaler on journal lines carried over from earlier refreshes (the export holds full history).
+    for (const key in groupSummary) {
+      const rec = groupSummary[key].recent;
+      if (!rec) continue;
+      const oid = groupSummary[key].outletId;
+      for (const r of rec) {
+        if (!r.whouse) { const w = whouseByLine[oid + '|' + r.invoice + '|' + r.productId]; if (w) r.whouse = w; }
+      }
     }
 
     // ---- outlet_summary: merge lifetime totals + onboarding-date history ----

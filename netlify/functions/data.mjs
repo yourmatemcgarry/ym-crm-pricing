@@ -238,7 +238,9 @@ async function readAll(s) {
     if (deletedCount2 > 0) await s.setJSON('manualOutlets', manualOutlets);
     await s.setJSON('slgR111CleanupAppliedV1', { applied: true, appliedAt: new Date().toISOString(), count: deletedCount2 });
   }
+  const supplyActions = (await s.get('supplyActions', { type: 'json' })) || [];
   return {
+    supplyActions,
     groupPrices: groupPrices || {},
     customerDeals: customerDeals || {},
     wholesalerDeals: wholesalerDeals || {},
@@ -694,6 +696,41 @@ export default async (req) => {
       if (idx >= 0) current[idx] = rec; else current.push(rec);
       await s.setJSON('callNotes', current);
       return json({ ok: true, id: newId, callNotes: current });
+    }
+
+    if (action === 'saveSupplyAction') {
+      // Round 123 — supply chain requests raised from Call Notes, ticked off by the delivery team.
+      const { id, outletId, item, qty, note, due, raisedBy, callNoteId } = payload;
+      if (!outletId || !item) return json({ error: 'outletId and item required' }, 400);
+      const current = (await s.get('supplyActions', { type: 'json' })) || [];
+      const newId = id || ('sa_' + Date.now() + '_' + Math.round(Math.random() * 10000));
+      const idx = current.findIndex((a) => a.id === newId);
+      const rec = {
+        id: newId, outletId, item, qty: parseInt(qty, 10) || 1, note: note || '', due: due || null,
+        raisedBy: raisedBy || '', raisedAt: idx >= 0 ? current[idx].raisedAt : now, callNoteId: callNoteId || null,
+        done: idx >= 0 ? !!current[idx].done : false, doneBy: idx >= 0 ? current[idx].doneBy : null, doneAt: idx >= 0 ? current[idx].doneAt : null,
+      };
+      if (idx >= 0) current[idx] = rec; else current.push(rec);
+      await s.setJSON('supplyActions', current);
+      return json({ ok: true, id: newId, supplyActions: current });
+    }
+
+    if (action === 'completeSupplyAction') {
+      const { id, done, by } = payload;
+      const current = (await s.get('supplyActions', { type: 'json' })) || [];
+      const idx = current.findIndex((a) => a.id === id);
+      if (idx < 0) return json({ error: 'Not found' }, 404);
+      current[idx].done = !!done; current[idx].doneBy = done ? (by || '') : null; current[idx].doneAt = done ? now : null;
+      await s.setJSON('supplyActions', current);
+      return json({ ok: true, supplyActions: current });
+    }
+
+    if (action === 'deleteSupplyAction') {
+      const { id } = payload;
+      const current = (await s.get('supplyActions', { type: 'json' })) || [];
+      const next = current.filter((a) => a.id !== id);
+      await s.setJSON('supplyActions', next);
+      return json({ ok: true, supplyActions: next });
     }
 
     if (action === 'deleteCallNote') {
