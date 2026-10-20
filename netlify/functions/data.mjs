@@ -698,6 +698,23 @@ export default async (req) => {
       return json({ ok: true, id: newId, callNotes: current });
     }
 
+    if (action === 'importCallNotes') {
+      // Round 124 — bulk add Rhino call notes. Idempotent: a note whose id is already stored is skipped,
+      // so a repeated / interrupted import can never create duplicates.
+      const { notes, updatedBy } = payload;
+      if (!Array.isArray(notes)) return json({ error: 'notes array required' }, 400);
+      const current = (await s.get('callNotes', { type: 'json' })) || [];
+      const have = new Set(current.map((c) => c.id));
+      let added = 0;
+      for (const n of notes) {
+        if (!n || !n.id || !n.outletId || have.has(n.id)) continue;
+        current.push({ ...n, updatedBy: updatedBy || n.updatedBy, updatedAt: now });
+        have.add(n.id); added++;
+      }
+      if (added) await s.setJSON('callNotes', current);
+      return json({ ok: true, added, callNotes: current });
+    }
+
     if (action === 'saveSupplyAction') {
       // Round 123 — supply chain requests raised from Call Notes, ticked off by the delivery team.
       const { id, outletId, item, qty, note, due, raisedBy, callNoteId } = payload;
