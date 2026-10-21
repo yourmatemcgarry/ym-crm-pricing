@@ -57,6 +57,33 @@
   nav.tabs .tab-group-label:first-child { padding-top:4px; }
   nav.tabs .tab-group-label:not(:first-child) { border-top:1px solid rgba(255,255,255,.14); margin-top:6px; }
   nav.tabs .tab-group-label .dot { display:inline-block; width:7px; height:7px; border-radius:50%; flex:none; }
+  /* Round 126: three collapsible sections, each with sub-headings. */
+  nav.tabs .nav-sec:not(:first-child) { border-top:1px solid rgba(255,255,255,.14); margin-top:6px; }
+  nav.tabs .nav-sec:not(:first-child) > .tab-group-label { border-top:none; margin-top:0; }
+  nav.tabs .nav-sec > .tab-group-label { cursor:pointer; user-select:none; padding-top:12px; }
+  nav.tabs .nav-sec:first-child > .tab-group-label { padding-top:4px; }
+  nav.tabs .nav-caret { margin-left:auto; font-size:11px; transition:transform .15s; }
+  nav.tabs .nav-sec.collapsed .nav-caret { transform:rotate(-90deg); }
+  nav.tabs .nav-sec.collapsed .nav-sec-body { display:none; }
+  nav.tabs .tab-sub-label { display:block; color:#6f7b99; font-size:9.5px; font-weight:600; text-transform:uppercase; letter-spacing:.07em; padding:9px 12px 3px 15px; }
+  nav.tabs .tab-sub-label:first-child { padding-top:2px; }
+  nav.tabs .nav-sec-body button { padding-left:12px; }
+  /* Round 126: calls logged per week (Team Dashboard) */
+  .cwc { margin-top:6px; }
+  .cwc-plot { position:relative; display:flex; align-items:stretch; gap:6px; height:150px; border-bottom:1px solid var(--grey2, #cfd5e3); }
+  .cwc-col { flex:1; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; min-width:0; }
+  .cwc-bar { position:relative; width:60%; max-width:34px; min-height:2px; border-radius:3px 3px 0 0; background:var(--blue); }
+  .cwc-bar.cwc-hit { background:var(--green); }
+  .cwc-bar.cwc-cur { opacity:.7; }
+  .cwc-val { position:absolute; bottom:100%; left:50%; transform:translateX(-50%); font-size:10px; color:var(--muted); margin-bottom:2px; white-space:nowrap; }
+  .cwc-target { position:absolute; left:0; right:0; border-top:2px dashed var(--red); pointer-events:none; }
+  .cwc-target span { position:absolute; right:0; bottom:2px; font-size:10px; font-weight:700; color:var(--red); background:rgba(255,255,255,.85); padding:0 4px; border-radius:3px; }
+  .cwc-labels { display:flex; gap:6px; margin-top:4px; }
+  .cwc-lbl { flex:1; font-size:9.5px; color:var(--muted); text-align:center; white-space:nowrap; line-height:1.2; }
+  @media print {
+    .cwc-plot { height:80px !important; }
+    .cwc-bar, .cwc-target { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
   main { flex:1 1 auto; min-width:0; padding: 18px 22px 60px; max-width:1700px; }
   .tabpage { display:none; }
   .tabpage.active { display:block; }
@@ -527,44 +554,63 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
 
 <div class="app-body">
 <nav class="tabs">
-  <span class="tab-group-label"><span class="dot" style="background:var(--grp-rsm);"></span>RSM Tools</span>
-  <button class="tab-btn active" data-tab="performance" data-group="rsm">Team Dashboard</button>
-  <button class="tab-btn" data-tab="atrisk" data-group="rsm">Listings Report</button>
-  <button class="tab-btn" data-tab="hitlists" data-group="rsm">Hit Lists</button>
-  <button class="tab-btn" data-tab="activations" data-group="rsm">Activations</button>
-  <button class="tab-btn" data-tab="callnotes" data-group="rsm">Call Notes</button>
-  <button class="tab-btn" data-tab="journeyplanner" data-group="rsm">Journey Planner</button>
-  <button class="tab-btn" data-tab="customerexplorer" data-group="rsm">Customer List Explorer</button>
-  <button class="tab-btn" data-tab="directdelivery" data-group="rsm">Direct Delivery</button>
-  <button class="tab-btn" data-tab="grid" data-group="rsm">Customer Pricing</button>
-  <button class="tab-btn" data-tab="newcustomers" data-group="rsm">New Customers</button>
-  <button class="tab-btn" data-tab="margin" data-group="rsm">Margin Calculator - Venues (On Prem)</button>
-  <button class="tab-btn" data-tab="offpremise" data-group="rsm">Margin Calculator - Bottleshops (Off Prem)</button>
-  <button class="tab-btn" data-tab="bannergaps" data-group="rsm">Banner Gap Report</button>
-  <button class="tab-btn" data-tab="summary" data-group="rsm">Customer Details</button>
-
-  <span class="tab-group-label"><span class="dot" style="background:var(--grp-mgmt);"></span>Management Tools</span>
-  <button class="tab-btn" data-tab="prodprices" data-group="mgmt">Product List Prices</button>
-  <button class="tab-btn" data-tab="vipcontacts" data-group="mgmt">VIP Contacts</button>
-  <button class="tab-btn" data-tab="targets" data-group="mgmt">Set Targets</button>
-  <button class="tab-btn" data-tab="postcodedb" data-group="mgmt">Postcode Database</button>
-  <button class="tab-btn" data-tab="rhinoimport" data-group="mgmt">Rhino Import</button>
-  <button class="tab-btn" data-tab="dupcustomers" data-group="mgmt">Duplicate Customers</button>
-  <button class="tab-btn" data-tab="segments" data-group="mgmt">Segments</button>
-  <button class="tab-btn" data-tab="trends" data-group="mgmt">Volume Trends</button>
-  <button class="tab-btn" data-tab="colesww" data-group="mgmt">Coles &amp; Woolworths</button>
-  <button class="tab-btn" data-tab="totalvolume" data-group="mgmt">Total Volume</button>
-  <button class="tab-btn" data-tab="bottleshopanalysis" data-group="mgmt">Banner Bottleshop Analysis</button>
-  <button class="tab-btn" data-tab="exportemails" data-group="mgmt">Export Emails</button>
-  <button class="tab-btn" data-tab="familygroups" data-group="mgmt">Family Group Key Contacts</button>
-  <button class="tab-btn" data-tab="weeklykpi" data-group="mgmt">Weekly KPI</button>
-  <button class="tab-btn" data-tab="datarefresh" data-group="mgmt">Data Refresh</button>
-
-  <span class="tab-group-label"><span class="dot" style="background:var(--grp-supply);"></span>Supply Chain Tools</span>
-  <button class="tab-btn" data-tab="orders" data-group="supply">Orders</button>
-  <button class="tab-btn" data-tab="runs" data-group="supply">Delivery Runs</button>
-  <button class="tab-btn" data-tab="supplyactions" data-group="supply">Supply Chain Actions</button>
-  <button class="tab-btn" data-tab="deliveryreports" data-group="supply">Delivery Reports</button>
+  <div class="nav-sec" data-sec="rsm">
+    <span class="tab-group-label" onclick="toggleNavSection('rsm')" title="Click to collapse / expand"><span class="dot" style="background:var(--grp-rsm);"></span>RSM Tools<span class="nav-caret">&#9662;</span></span>
+    <div class="nav-sec-body">
+    <span class="tab-sub-label">Daily</span>
+    <button class="tab-btn" data-tab="summary" data-group="rsm">Customer Visit</button>
+    <button class="tab-btn" data-tab="callnotes" data-group="rsm">Call Notes Summary</button>
+    <button class="tab-btn" data-tab="journeyplanner" data-group="rsm">Journey Planner</button>
+    <button class="tab-btn" data-tab="activations" data-group="rsm">Activations</button>
+    <span class="tab-sub-label">Performance</span>
+    <button class="tab-btn active" data-tab="performance" data-group="rsm">Team Dashboard</button>
+    <button class="tab-btn" data-tab="atrisk" data-group="rsm">Listings Report</button>
+    <span class="tab-sub-label">Find Customers</span>
+    <button class="tab-btn" data-tab="hitlists" data-group="rsm">Hit Lists</button>
+    <button class="tab-btn" data-tab="customerexplorer" data-group="rsm">Customer List Explorer</button>
+    <button class="tab-btn" data-tab="newcustomers" data-group="rsm">New Customers</button>
+    <button class="tab-btn" data-tab="directdelivery" data-group="rsm">Direct Delivery</button>
+    <button class="tab-btn" data-tab="bannergaps" data-group="rsm">Banner Gap Report</button>
+    <span class="tab-sub-label">Pricing &amp; Margins</span>
+    <button class="tab-btn" data-tab="grid" data-group="rsm">Customer Pricing</button>
+    <button class="tab-btn" data-tab="margin" data-group="rsm">Margins &ndash; Venues (On Prem)</button>
+    <button class="tab-btn" data-tab="offpremise" data-group="rsm">Margins &ndash; Bottleshops (Off Prem)</button>
+    </div>
+  </div>
+  <div class="nav-sec" data-sec="mgmt">
+    <span class="tab-group-label" onclick="toggleNavSection('mgmt')" title="Click to collapse / expand"><span class="dot" style="background:var(--grp-mgmt);"></span>Management Tools<span class="nav-caret">&#9662;</span></span>
+    <div class="nav-sec-body">
+    <span class="tab-sub-label">Volume Reporting</span>
+    <button class="tab-btn" data-tab="trends" data-group="mgmt">Volume Trends</button>
+    <button class="tab-btn" data-tab="totalvolume" data-group="mgmt">Total Volume</button>
+    <button class="tab-btn" data-tab="colesww" data-group="mgmt">Coles &amp; Woolworths</button>
+    <button class="tab-btn" data-tab="bottleshopanalysis" data-group="mgmt">Banner Bottleshop Analysis</button>
+    <span class="tab-sub-label">Contacts &amp; Email</span>
+    <button class="tab-btn" data-tab="vipcontacts" data-group="mgmt">VIP Contacts</button>
+    <button class="tab-btn" data-tab="familygroups" data-group="mgmt">Family Group Key Contacts</button>
+    <button class="tab-btn" data-tab="exportemails" data-group="mgmt">Export Emails</button>
+    <span class="tab-sub-label">Setup &amp; Targets</span>
+    <button class="tab-btn" data-tab="targets" data-group="mgmt">Set Targets</button>
+    <button class="tab-btn" data-tab="prodprices" data-group="mgmt">Product List Prices</button>
+    <button class="tab-btn" data-tab="segments" data-group="mgmt">Segments</button>
+    <button class="tab-btn" data-tab="postcodedb" data-group="mgmt">Postcode Database</button>
+    <span class="tab-sub-label">Data Clean-up</span>
+    <button class="tab-btn" data-tab="datarefresh" data-group="mgmt">Data Refresh</button>
+    <button class="tab-btn" data-tab="rhinoimport" data-group="mgmt">Rhino Import</button>
+    <button class="tab-btn" data-tab="dupcustomers" data-group="mgmt">Duplicate Customers</button>
+    </div>
+  </div>
+  <div class="nav-sec" data-sec="supply">
+    <span class="tab-group-label" onclick="toggleNavSection('supply')" title="Click to collapse / expand"><span class="dot" style="background:var(--grp-supply);"></span>Supply Chain Tools<span class="nav-caret">&#9662;</span></span>
+    <div class="nav-sec-body">
+    <span class="tab-sub-label">Order to Door</span>
+    <button class="tab-btn" data-tab="orders" data-group="supply">Orders</button>
+    <button class="tab-btn" data-tab="runs" data-group="supply">Delivery Runs</button>
+    <button class="tab-btn" data-tab="supplyactions" data-group="supply">Supply Chain Actions</button>
+    <span class="tab-sub-label">Reporting</span>
+    <button class="tab-btn" data-tab="deliveryreports" data-group="supply">Delivery Reports</button>
+    </div>
+  </div>
 </nav>
 
 <main>
@@ -762,7 +808,7 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
   <!-- ================= CUSTOMER SUMMARY ================= -->
   <div class="tabpage" id="tab-summary">
     <div class="panel no-print">
-      <h2>Choose a customer</h2>
+      <h2>Customer Visit — choose the customer you're visiting</h2>
       <div class="filters">
         <div class="fld autocomplete"><label>Customer</label>
           <input id="cs_search" placeholder="Search by name or suburb…" autocomplete="off">
@@ -778,6 +824,58 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
       </div>
     </div>
     <div id="cs_detail"></div>
+    <div id="cs_logHolder" style="display:none;">
+    <div class="panel" id="cn_logPanel">
+      <h2 id="cn_logTitle">Log a visit</h2>
+      <div class="formgrid">
+        <div class="fld autocomplete" style="display:none;">
+          <label>Customer</label>
+          <input id="cn_outletSearch" placeholder="Search customer…" autocomplete="off">
+          <div class="ac-results" id="cn_outletResults"></div>
+          <input type="hidden" id="cn_outletId">
+        </div>
+        <div class="fld"><label>Visit date</label><input id="cn_visitDate" type="date"></div>
+        <div class="fld">
+          <label>Outcome</label>
+          <select id="cn_outcome"><option value="">Select…</option></select>
+        </div>
+        <div class="fld"><label>Next action</label><input id="cn_nextAction" placeholder="e.g. Send Hazy IPA pricing"></div>
+        <div class="fld"><label>Next action due</label><input id="cn_nextActionDue" type="date"></div>
+        <div class="fld"><label>Competitor / market intel</label><input id="cn_competitor" placeholder="e.g. Balter tap added"></div>
+      </div>
+      <div class="panel" style="background:var(--bg); margin-top:10px;">
+        <h3 style="margin:0 0 6px;">Supply Chain Action <span class="muted" style="font-weight:400; font-size:11px;">— optional; goes straight to the delivery team's Supply Chain list</span></h3>
+        <div class="formgrid">
+          <div class="fld"><label>Item to deliver</label><select id="cn_supItem" onfocus="initCnSupplyForm()"></select></div>
+          <div class="fld"><label>Qty</label><input id="cn_supQty" type="number" min="1" step="1" placeholder="1"></div>
+          <div class="fld"><label>Supply note</label><input id="cn_supNote" placeholder="e.g. 2 x window decals for front door"></div>
+          <div class="fld"><label>Needed by</label><input id="cn_supDue" type="date"></div>
+        </div>
+      </div>
+      <div class="fld" style="margin-top:10px;"><label>Notes</label><textarea id="cn_notes" style="min-height:70px; resize:vertical; width:100%;" placeholder="What happened on this visit…"></textarea></div>
+      <div class="fld no-print" style="margin-top:10px;"><label>Photo evidence <span class="muted" style="font-weight:400;">— optional, but visits without one are flagged "Needs photo"</span></label><div id="cn_formPhotos"></div></div>
+      <div class="rowflex no-print" style="margin-top:10px; gap:10px; align-items:center;">
+        <button class="btn small secondary" onclick="captureCallNoteLocation()">&#128205; Log this location</button>
+        <span class="hint" id="cn_geoStatus"></span>
+      </div>
+      <div style="margin-top:14px;">
+        <h3 style="margin:0 0 4px;">Core SKU pricing <span class="muted" style="font-weight:400; font-size:11.5px;">— what's this venue charging/selling at today? Pick the SKUs you checked, leave anything else blank.</span></h3>
+        <div class="fld" style="max-width:280px; margin:0 0 8px;">
+          <div class="msel" id="cn_sku_msel">
+            <button type="button" class="msel-btn" id="cn_sku_btn">Select SKUs to price check ▾</button>
+            <div class="msel-menu" id="cn_sku_menu"></div>
+          </div>
+        </div>
+        <div id="cn_pricing"></div>
+      </div>
+      <div class="rowflex" style="margin-top:12px;">
+        <button class="btn" onclick="saveCallNote()">Save visit</button>
+        <button class="btn secondary" onclick="resetCallNoteForm()">Clear form</button>
+        <span class="hint" id="cn_saveMsg"></span>
+      </div>
+    </div>
+
+    </div>
   </div>
 
   <!-- ================= NEW CUSTOMERS ================= -->
@@ -877,34 +975,6 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
     </div>
     <div class="cards" id="fg_summary"></div>
     <div id="fg_list"></div>
-  </div>
-
-  <!-- ================= WEEKLY KPI (Round 96) ================= -->
-  <div class="tabpage" id="tab-weeklykpi">
-    <div class="panel">
-      <div class="rowflex" style="justify-content:space-between; flex-wrap:wrap; gap:10px;">
-        <h2 style="margin:0;">Weekly KPI — meetings logged</h2>
-        <div class="qnav">
-          <button class="qstep" onclick="stepWeeklyKpiWeek(-1)" title="Previous week">‹</button>
-          <div class="qlabel" id="wk_weeklabel"></div>
-          <button class="qstep" onclick="stepWeeklyKpiWeek(1)" title="Next week">›</button>
-          <button class="btn small secondary" onclick="jumpWeeklyKpiCurrentWeek()">Current week</button>
-        </div>
-      </div>
-      <div class="hint" style="margin-top:6px;">How many visits each RSM has logged in Call Notes for the selected week (Monday–Sunday).</div>
-      <div class="sub" id="wk_totalMeetings" style="margin-top:4px; font-weight:600;"></div>
-      <div class="tablewrap" style="margin-top:10px; max-width:360px;">
-        <table class="datatable">
-          <thead><tr><th>RSM</th><th>Meetings logged</th></tr></thead>
-          <tbody id="wk_meetingsBody"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="panel">
-      <h2 style="margin:0;">This week's notes, by RSM</h2>
-      <div class="hint" style="margin-top:6px;">Every visit logged in the selected week, grouped by RSM, so management can scan the week's activity in one place.</div>
-      <div id="wk_notesSummary"></div>
-    </div>
   </div>
 
   <!-- ================= VIP CONTACTS ================= -->
@@ -1688,73 +1758,22 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
   <!-- ================= CALL NOTES ================= -->
   <div class="tabpage" id="tab-callnotes">
     <div class="panel">
-      <h2>Log a visit</h2>
-      <div class="formgrid">
-        <div class="fld autocomplete">
-          <label>Customer</label>
-          <input id="cn_outletSearch" placeholder="Search customer…" autocomplete="off">
-          <div class="ac-results" id="cn_outletResults"></div>
-          <input type="hidden" id="cn_outletId">
-        </div>
-        <div class="fld"><label>Visit date</label><input id="cn_visitDate" type="date"></div>
-        <div class="fld">
-          <label>Outcome</label>
-          <select id="cn_outcome"><option value="">Select…</option></select>
-        </div>
-        <div class="fld"><label>Next action</label><input id="cn_nextAction" placeholder="e.g. Send Hazy IPA pricing"></div>
-        <div class="fld"><label>Next action due</label><input id="cn_nextActionDue" type="date"></div>
-        <div class="fld"><label>Competitor / market intel</label><input id="cn_competitor" placeholder="e.g. Balter tap added"></div>
-      </div>
-      <div class="panel" style="background:var(--bg); margin-top:10px;">
-        <h3 style="margin:0 0 6px;">Supply Chain Action <span class="muted" style="font-weight:400; font-size:11px;">— optional; goes straight to the delivery team's Supply Chain list</span></h3>
-        <div class="formgrid">
-          <div class="fld"><label>Item to deliver</label><select id="cn_supItem" onfocus="initCnSupplyForm()"></select></div>
-          <div class="fld"><label>Qty</label><input id="cn_supQty" type="number" min="1" step="1" placeholder="1"></div>
-          <div class="fld"><label>Supply note</label><input id="cn_supNote" placeholder="e.g. 2 x window decals for front door"></div>
-          <div class="fld"><label>Needed by</label><input id="cn_supDue" type="date"></div>
-        </div>
-      </div>
-      <div class="fld" style="margin-top:10px;"><label>Notes</label><textarea id="cn_notes" style="min-height:70px; resize:vertical; width:100%;" placeholder="What happened on this visit…"></textarea></div>
-      <div class="fld no-print" style="margin-top:10px;"><label>Photo evidence <span class="muted" style="font-weight:400;">— optional, but visits without one are flagged "Needs photo"</span></label><div id="cn_formPhotos"></div></div>
-      <div class="rowflex no-print" style="margin-top:10px; gap:10px; align-items:center;">
-        <button class="btn small secondary" onclick="captureCallNoteLocation()">&#128205; Log this location</button>
-        <span class="hint" id="cn_geoStatus"></span>
-      </div>
-      <div style="margin-top:14px;">
-        <h3 style="margin:0 0 4px;">Core SKU pricing <span class="muted" style="font-weight:400; font-size:11.5px;">— what's this venue charging/selling at today? Pick the SKUs you checked, leave anything else blank.</span></h3>
-        <div class="fld" style="max-width:280px; margin:0 0 8px;">
-          <div class="msel" id="cn_sku_msel">
-            <button type="button" class="msel-btn" id="cn_sku_btn">Select SKUs to price check ▾</button>
-            <div class="msel-menu" id="cn_sku_menu"></div>
-          </div>
-        </div>
-        <div id="cn_pricing"></div>
-      </div>
-      <div class="rowflex" style="margin-top:12px;">
-        <button class="btn" onclick="saveCallNote()">Save visit</button>
-        <button class="btn secondary" onclick="resetCallNoteForm()">Clear form</button>
-        <span class="hint" id="cn_saveMsg"></span>
-      </div>
-    </div>
-
-    <div class="panel">
       <div class="rowflex" style="justify-content:space-between; flex-wrap:wrap; gap:10px;">
-        <h2 style="margin:0;">Visit History <span class="muted" id="cn_count" style="font-weight:400;"></span></h2>
-        <div class="qnav">
-          <button class="qstep" onclick="stepCallNotesQuarter(-1)" title="Previous quarter">‹</button>
-          <div class="qlabel" id="cn_qlabel"></div>
-          <button class="qstep" onclick="stepCallNotesQuarter(1)" title="Next quarter">›</button>
-          <button class="btn small secondary" onclick="jumpCallNotesCurrentQuarter()">Current quarter</button>
-        </div>
+        <h2 style="margin:0;">Call Notes Summary <span class="muted" id="cn_count" style="font-weight:400;"></span> <span class="muted" id="cn_periodLabel" style="font-weight:400; font-size:13px;"></span></h2>
+        <button class="btn small" onclick="document.querySelector('.tab-btn[data-tab=summary]').click()">+ Log a visit (open Customer Visit)</button>
       </div>
-      <div class="rowflex" style="margin-top:10px; gap:10px; flex-wrap:wrap;">
+      <div class="hint" style="margin-top:6px;">Every call note for the period you pick. Press <strong>Edit</strong> on any row to change it right here; click a customer name to open their full Customer Visit page.</div>
+      <div class="rowflex" style="margin-top:10px; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="fld" style="margin:0;"><label>Period</label><select id="cn_period" onchange="cnPeriodChanged()"><option value="week">This week</option><option value="lastweek">Last week</option><option value="month" selected>This month</option><option value="lastmonth">Last month</option><option value="quarter">This quarter</option><option value="lastquarter">Last quarter</option><option value="12m">Last 12 months</option><option value="all">All time</option><option value="custom">Custom range…</option></select></div>
+        <input id="cn_from" type="date" style="display:none;" onchange="renderCallNotesList()">
+        <input id="cn_to" type="date" style="display:none;" onchange="renderCallNotesList()">
         <select id="cn_rsmFilter"><option value="">All RSMs</option></select>
         <select id="cn_outcomeFilter"><option value="">All outcomes</option></select>
-        <input id="cn_search" placeholder="Search customer…" style="max-width:220px;">
+        <input id="cn_search" placeholder="Search customer or note text…" style="max-width:240px;">
       </div>
       <div class="tablewrap" style="margin-top:10px;">
         <table class="datatable">
-          <thead><tr><th>Customer</th><th>RSM</th><th>Date</th><th>Outcome</th><th>Notes</th><th>Competitor intel</th><th>Next action</th><th>Pricing</th><th>Location</th><th>Status</th><th>Photos</th><th>Logged</th><th class="no-print">Action</th></tr></thead>
+          <thead><tr><th>Customer</th><th>RSM</th><th>Date</th><th>Outcome</th><th>Notes</th><th>Next action</th><th>Pricing</th><th>Photos</th><th class="no-print">Actions</th></tr></thead>
           <tbody id="cn_body"></tbody>
         </table>
       </div>
@@ -4715,6 +4734,7 @@ function populateTempDealXOptions(bucket, keepValue, selId, hintId) {
 // ===================== CUSTOMER SUMMARY =====================
 let currentSummaryOutlet = null;
 function renderCustomerSummaryPage(outletId) {
+  if (typeof cnDetachForm === 'function') cnDetachForm(); // Round 125: park the Log-a-visit form before the page is rewritten
   currentSummaryOutlet = outletId;
   const o = outlets[outletId];
   if (!o) { document.getElementById('cs_detail').innerHTML=''; return; }
@@ -4798,19 +4818,63 @@ function renderCustomerSummaryPage(outletId) {
         </div>
       </div>
     </div>
+    <div id="cs_logSlot"></div>
+    <div class="panel">
+      <h3>Previous call notes <span class="muted" style="font-weight:400; font-size:11.5px;">— everything logged for this customer; Edit changes a note right here</span></h3>
+      ${csRecentVisitsHtml(outletId)}
+    </div>
     <div id="cs_volumeChart"></div>
     <div class="panel">
       <h3>Listings <span class="muted" style="font-weight:400; font-size:11.5px;">— which SKUs this customer currently has ranged vs has lapsed on</span></h3>
       ${customerListingsHtml(outletId)}
     </div>
     <div class="panel">
-      <h3>Notes</h3>
-      <textarea id="cs_notesInput" style="width:100%; min-height:80px; padding:8px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; resize:vertical;" placeholder="Any notes about this customer…">${escapeHtml(flagsFor(outletId).notes||'')}</textarea>
-      <div class="rowflex no-print" style="margin-top:8px;">
-        <button class="btn small" onclick="saveCsNotes('${outletId}')">Save notes</button>
-        <span class="hint" id="cs_notesMsg"></span>
+      <div class="rowflex" style="justify-content:space-between; align-items:flex-start;">
+        <h2>Pricing in place — enabled SKU groups (${shownGroups.length})</h2>
+        <div class="rowflex no-print" style="gap:16px;">
+          <div class="rowflex" style="gap:5px;">
+            <span class="hint" style="margin:0;">All Kegs:</span>
+            <select id="csBulkKegSel" style="padding:4px 5px; font-size:12px; border:1px solid var(--border); border-radius:5px;">${stdDealOptionsHtml('KEGS')}</select>
+            <button class="btn small secondary" onclick="bulkApplyDeal('${outletId}','KEGS', parseFloat(document.getElementById('csBulkKegSel').value)||0)">Set</button>
+          </div>
+          <div class="rowflex" style="gap:5px;">
+            <span class="hint" style="margin:0;">All Cartons:</span>
+            <select id="csBulkCartonSel" style="padding:4px 5px; font-size:12px; border:1px solid var(--border); border-radius:5px;">${stdDealOptionsHtml('CARTONS')}</select>
+            <button class="btn small secondary" onclick="bulkApplyDeal('${outletId}','CARTONS', parseFloat(document.getElementById('csBulkCartonSel').value)||0)">Set</button>
+          </div>
+        </div>
+      </div>
+      <div class="hint" style="margin-bottom:8px;">Deals can be edited here too — handy for setting a custom deal or reviewing everything for one customer in detail.${disabledCount>0 ? ` ${disabledCount} SKU group${disabledCount===1?'':'s'} not shown here because ${disabledCount===1?'it is':'they are'} disabled on the Product List Prices page.` : ''}</div>
+      <div class="tablewrap">
+        <table class="datatable">
+          <thead><tr><th>SKU group</th><th>Format</th><th class="num-cell">List price (/carton or keg)</th><th>Deal</th><th class="num-cell">Effective price</th><th class="num-cell">Last price paid</th><th>Last sale</th><th>Check</th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
       </div>
     </div>
+    <div class="panel">
+      <h3>Sales Journal <span class="muted" style="font-weight:400; font-size:11.5px;">— line-item sales history, most recent first</span></h3>
+      ${customerSalesJournalHtml(outletId)}
+    </div>
+    <div class="panel" style="background:var(--bg); border-left:4px solid var(--accent, #2d6cdf);">
+      <h2 style="margin:0;">Updates <span class="muted" style="font-weight:400; font-size:13px;">— delivery details, contacts and anything else to change after the visit</span></h2>
+    </div>
+    <div class="panel">
+      <h3>Delivery details</h3>
+      <div class="hint" style="margin-bottom:10px;">Shown automatically to the driver whenever this customer is on a delivery run — access notes, on-site contact, and preferred delivery timing.</div>
+      <div class="formgrid">
+        <div class="fld"><label>Access notes</label><textarea id="cs_dd_access" style="min-height:60px; resize:vertical;" placeholder="e.g. deliver via rear laneway, ring bell for loading dock, no deliveries during lunch service…">${escapeHtml(deliveryDetailsFor(outletId).accessNotes||'')}</textarea></div>
+        <div class="fld"><label>On-site contact name</label><input id="cs_dd_contact" value="${escapeHtml(deliveryDetailsFor(outletId).contactName||'')}"></div>
+        <div class="fld"><label>Contact phone</label><input id="cs_dd_phone" value="${escapeHtml(deliveryDetailsFor(outletId).contactPhone||'')}"></div>
+        <div class="fld"><label>Preferred delivery day</label><select id="cs_dd_day">${DELIVERY_DAYS.map(d=>`<option value="${d}" ${(deliveryDetailsFor(outletId).preferredDay||'Any day')===d?'selected':''}>${d}</option>`).join('')}</select></div>
+        <div class="fld"><label>Preferred time window</label><input id="cs_dd_window" placeholder="e.g. 8am–11am" value="${escapeHtml(deliveryDetailsFor(outletId).preferredWindow||'')}"></div>
+      </div>
+      <div class="rowflex no-print" style="margin-top:8px;">
+        <button class="btn small" onclick="saveCsDeliveryDetails('${outletId}')">Save delivery details</button>
+        <span class="hint" id="cs_dd_msg"></span>
+      </div>
+    </div>
+    ${csDeliveryFeePanelHtml(outletId)}
     <div class="panel">
       <h3>Contact info</h3>
       <div class="hint" style="margin-bottom:10px;">Email address(es) for pricing/marketing. Mostly seeded from the Feb'26 customer list import; edit freely — your changes always win over the import.</div>
@@ -4838,58 +4902,16 @@ function renderCustomerSummaryPage(outletId) {
       </div>
     </div>
     <div class="panel">
-      <h3>Delivery details</h3>
-      <div class="hint" style="margin-bottom:10px;">Shown automatically to the driver whenever this customer is on a delivery run — access notes, on-site contact, and preferred delivery timing.</div>
-      <div class="formgrid">
-        <div class="fld"><label>Access notes</label><textarea id="cs_dd_access" style="min-height:60px; resize:vertical;" placeholder="e.g. deliver via rear laneway, ring bell for loading dock, no deliveries during lunch service…">${escapeHtml(deliveryDetailsFor(outletId).accessNotes||'')}</textarea></div>
-        <div class="fld"><label>On-site contact name</label><input id="cs_dd_contact" value="${escapeHtml(deliveryDetailsFor(outletId).contactName||'')}"></div>
-        <div class="fld"><label>Contact phone</label><input id="cs_dd_phone" value="${escapeHtml(deliveryDetailsFor(outletId).contactPhone||'')}"></div>
-        <div class="fld"><label>Preferred delivery day</label><select id="cs_dd_day">${DELIVERY_DAYS.map(d=>`<option value="${d}" ${(deliveryDetailsFor(outletId).preferredDay||'Any day')===d?'selected':''}>${d}</option>`).join('')}</select></div>
-        <div class="fld"><label>Preferred time window</label><input id="cs_dd_window" placeholder="e.g. 8am–11am" value="${escapeHtml(deliveryDetailsFor(outletId).preferredWindow||'')}"></div>
-      </div>
+      <h3>Notes</h3>
+      <textarea id="cs_notesInput" style="width:100%; min-height:80px; padding:8px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; resize:vertical;" placeholder="Any notes about this customer…">${escapeHtml(flagsFor(outletId).notes||'')}</textarea>
       <div class="rowflex no-print" style="margin-top:8px;">
-        <button class="btn small" onclick="saveCsDeliveryDetails('${outletId}')">Save delivery details</button>
-        <span class="hint" id="cs_dd_msg"></span>
+        <button class="btn small" onclick="saveCsNotes('${outletId}')">Save notes</button>
+        <span class="hint" id="cs_notesMsg"></span>
       </div>
-    </div>
-    ${csDeliveryFeePanelHtml(outletId)}
-    <div class="panel">
-      <div class="rowflex" style="justify-content:space-between; align-items:flex-start;">
-        <h2>Pricing in place — enabled SKU groups (${shownGroups.length})</h2>
-        <div class="rowflex no-print" style="gap:16px;">
-          <div class="rowflex" style="gap:5px;">
-            <span class="hint" style="margin:0;">All Kegs:</span>
-            <select id="csBulkKegSel" style="padding:4px 5px; font-size:12px; border:1px solid var(--border); border-radius:5px;">${stdDealOptionsHtml('KEGS')}</select>
-            <button class="btn small secondary" onclick="bulkApplyDeal('${outletId}','KEGS', parseFloat(document.getElementById('csBulkKegSel').value)||0)">Set</button>
-          </div>
-          <div class="rowflex" style="gap:5px;">
-            <span class="hint" style="margin:0;">All Cartons:</span>
-            <select id="csBulkCartonSel" style="padding:4px 5px; font-size:12px; border:1px solid var(--border); border-radius:5px;">${stdDealOptionsHtml('CARTONS')}</select>
-            <button class="btn small secondary" onclick="bulkApplyDeal('${outletId}','CARTONS', parseFloat(document.getElementById('csBulkCartonSel').value)||0)">Set</button>
-          </div>
-        </div>
-      </div>
-      <div class="hint" style="margin-bottom:8px;">Deals can be edited here too — handy for setting a custom deal or reviewing everything for one customer in detail.${disabledCount>0 ? ` ${disabledCount} SKU group${disabledCount===1?'':'s'} not shown here because ${disabledCount===1?'it is':'they are'} disabled on the Product List Prices page.` : ''}</div>
-      <div class="tablewrap">
-        <table class="datatable">
-          <thead><tr><th>SKU group</th><th>Format</th><th class="num-cell">List price (/carton or keg)</th><th>Deal</th><th class="num-cell">Effective price</th><th class="num-cell">Last price paid</th><th>Last sale</th><th>Check</th></tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-      </div>
-    </div>
-    <div class="panel">
-      <div class="rowflex" style="justify-content:space-between; align-items:center;">
-        <h3 style="margin:0;">Recent Visits <span class="muted" style="font-weight:400; font-size:11.5px;">— call notes logged for this customer</span></h3>
-        <button class="btn small no-print" onclick="quickLogVisitFor('${outletId}')">+ Log a visit</button>
-      </div>
-      ${csRecentVisitsHtml(outletId)}
-    </div>
-    <div class="panel">
-      <h3>Sales Journal <span class="muted" style="font-weight:400; font-size:11.5px;">— line-item sales history, most recent first</span></h3>
-      ${customerSalesJournalHtml(outletId)}
     </div>
   `;
   renderCustomerVolumeChart(outletId);
+  if (typeof cnAttachForm === 'function') cnAttachForm(outletId);
 }
 // ---------- Volume trends (Customer Details) ----------
 // Reuses the exact same monthly bar-chart building blocks as the Total Volume tab (veePeriodRanges/
@@ -6342,6 +6364,53 @@ function perfListingTrioHtml(startVal, targetVal, nowVal, nowLabel, liveVal) {
     ${liveVal!=null ? `<div><div class="lt-num">${fmtNum(liveVal)}</div><div class="lt-lbl">Current listings</div></div>` : ''}
   </div>`;
 }
+// Round 126: "Calls logged per week" — call notes logged in each week of the quarter vs a weekly
+// target of 25 calls PER RSM. Weeks are 7-day bins from the quarter start (the same bins as the
+// "New listings per week" charts above it). Counts every call note by visitDate (Hub-logged and
+// Rhino-imported alike). In the All-RSMs view it counts Josh & Kayla (PERF_TOP_CHART_RSMS, same
+// convention as the "Total Volume by RSM" chart), so the target is 25 x 2. Weeks that haven't
+// started yet (relative to today, not the sales-data date) show no bar.
+const CALLS_PER_RSM_PER_WEEK_TARGET = 25;
+function perfCallsPerWeekData(scope, startDayIdx, endDayIdx) {
+  const rsms = scope === PERF_ALL ? PERF_TOP_CHART_RSMS.slice() : [scope];
+  const numBins = Math.ceil((endDayIdx - startDayIdx + 1) / 7);
+  const counts = new Array(numBins).fill(0);
+  callNotes.forEach(c => {
+    if (!c.visitDate || !c.rsm || !rsms.includes(c.rsm)) return;
+    const di = dayIndexOf(new Date(c.visitDate + 'T00:00:00'));
+    if (di < startDayIdx || di > endDayIdx) return;
+    counts[Math.floor((di - startDayIdx) / 7)]++;
+  });
+  return { rsms, counts, target: CALLS_PER_RSM_PER_WEEK_TARGET * rsms.length, numBins };
+}
+function perfCallsPerWeekChartHtml(scope, startDayIdx, endDayIdx) {
+  const d = perfCallsPerWeekData(scope, startDayIdx, endDayIdx);
+  const todayIdx = dayIndexOf(new Date());
+  const scale = Math.max(d.target, ...d.counts) * 1.18;
+  let elapsed = 0, hit = 0;
+  const cols = d.counts.map((v, b) => {
+    const wkStartIdx = startDayIdx + b * 7;
+    const lbl = new Date(EPOCH_DATE.getTime() + wkStartIdx * 86400000).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
+    const future = wkStartIdx > todayIdx;
+    const current = !future && todayIdx < wkStartIdx + 7;
+    if (!future) { elapsed++; if (v >= d.target) hit++; }
+    const pct = future ? 0 : (v / scale) * 100;
+    const cls = v >= d.target ? 'cwc-hit' : 'cwc-miss';
+    const tip = future ? `Week of ${lbl} — not started` : `Week of ${lbl}${current ? ' (in progress)' : ''}: ${v} call${v === 1 ? '' : 's'} logged (target ${d.target})`;
+    return { html: `<div class="cwc-col" title="${tip}">${future ? '' : `<div class="cwc-bar ${cls}${current ? ' cwc-cur' : ''}" style="height:${pct.toFixed(1)}%;"><span class="cwc-val">${v}</span></div>`}</div>`,
+             label: `<div class="cwc-lbl">${lbl}${current ? '<br><span class="muted">so far</span>' : ''}</div>` };
+  });
+  const total = d.counts.reduce((s, n) => s + n, 0);
+  const targetPct = (d.target / scale) * 100;
+  return `<div class="sub" style="margin:2px 0 6px; font-weight:600;">${total} call${total === 1 ? '' : 's'} logged this quarter &middot; ${hit} of ${elapsed} week${elapsed === 1 ? '' : 's'} at or above target</div>
+  <div class="cwc">
+    <div class="cwc-plot">
+      ${cols.map(c => c.html).join('')}
+      <div class="cwc-target" style="bottom:${targetPct.toFixed(1)}%;"><span>Target ${d.target}/wk</span></div>
+    </div>
+    <div class="cwc-labels">${cols.map(c => c.label).join('')}</div>
+  </div>`;
+}
 function perfBarChartHtml(counts, startDayIdx, endDayIdx, cls) {
   const numBins = Math.ceil((endDayIdx - startDayIdx + 1) / 7);
   const vals = [];
@@ -6706,6 +6775,11 @@ function renderPerfPage() {
         <div class="hint" style="margin-bottom:4px;">Only activations with a photo attached count toward the target above — anything marked "Needs photo" below doesn't yet.</div>
         ${perfActivationsTableHtml(cartonActivationsList)}
       </div>
+    </div>
+    <div class="panel">
+      <h3>Calls logged per week <span class="muted" style="font-weight:400; font-size:11.5px;">(target ${CALLS_PER_RSM_PER_WEEK_TARGET} per RSM per week)</span></h3>
+      <div class="hint" style="margin-bottom:4px;">Call notes logged each week of the quarter (by visit date). ${scope === PERF_ALL ? 'Josh &amp; Kayla combined, so the target line is 2 &times; ' + CALLS_PER_RSM_PER_WEEK_TARGET + '.' : 'Dashed line = the weekly target.'}</div>
+      ${perfCallsPerWeekChartHtml(scope, startDayIdx, endDayIdx)}
     </div>
     <div class="panel">
       <h3>Direct Delivery customers onboarded <span class="muted" style="font-weight:400; font-size:11.5px;">(${directDeliveryCount})</span></h3>
@@ -7581,8 +7655,8 @@ function initCnSkuSelector(prefix, groupIds, onChange) {
   };
 }
 function resetCallNoteForm() {
-  document.getElementById('cn_outletSearch').value = '';
-  document.getElementById('cn_outletId').value = '';
+  document.getElementById('cn_outletSearch').value = cnFormCustomerName();
+  document.getElementById('cn_outletId').value = cnFormCustomerId();
   document.getElementById('cn_visitDate').value = new Date().toISOString().slice(0,10);
   document.getElementById('cn_outcome').value = '';
   document.getElementById('cn_notes').value = '';
@@ -7771,7 +7845,7 @@ function jumpCallNotesCurrentQuarter() {
   callNotesQuarter = { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q };
   renderCallNotesList();
 }
-function renderCallNotesList() {
+function renderCallNotesList_r94() {
   const { fy, q } = callNotesQuarter;
   document.getElementById('cn_qlabel').textContent = quarterLabelOf(fy,q);
 
@@ -7814,6 +7888,170 @@ function renderCallNotesList() {
     </tr>`;
   }).join('');
 }
+
+// ===================== CUSTOMER VISIT + CALL NOTES SUMMARY (Round 125) =====================
+// Shared by the static (app3.js) and Netlify (netlify_part4.js) builds. Only cnPersistEdit() below differs.
+// - "Customer Visit" (the old Customer Details tab) is now the one page an RSM uses on a visit: log today's
+//   visit at the top, previous call notes (edit in place), volume / ranging / pricing / sales journal, and the
+//   delivery-details & other updates last. The Log-a-visit form is physically moved into the page (see
+//   cnAttachForm) so every existing cn_* id and saveCallNote() keeps working untouched.
+// - "Call Notes Summary" (the old Call Notes tab) lists every note in a chosen period with in-place editing.
+let cnEditingId = null;
+let csVisitsShowAll = false;
+
+function cnFormCustomerId() { return (typeof currentSummaryOutlet !== 'undefined' && currentSummaryOutlet) ? currentSummaryOutlet : ''; }
+function cnFormCustomerName() { const id = cnFormCustomerId(); return id && outlets[id] ? outlets[id].name : ''; }
+function cnDetachForm() {
+  const p = document.getElementById('cn_logPanel'), h = document.getElementById('cs_logHolder');
+  if (p && h && p.parentNode !== h) h.appendChild(p); // park it before cs_detail's innerHTML is rewritten
+}
+function cnAttachForm(outletId) {
+  const p = document.getElementById('cn_logPanel'), slot = document.getElementById('cs_logSlot');
+  if (!p || !slot || !outletId || !outlets[outletId]) return;
+  slot.appendChild(p);
+  const idEl = document.getElementById('cn_outletId');
+  const changed = idEl.value !== outletId;
+  idEl.value = outletId;
+  document.getElementById('cn_outletSearch').value = outlets[outletId].name;
+  const t = document.getElementById('cn_logTitle'); if (t) t.textContent = 'Log a visit — ' + outlets[outletId].name;
+  if (changed) { // different customer: clear anything half-typed for the previous one
+    ['cn_notes','cn_competitor','cn_nextAction','cn_nextActionDue'].forEach(i => { const e = document.getElementById(i); if (e) e.value = ''; });
+  }
+  if (!document.getElementById('cn_visitDate').value) document.getElementById('cn_visitDate').value = new Date().toISOString().slice(0,10);
+}
+
+// ---- inline editing (used by both the Customer Visit history and the Call Notes Summary table) ----
+function cnStartEdit(id) { cnEditingId = id; cnRefreshViews(); }
+function cnCancelEdit() { cnEditingId = null; cnRefreshViews(); }
+function cnRefreshViews() {
+  if (document.getElementById('cn_body')) renderCallNotesList();
+  const vb = document.getElementById('cs_visitsBody');
+  if (vb && currentSummaryOutlet) vb.innerHTML = csVisitsTableHtml(currentSummaryOutlet);
+}
+function cnEditRowHtml(c, colspan) {
+  const k = c.id;
+  const opts = CALL_NOTE_OUTCOMES.concat(CALL_NOTE_OUTCOMES.includes(c.outcome) ? [] : [c.outcome]).map(t => `<option ${t === c.outcome ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('');
+  return `<tr class="cn-editrow"><td colspan="${colspan}" style="background:var(--bg);">
+    <div class="formgrid">
+      <div class="fld"><label>Visit date</label><input id="cne_date_${k}" type="date" value="${escapeHtml(c.visitDate || '')}"></div>
+      <div class="fld"><label>Outcome</label><select id="cne_outcome_${k}">${opts}</select></div>
+      <div class="fld"><label>Competitor / market intel</label><input id="cne_comp_${k}" value="${escapeHtml(c.competitorNote || '')}"></div>
+      <div class="fld"><label>Next action</label><input id="cne_next_${k}" value="${escapeHtml(c.nextAction || '')}"></div>
+      <div class="fld"><label>Next action due</label><input id="cne_due_${k}" type="date" value="${escapeHtml(c.nextActionDue || '')}"></div>
+    </div>
+    <div class="fld" style="margin-top:8px;"><label>Notes</label><textarea id="cne_notes_${k}" style="min-height:90px; width:100%; resize:vertical;">${escapeHtml(c.notes || '')}</textarea></div>
+    <div class="rowflex" style="margin-top:8px; gap:8px;">
+      <button class="btn small" onclick="cnInlineSave('${k}')">Save changes</button>
+      <button class="btn small secondary" onclick="cnCancelEdit()">Cancel</button>
+    </div></td></tr>`;
+}
+function cnInlineSave(id) {
+  const c = callNotes.find(x => x.id === id); if (!c) return;
+  const v = f => document.getElementById('cne_' + f + '_' + id).value;
+  const patch = { visitDate: v('date'), outcome: v('outcome'), notes: v('notes').trim(), competitorNote: v('comp').trim(), nextAction: v('next').trim(), nextActionDue: v('due') || null };
+  if (!patch.visitDate) { toast('Please set a visit date.'); return; }
+  if (!patch.outcome) { toast('Please select an outcome.'); return; }
+  cnPersistEdit(c, patch, () => {
+    cnEditingId = null; cnRefreshViews();
+    toast('Visit updated.');
+  });
+}
+
+// ---- Customer Visit page: previous call notes ----
+function csVisitsTableHtml(outletId) {
+  const all = callNotesForOutlet(outletId);
+  if (!all.length) return '<div class="empty">No visits logged yet for this customer.</div>';
+  const list = csVisitsShowAll ? all : all.slice(0, 5);
+  const rows = list.map(c => cnEditingId === c.id ? cnEditRowHtml(c, 7) : `<tr>
+      <td class="mono">${fmtDate(c.visitDate)}</td>
+      <td><span class="badge ${callNoteOutcomeBadgeClass(c.outcome)}">${escapeHtml(c.outcome)}</span></td>
+      <td style="max-width:360px; white-space:pre-wrap;">${escapeHtml(c.notes || '—')}${c.competitorNote ? '<div class="muted" style="margin-top:4px;">Intel: ' + escapeHtml(c.competitorNote) + '</div>' : ''}</td>
+      <td>${c.nextAction ? escapeHtml(c.nextAction) + (c.nextActionDue ? ' <span class="muted">(' + fmtDate(c.nextActionDue) + ')</span>' : '') : '—'}</td>
+      <td style="max-width:150px;">${cnPricingCellHtml(c)}</td>
+      <td class="muted">${escapeHtml(c.createdBy || '')}</td>
+      <td class="no-print rowflex"><button class="btn small secondary" onclick="cnStartEdit('${c.id}')">Edit</button><button class="btn small danger" onclick="deleteCallNote('${c.id}')">Delete</button></td>
+    </tr>`).join('');
+  const toggle = all.length > 5 ? `<div class="hint no-print" style="margin-top:6px;"><a href="#" onclick="csVisitsShowAll=!csVisitsShowAll; cnRefreshViews(); return false;">${csVisitsShowAll ? 'Show only the 5 most recent' : 'Show all ' + all.length + ' visits'}</a></div>` : '';
+  return `<div class="tablewrap"><table class="datatable"><thead><tr><th>Date</th><th>Outcome</th><th>Notes</th><th>Next action</th><th>Pricing</th><th>Logged by</th><th class="no-print">Actions</th></tr></thead><tbody>${rows}</tbody></table></div>${toggle}`;
+}
+function csRecentVisitsHtml(outletId) { return `<div id="cs_visitsBody">${csVisitsTableHtml(outletId)}</div>`; }
+function quickLogVisitFor(outletId) {
+  document.querySelector('.tab-btn[data-tab=summary]').click();
+  setTimeout(() => {
+    selectSummaryOutlet(outletId);
+    const n = document.getElementById('cn_notes'); if (n) { n.scrollIntoView({ behavior: 'smooth', block: 'center' }); n.focus(); }
+  }, 0);
+}
+
+// ---- Call Notes Summary tab ----
+function cnPeriodRange() {
+  const v = (document.getElementById('cn_period') || {}).value || 'month';
+  const today = new Date(), ds = localDateStr;
+  const addDays = (d, n) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); return x; };
+  if (v === 'all') return { from: '0000-00-00', to: '9999-99-99', label: 'All time' };
+  if (v === 'custom') { const f = document.getElementById('cn_from').value || '0000-00-00', t = document.getElementById('cn_to').value || '9999-99-99'; return { from: f, to: t, label: 'Custom range' }; }
+  if (v === 'week' || v === 'lastweek') { const m = addDays(mondayOf(today), v === 'week' ? 0 : -7); return { from: ds(m), to: ds(addDays(m, 6)), label: (v === 'week' ? 'This week' : 'Last week') }; }
+  if (v === 'month' || v === 'lastmonth') { const first = new Date(today.getFullYear(), today.getMonth() + (v === 'month' ? 0 : -1), 1), last = new Date(first.getFullYear(), first.getMonth() + 1, 0); return { from: ds(first), to: ds(last), label: first.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }) }; }
+  if (v === 'quarter' || v === 'lastquarter') { const cq = v === 'quarter' ? PERF_CURRENT_Q : shiftQuarter(PERF_CURRENT_Q.fy, PERF_CURRENT_Q.q, -1); const [s, e] = quarterBoundsOf(cq.fy, cq.q); return { from: ds(s), to: ds(addDays(e, -1)), label: quarterLabelOf(cq.fy, cq.q) }; }
+  if (v === '12m') return { from: ds(addDays(today, -365)), to: ds(today), label: 'Last 12 months' };
+  return { from: '0000-00-00', to: '9999-99-99', label: '' };
+}
+function cnPeriodChanged() {
+  const custom = document.getElementById('cn_period').value === 'custom';
+  ['cn_from', 'cn_to'].forEach(i => { const e = document.getElementById(i); if (e) e.style.display = custom ? '' : 'none'; });
+  renderCallNotesList();
+}
+function renderCallNotesList() {
+  const body = document.getElementById('cn_body');
+  if (!body) return;
+  const pr = cnPeriodRange();
+  const pl = document.getElementById('cn_periodLabel'); if (pl) pl.textContent = pr.label;
+  const rsmSel = document.getElementById('cn_rsmFilter').value;
+  const outcomeSel = document.getElementById('cn_outcomeFilter').value;
+  const q2 = (document.getElementById('cn_search').value || '').trim().toLowerCase();
+  const list = callNotes.filter(c => {
+    if (!c.visitDate || c.visitDate < pr.from || c.visitDate > pr.to) return false;
+    if (rsmSel && c.rsm !== rsmSel) return false;
+    if (outcomeSel && c.outcome !== outcomeSel) return false;
+    if (q2) { const o = outlets[c.outletId]; if (!(((o && o.name) || '').toLowerCase().includes(q2) || (c.notes || '').toLowerCase().includes(q2))) return false; }
+    return true;
+  }).sort((a, b) => (b.visitDate || '').localeCompare(a.visitDate || '') || (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  document.getElementById('cn_count').textContent = `(${list.length.toLocaleString()})`;
+  if (!list.length) { body.innerHTML = '<tr><td colspan="9"><div class="empty">No call notes for this period / filter.</div></td></tr>'; }
+  else {
+    const CAP = 400;
+    body.innerHTML = list.slice(0, CAP).map(c => {
+      if (cnEditingId === c.id) return cnEditRowHtml(c, 9);
+      const o = outlets[c.outletId] || {};
+      return `<tr>
+        <td><a href="#" onclick="quickOpenCustomerVisit('${escapeHtml(c.outletId)}'); return false;" title="Open Customer Visit">${escapeHtml(o.name || c.outletId)}</a></td>
+        <td>${escapeHtml(c.rsm || '—')}</td>
+        <td class="mono">${fmtDate(c.visitDate)}</td>
+        <td><span class="badge ${callNoteOutcomeBadgeClass(c.outcome)}">${escapeHtml(c.outcome)}</span></td>
+        <td style="max-width:340px; white-space:pre-wrap;">${escapeHtml(c.notes || '—')}${c.competitorNote ? '<div class="muted" style="margin-top:4px;">Intel: ' + escapeHtml(c.competitorNote) + '</div>' : ''}</td>
+        <td style="max-width:170px;">${c.nextAction ? escapeHtml(c.nextAction) + (c.nextActionDue ? ' <span class="muted">(' + fmtDate(c.nextActionDue) + ')</span>' : '') : '—'}</td>
+        <td style="max-width:150px;">${cnPricingCellHtml(c)}</td>
+        <td>${cnPhotosCellHtml(c)}</td>
+        <td class="no-print rowflex"><button class="btn small secondary" onclick="cnStartEdit('${c.id}')">Edit</button><button class="btn small danger" onclick="deleteCallNote('${c.id}')">Delete</button></td>
+      </tr>`;
+    }).join('') + (list.length > CAP ? `<tr><td colspan="9"><div class="hint">Showing the latest ${CAP} of ${list.length.toLocaleString()} — narrow the period or filters to see the rest.</div></td></tr>` : '');
+  }
+  const vb = document.getElementById('cs_visitsBody');
+  if (vb && currentSummaryOutlet) vb.innerHTML = csVisitsTableHtml(currentSummaryOutlet);
+}
+function quickOpenCustomerVisit(outletId) {
+  document.querySelector('.tab-btn[data-tab=summary]').click();
+  setTimeout(() => selectSummaryOutlet(outletId), 0);
+}
+function cnPersistEdit(c, patch, done) {
+  const n = Object.assign({}, c, patch);
+  toast('Saving…');
+  callServer('saveCallNote', [c.id, c.outletId, c.rsm, n.visitDate, n.outcome, n.notes, n.competitorNote, n.nextAction, n.nextActionDue, c.geo || null, currentUserEmail, c.photos || [], c.pricing || {}], () => {
+    Object.assign(c, patch, { updatedBy: currentUserEmail, updatedAt: new Date().toISOString() });
+    done();
+  }, () => {});
+}
+
 function editCallNote(id) {
   const c = callNotes.find(x=>x.id===id);
   if (!c) return;
@@ -7908,7 +8146,7 @@ function cnPhotosCellHtml(c) {
   </div>`;
 }
 // ---------- Recent Visits panel (Customer Summary) ----------
-function csRecentVisitsHtml(outletId) {
+function csRecentVisitsHtml_r94(outletId) {
   const all = callNotesForOutlet(outletId);
   if (!all.length) return '<div class="empty">No visits logged yet for this customer.</div>';
   const list = all.slice(0, 5);
@@ -7925,7 +8163,7 @@ function csRecentVisitsHtml(outletId) {
     <tbody>${rows}</tbody>
   </table></div>${more}`;
 }
-function quickLogVisitFor(outletId) {
+function quickLogVisitFor_r94(outletId) {
   document.querySelector('.tab-btn[data-tab=callnotes]').click();
   setTimeout(() => {
     document.getElementById('cn_outletId').value = outletId;
@@ -7933,92 +8171,6 @@ function quickLogVisitFor(outletId) {
     document.getElementById('cn_visitDate').value = new Date().toISOString().slice(0,10);
     document.getElementById('cn_notes').focus();
   }, 0);
-}
-
-// ===================== WEEKLY KPI (Round 96) =====================
-// Reads straight off callNotes[] (no new state) — this is the "Weekly Meeting KPI" piece flagged
-// as deferred in Round 94's notes, now built: how many visits has each RSM logged this week, and
-// what did they actually write, all in one place for management to scan without opening the full
-// Call Notes list and filtering by RSM one at a time. Monday-anchored week bucketing reuses the
-// exact same mondayOf()/weekKeyOf()/weekLabelOf() helpers Delivery Reports already established.
-let wkCurrentWeek = weekKeyOf(new Date());
-function stepWeeklyKpiWeek(delta) {
-  const d = new Date(wkCurrentWeek + 'T00:00:00');
-  d.setDate(d.getDate() + delta * 7);
-  wkCurrentWeek = weekKeyOf(d);
-  renderWeeklyKpiPage();
-}
-function jumpWeeklyKpiCurrentWeek() {
-  wkCurrentWeek = weekKeyOf(new Date());
-  renderWeeklyKpiPage();
-}
-function weekEndKeyOf(weekKey) {
-  const d = new Date(weekKey + 'T00:00:00');
-  d.setDate(d.getDate() + 6);
-  return localDateStr(d);
-}
-// Every visit logged with a visitDate inside [Monday, Sunday] of the given week — same inclusive
-// boundary style as callNotesInQuarter() above.
-function callNotesInWeek(weekKey) {
-  const endKey = weekEndKeyOf(weekKey);
-  return callNotes.filter(c => c.visitDate >= weekKey && c.visitDate <= endKey);
-}
-// {rsmName: count} for the given week — every RSM known to the app appears in the caller's own
-// loop (via uniqueVals('rsm', outlets)) even at 0, so a quiet week is visible, not just absent.
-function weeklyKpiMeetingCounts(weekKey) {
-  const byRsm = {};
-  callNotesInWeek(weekKey).forEach(c => {
-    const r = c.rsm || 'Unassigned';
-    byRsm[r] = (byRsm[r] || 0) + 1;
-  });
-  return byRsm;
-}
-function renderWeeklyKpiPage() {
-  const label = document.getElementById('wk_weeklabel');
-  if (label) label.textContent = `${weekLabelOf(wkCurrentWeek)} – ${weekLabelOf(weekEndKeyOf(wkCurrentWeek))}`;
-
-  const rsmVals = uniqueVals('rsm', outlets);
-  const counts = weeklyKpiMeetingCounts(wkCurrentWeek);
-  const totalMeetings = Object.values(counts).reduce((s,n) => s+n, 0);
-  const body = document.getElementById('wk_meetingsBody');
-  if (body) {
-    const rows = rsmVals.slice().sort((a,b) => (counts[b]||0) - (counts[a]||0) || a.localeCompare(b))
-      .map(rsm => `<tr><td>${escapeHtml(rsm)}</td><td class="mono">${counts[rsm]||0}</td></tr>`).join('');
-    body.innerHTML = rows || `<tr><td colspan="2"><div class="empty">No RSMs found.</div></td></tr>`;
-  }
-  const totalEl = document.getElementById('wk_totalMeetings');
-  if (totalEl) totalEl.textContent = `${totalMeetings} meeting${totalMeetings===1?'':'s'} logged this week`;
-
-  const notes = callNotesInWeek(wkCurrentWeek);
-  const byRsmNotes = {};
-  notes.forEach(c => { const r = c.rsm || 'Unassigned'; (byRsmNotes[r] = byRsmNotes[r] || []).push(c); });
-  const summaryEl = document.getElementById('wk_notesSummary');
-  if (summaryEl) {
-    const rsmsWithNotes = rsmVals.filter(r => byRsmNotes[r] && byRsmNotes[r].length);
-    if (!rsmsWithNotes.length) {
-      summaryEl.innerHTML = `<div class="empty">No visits logged this week yet.</div>`;
-    } else {
-      summaryEl.innerHTML = rsmsWithNotes.map(rsm => {
-        const items = byRsmNotes[rsm].slice().sort((a,b) => (a.visitDate||'').localeCompare(b.visitDate||''));
-        const rows = items.map(c => {
-          const o = outlets[c.outletId] || {};
-          return `<tr>
-            <td class="mono">${fmtDate(c.visitDate)}</td>
-            <td>${escapeHtml(o.name||c.outletId)}</td>
-            <td><span class="badge ${callNoteOutcomeBadgeClass(c.outcome)}">${escapeHtml(c.outcome)}</span></td>
-            <td style="max-width:320px;">${escapeHtml(c.notes||'—')}</td>
-          </tr>`;
-        }).join('');
-        return `<div class="panel" style="margin-top:10px;">
-          <h3 style="margin:0 0 6px;">${escapeHtml(rsm)} <span class="muted" style="font-weight:400;">(${items.length} visit${items.length>1?'s':''})</span></h3>
-          <div class="tablewrap"><table class="datatable">
-            <thead><tr><th>Date</th><th>Customer</th><th>Outcome</th><th>Notes</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table></div>
-        </div>`;
-      }).join('');
-    }
-  }
 }
 
 // ===================== JOURNEY PLANNER (Round 97; Round 98 redesign; Round 99 refinement; Round 100 usability pass) =====================
@@ -15220,6 +15372,30 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
+// Round 126 — collapsible nav sections. State is remembered per device (localStorage).
+const LS_NAV_COLLAPSED = 'ymtNavCollapsedV1';
+function navCollapsedState() { try { return JSON.parse(localStorage.getItem(LS_NAV_COLLAPSED)) || {}; } catch (e) { return {}; } }
+function applyNavCollapsed() {
+  const st = navCollapsedState();
+  document.querySelectorAll('nav.tabs .nav-sec').forEach(s => s.classList.toggle('collapsed', !!st[s.dataset.sec]));
+}
+function toggleNavSection(key) {
+  const st = navCollapsedState();
+  st[key] = !st[key];
+  try { localStorage.setItem(LS_NAV_COLLAPSED, JSON.stringify(st)); } catch (e) {}
+  applyNavCollapsed();
+}
+// Any tab opened from elsewhere (cross-links, "Log a visit" buttons) reveals its own section.
+document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
+  const sec = b.closest('.nav-sec');
+  if (sec && sec.classList.contains('collapsed')) {
+    sec.classList.remove('collapsed');
+    const st = navCollapsedState(); st[sec.dataset.sec] = false;
+    try { localStorage.setItem(LS_NAV_COLLAPSED, JSON.stringify(st)); } catch (e) {}
+  }
+}));
+applyNavCollapsed();
+
 function segPersistBulk(items) { if (items && items.length) callServer('saveCustomerSegments', [items, currentUserEmail], (data) => { if (data && data.customerSegmentOverrides) customerSegmentOverrides = data.customerSegmentOverrides; }); }
 // ===================== SEGMENTS (Round 114) =====================
 // The Hub now owns the customer segment labels that Ontap used to maintain for us:
@@ -16033,9 +16209,6 @@ function renderEverything() {
   // Family Group Key Contacts page (Round 85)
   document.getElementById('fg_search').addEventListener('input', renderFamilyGroupsPage);
   renderFamilyGroupsPage();
-
-  // Weekly KPI page (Round 96)
-  renderWeeklyKpiPage();
 
   // Journey Planner page (Round 97)
   populateSelect('jp_rsm', rsmVals);

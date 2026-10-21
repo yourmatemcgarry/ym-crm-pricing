@@ -693,7 +693,8 @@ export default async (req) => {
         pricing: pricing || {},
         updatedBy, updatedAt: now,
       };
-      if (idx >= 0) current[idx] = rec; else current.push(rec);
+      // Round 125: editing in place must not drop fields this action doesn't know about (e.g. the Rhino import's importedFrom / rhinoCallType / createdBy)
+      if (idx >= 0) current[idx] = { ...current[idx], ...rec }; else current.push(rec);
       await s.setJSON('callNotes', current);
       return json({ ok: true, id: newId, callNotes: current });
     }
