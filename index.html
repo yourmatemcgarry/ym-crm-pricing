@@ -884,7 +884,12 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
       <h2>Add a new customer</h2>
       <div class="hint" style="margin-bottom:10px;">For a prospect who hasn't ordered yet, so they don't show up in your sales data. Once added here, they're pickable everywhere you choose a customer — pricing, orders, delivery runs — for the whole team. If you know this venue's real/eventual outlet ID (e.g. from your licensing or POS system), enter it — once that same ID shows up in a real weekly data refresh, this record is automatically replaced by the real one, with nothing further for you to do. Leave it blank if you don't know it yet.</div>
       <div class="formgrid">
-        <div class="fld"><label>Outlet ID (optional, but recommended)</label><input id="nc_id" placeholder="e.g. their license/POS ID, if known"></div>
+        <div class="fld"><label>Outlet ID (optional, but recommended)</label><input id="nc_id" placeholder="e.g. their license/POS ID, if known">
+          <div class="hint" id="nc_otdBox" style="margin-top:6px; line-height:1.6;">
+            <a href="https://otd-outlets.ontapdata.com.au/login" target="_blank" rel="noopener">Look up an Outlet ID in OTD Outlets &#8599;</a><br>
+            Username: <span class="mono">christen@yourmatesbrewing.com</span> <a href="#" onclick="navigator.clipboard&amp;&amp;navigator.clipboard.writeText('christen@yourmatesbrewing.com'); this.textContent='Copied'; return false;">Copy</a><br>
+            Password: <span class="mono" id="nc_otdPw" data-pw="thyus#PN1">&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;</span> <a href="#" onclick="var s=document.getElementById('nc_otdPw'); var hid=s.dataset.shown!=='1'; s.textContent=hid?s.dataset.pw:'\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'; s.dataset.shown=hid?'1':'0'; this.textContent=hid?'Hide':'Show'; return false;">Show</a> &middot; <a href="#" onclick="navigator.clipboard&amp;&amp;navigator.clipboard.writeText(document.getElementById('nc_otdPw').dataset.pw); this.textContent='Copied'; return false;">Copy</a>
+          </div></div>
         <div class="fld"><label>Customer name</label><input id="nc_name" placeholder="Venue name"></div>
         <div class="fld"><label>Address</label><input id="nc_address" placeholder="Street address"></div>
         <div class="fld"><label>Suburb</label><input id="nc_suburb"></div>
@@ -1806,8 +1811,11 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
   <!-- ================= ORDERS ================= -->
   <div class="tabpage" id="tab-orders">
     <div class="panel no-print">
-      <h2>New order</h2>
-      <div class="fld autocomplete" style="max-width:420px;">
+      <div class="rowflex" style="justify-content:space-between; align-items:center; gap:10px;">
+        <h2 style="margin:0;">New order</h2>
+        <button class="btn secondary" onclick="resetOrderForm()">Clear form</button>
+      </div>
+      <div class="fld autocomplete" style="max-width:420px; margin-top:10px;">
         <label>Customer</label>
         <input id="ord_outletSearch" placeholder="Search customer…" autocomplete="off">
         <div class="ac-results" id="ord_outletResults"></div>
@@ -1823,7 +1831,6 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
       </div>
       <div class="rowflex" style="margin-top:12px;">
         <button class="btn" onclick="saveOrder()">Save order</button>
-        <button class="btn secondary" onclick="resetOrderForm()">Clear form</button>
       </div>
     </div>
     <div class="panel">
