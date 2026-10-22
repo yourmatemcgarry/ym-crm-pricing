@@ -1393,6 +1393,7 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
           <select id="ce_period"></select>
         </div>
         <div class="fld" style="margin:0;"><label>Compare to</label><select id="ce_compare"><option value="previous">Previous period</option><option value="lastyear">Same period last year</option></select></div>
+        <div class="fld" style="margin:0;"><label>Activity</label><select id="ce_activity"><option value="">All customers</option><option value="active">Active (bought in last quarter)</option><option value="inactive">Not active (no purchase in last quarter)</option></select></div>
         <div class="fld" style="margin:0;"><label>RSM</label><select id="ce_rsm"><option value="">All RSMs</option></select></div>
         <div class="fld" style="margin:0;">
           <label>Customer type</label>
@@ -11499,6 +11500,7 @@ const CE_PERIOD_PRESETS = [
   { key: 'rollingQuarter', label: 'Rolling quarter (trailing 91 days)' },
   { key: 'mat', label: 'MAT (trailing 12 months)' },
   { key: 'lastFullFy', label: 'Last full financial year' },
+  { key: 'allTime', label: 'All time (since first sales data)' },
 ];
 function cePeriodBounds(key) {
   const today = PERF_TODAY;
@@ -11530,6 +11532,9 @@ function cePeriodBounds(key) {
   }
   if (key === 'mat') {
     return [new Date(today.getTime() - 364 * 86400000), today];
+  }
+  if (key === 'allTime') {
+    return [EPOCH_DATE || new Date(2000, 0, 1), today];
   }
   if (key === 'lastFullFy') {
     const [fyStart] = quarterBoundsOf(PERF_CURRENT_Q.fy - 1, 1);
@@ -11658,7 +11663,14 @@ function ceBuildRows() {
   const todayDayIdx = dayIndexOf(PERF_TODAY);
   const STALE_INVOICE_DAYS = 91;
 
+  // Round 130: activity filter. "Not active" = no purchase in the last quarter (91 days to the last
+  // sales update), judged on each customer's TRUE last invoice across all time (under the same
+  // beer/package filters), not just inside the chosen period — so choose any period and still get
+  // every customer who has gone quiet.
+  const activitySel = document.getElementById('ce_activity') ? document.getElementById('ce_activity').value : '';
+  const allTimeStats = ceComputeAllOutletStats(0, todayDayIdx, groupFilterFn);
   const allOids = new Set([...Object.keys(primaryStats), ...Object.keys(compareStats)]);
+  if (activitySel === 'inactive') Object.keys(allTimeStats).forEach(k => allOids.add(k));
   const rows = [];
   allOids.forEach(oid => {
     if (!outletFilterFn(oid)) return;
@@ -11666,7 +11678,11 @@ function ceBuildRows() {
     if (!o) return;
     const p = primaryStats[oid] || { totalLitres: 0, listingsCount: 0, lastInvoiceDayIdx: null };
     const c = compareStats[oid] || { totalLitres: 0, listingsCount: 0, lastInvoiceDayIdx: null };
-    const lastInvoiceDayIdx = p.lastInvoiceDayIdx != null ? p.lastInvoiceDayIdx : c.lastInvoiceDayIdx;
+    const at = allTimeStats[oid];
+    const lastInvoiceDayIdx = at && at.lastInvoiceDayIdx != null ? at.lastInvoiceDayIdx : (p.lastInvoiceDayIdx != null ? p.lastInvoiceDayIdx : c.lastInvoiceDayIdx);
+    const isActive = lastInvoiceDayIdx != null && (todayDayIdx - lastInvoiceDayIdx) <= STALE_INVOICE_DAYS;
+    if (activitySel === 'active' && !isActive) return;
+    if (activitySel === 'inactive' && isActive) return;
     rows.push({
       oid, name: o.name, rsm: o.rsm || '—', custType: o.custType || '—',
       volume: p.totalLitres, volumeCompare: c.totalLitres, volumeDeltaPct: cePctDelta(p.totalLitres, c.totalLitres),
@@ -16072,7 +16088,7 @@ function renderEverything() {
   populateSelect('ce_familyGroup', familyGroupVals);
   ceZoneMsel = initMultiSelect('ce_zone', zoneVals, 'zones', () => { cePage = 1; renderCustomerExplorerPage(); });
   ceSubbrandMsel = initMultiSelect('ce_subbrand', uniqueVals('subbrand', groups), 'beers', () => { cePage = 1; renderCustomerExplorerPage(); });
-  ['ce_period','ce_compare','ce_rsm','ce_pkgtype','ce_whouse','ce_bannerGroup','ce_subBanner','ce_familyGroup'].forEach(id =>
+  ['ce_period','ce_compare','ce_activity','ce_rsm','ce_pkgtype','ce_whouse','ce_bannerGroup','ce_subBanner','ce_familyGroup'].forEach(id =>
     document.getElementById(id).addEventListener('change', () => { cePage = 1; renderCustomerExplorerPage(); }));
   renderCustomerExplorerPage();
 
