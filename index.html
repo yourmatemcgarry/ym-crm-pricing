@@ -6136,6 +6136,12 @@ let bgZoneMsel = null;            // multi-select for Banner Gap Report "Zone" f
 // current active reps only, regardless of who else appears in the raw sales data (e.g. former
 // reps, house accounts) — update this list if the sales team roster changes.
 const PERF_TOP_CHART_RSMS = ['Josh Pitts', 'Kayla Miller'];
+// Round 129: an RSM who has left (no outlets assigned any more) is dropped from the "active" list, so
+// the weekly-calls target and the All-Reps PDF export follow the team as it is today.
+function perfActiveTopRsms() {
+  const owners = new Set(Object.values(outlets).map(o => o && o.rsm).filter(Boolean));
+  return PERF_TOP_CHART_RSMS.filter(r => owners.has(r));
+}
 
 function perfOutletFilter(scope) {
   // PERF_ALL means "Sales Team, all RSMs" (see its definition) — NOT "every outlet in the raw
@@ -6388,7 +6394,8 @@ function perfCallsPerWeekData(scope, startDayIdx, endDayIdx) {
     if (di < startDayIdx || di > endDayIdx) return;
     counts[Math.floor((di - startDayIdx) / 7)]++;
   });
-  return { rsms, counts, target: CALLS_PER_RSM_PER_WEEK_TARGET * rsms.length, numBins };
+  const activeN = scope === PERF_ALL ? Math.max(1, perfActiveTopRsms().length) : 1;
+  return { rsms, counts, target: CALLS_PER_RSM_PER_WEEK_TARGET * activeN, numBins };
 }
 function perfCallsPerWeekChartHtml(scope, startDayIdx, endDayIdx) {
   const d = perfCallsPerWeekData(scope, startDayIdx, endDayIdx);
@@ -6785,7 +6792,7 @@ function renderPerfPage() {
     </div>
     <div class="panel">
       <h3>Calls logged per week <span class="muted" style="font-weight:400; font-size:11.5px;">(target ${CALLS_PER_RSM_PER_WEEK_TARGET} per RSM per week)</span></h3>
-      <div class="hint" style="margin-bottom:4px;">Call notes logged each week of the quarter (by visit date). ${scope === PERF_ALL ? 'Josh &amp; Kayla combined, so the target line is 2 &times; ' + CALLS_PER_RSM_PER_WEEK_TARGET + '.' : 'Dashed line = the weekly target.'}</div>
+      <div class="hint" style="margin-bottom:4px;">Call notes logged each week of the quarter (by visit date). ${scope === PERF_ALL ? 'All active RSMs combined, so the target line is ' + Math.max(1, perfActiveTopRsms().length) + ' &times; ' + CALLS_PER_RSM_PER_WEEK_TARGET + '.' : 'Dashed line = the weekly target.'}</div>
       ${perfCallsPerWeekChartHtml(scope, startDayIdx, endDayIdx)}
     </div>
     <div class="panel">
@@ -6864,7 +6871,7 @@ function exportPerfPDF() { window.print(); }
 // the on-screen page doesn't get left stuck on the last rep in the list.
 function exportAllRepsPDF() {
   const originalScope = perfScope;
-  PERF_TOP_CHART_RSMS.forEach(rep => {
+  perfActiveTopRsms().forEach(rep => {
     perfScope = rep;
     renderPerfPage();
     window.print();
@@ -9285,7 +9292,9 @@ function fyForecastApplyKeg(rsm, fy) {
   const result = fyForecastCompute(rsm, fy);
   const skippedQKeys = [];
   const entries = [];
-  result.quarters.forEach(r => {
+  result.quarters.forEach((r, qi) => {
+    // Round 129: a finished quarter keeps the target it was judged against.
+    if (quarterBoundsOf(fy, qi + 1)[1].getTime() <= Date.now()) return;
     if (isRsmTargetProtected(rsm, r.qKey)) { skippedQKeys.push(r.qKey); return; }
     [
       ['kegListingsTarget', Math.round(r.kegListingsTargetFinal)],
@@ -9302,7 +9311,9 @@ function fyForecastApplyCarton(rsm, fy) {
   const result = fyForecastCompute(rsm, fy);
   const skippedQKeys = [];
   const entries = [];
-  result.quarters.forEach(r => {
+  result.quarters.forEach((r, qi) => {
+    // Round 129: a finished quarter keeps the target it was judged against.
+    if (quarterBoundsOf(fy, qi + 1)[1].getTime() <= Date.now()) return;
     if (isRsmTargetProtected(rsm, r.qKey)) { skippedQKeys.push(r.qKey); return; }
     [
       ['cartonListingsTarget', Math.round(r.cartonListingsTargetFinal)],
@@ -9622,7 +9633,7 @@ function fyForecastOnInputChange(rsm, fy, field, val) {
   renderTargetsPage();
 }
 function kegForecastOnApply(rsm, fy) {
-  if (!confirm(`This will set/overwrite Q1–Q4 Keg Listings and Volume targets for ${rsm} in FY${fy}. Continue?`)) return;
+  if (!confirm(`This will set/overwrite the Keg Listings and Volume targets for ${rsm} in FY${fy} (quarters already finished are left as they were). Continue?`)) return;
   const result = fyForecastApplyKeg(rsm, fy);
   if (result.skippedQKeys && result.skippedQKeys.length) {
     toast(`FY${fy} keg forecast applied for ${rsm}. Skipped ${result.skippedQKeys.length} protected quarter(s): ${result.skippedQKeys.join(', ')}.`);
@@ -9635,7 +9646,7 @@ function kegForecastOnApply(rsm, fy) {
 function kegForecastOnApplyAll(fy) {
   const rsmList = uniqueVals('rsm', outlets);
   if (!rsmList.length) return;
-  if (!confirm(`This will set/overwrite Q1–Q4 Keg Listings and Volume targets for ALL ${rsmList.length} RSMs in FY${fy}. Continue?`)) return;
+  if (!confirm(`This will set/overwrite the Keg Listings and Volume targets for ALL ${rsmList.length} RSMs in FY${fy} (finished quarters are left as they were). Continue?`)) return;
   let totalSkipped = 0;
   const allEntries = [];
   rsmList.forEach(rsm => {
@@ -9650,7 +9661,7 @@ function kegForecastOnApplyAll(fy) {
   persistRsmTargetsBulk(allEntries);
 }
 function cartonForecastOnApply(rsm, fy) {
-  if (!confirm(`This will set/overwrite Q1–Q4 Carton Listings and Volume targets for ${rsm} in FY${fy}. Continue?`)) return;
+  if (!confirm(`This will set/overwrite the Carton Listings and Volume targets for ${rsm} in FY${fy} (quarters already finished are left as they were). Continue?`)) return;
   const result = fyForecastApplyCarton(rsm, fy);
   if (result.skippedQKeys && result.skippedQKeys.length) {
     toast(`FY${fy} carton forecast applied for ${rsm}. Skipped ${result.skippedQKeys.length} protected quarter(s): ${result.skippedQKeys.join(', ')}.`);
@@ -9663,7 +9674,7 @@ function cartonForecastOnApply(rsm, fy) {
 function cartonForecastOnApplyAll(fy) {
   const rsmList = uniqueVals('rsm', outlets);
   if (!rsmList.length) return;
-  if (!confirm(`This will set/overwrite Q1–Q4 Carton Listings and Volume targets for ALL ${rsmList.length} RSMs in FY${fy}. Continue?`)) return;
+  if (!confirm(`This will set/overwrite the Carton Listings and Volume targets for ALL ${rsmList.length} RSMs in FY${fy} (finished quarters are left as they were). Continue?`)) return;
   let totalSkipped = 0;
   const allEntries = [];
   rsmList.forEach(rsm => {
