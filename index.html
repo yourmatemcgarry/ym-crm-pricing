@@ -1441,14 +1441,14 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
       <!-- On-screen, paginated view (25 rows/page). -->
       <div class="tablewrap no-print">
         <table class="datatable">
-          <thead id="ce_thead"><tr><th>Customer</th><th class="num-cell">Volume</th><th class="num-cell">Volume Δ</th><th class="num-cell">Volume Δ (L)</th><th class="num-cell">Listings</th><th class="num-cell">Listings Δ</th><th class="num-cell">Keg Vol/Listing/Wk <span class="muted" style="font-weight:400;">(50L)</span></th><th class="num-cell">Carton Vol/Listing/Wk <span class="muted" style="font-weight:400;">(6L)</span></th><th>Last invoice</th></tr></thead>
+          <thead id="ce_thead"><tr><th>Customer</th><th class="num-cell">Volume</th><th class="num-cell">Volume Δ</th><th class="num-cell">Volume Δ (L)</th><th class="num-cell">Listings</th><th class="num-cell">Listings Δ</th><th class="num-cell">Keg Vol/Listing/Wk <span class="muted" style="font-weight:400;">(50L)</span></th><th class="num-cell">Carton Vol/Listing/Wk <span class="muted" style="font-weight:400;">(6L)</span></th><th>Last invoice</th><th>Email(s)</th></tr></thead>
           <tbody id="ce_body"></tbody>
         </table>
       </div>
       <!-- Print-only view: every filtered customer, not just the current page. -->
       <div class="tablewrap print-only">
         <table class="datatable">
-          <thead><tr><th>Customer</th><th class="num-cell">Volume</th><th class="num-cell">Volume Δ</th><th class="num-cell">Volume Δ (L)</th><th class="num-cell">Listings</th><th class="num-cell">Listings Δ</th><th class="num-cell">Keg Vol/Listing/Wk <span class="muted" style="font-weight:400;">(50L)</span></th><th class="num-cell">Carton Vol/Listing/Wk <span class="muted" style="font-weight:400;">(6L)</span></th><th>Last invoice</th></tr></thead>
+          <thead><tr><th>Customer</th><th class="num-cell">Volume</th><th class="num-cell">Volume Δ</th><th class="num-cell">Volume Δ (L)</th><th class="num-cell">Listings</th><th class="num-cell">Listings Δ</th><th class="num-cell">Keg Vol/Listing/Wk <span class="muted" style="font-weight:400;">(50L)</span></th><th class="num-cell">Carton Vol/Listing/Wk <span class="muted" style="font-weight:400;">(6L)</span></th><th>Last invoice</th><th>Email(s)</th></tr></thead>
           <tbody id="ce_printBody"></tbody>
         </table>
       </div>
@@ -1966,6 +1966,13 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
             <option value="email">Email needed</option>
           </select>
         </div>
+        <div><label>Activity</label>
+          <select id="ee_activity">
+            <option value="">All customers</option>
+            <option value="active">Active (bought in last quarter)</option>
+            <option value="inactive">Not active (no purchase in last quarter)</option>
+          </select>
+        </div>
         <div><label>Banner group</label><select id="ee_bannergroup"><option value="">All</option></select></div>
         <div><label>Sub banner</label><select id="ee_subbanner"><option value="">All</option></select></div>
         <div><label>Volume stream</label>
@@ -2017,7 +2024,7 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
           </select>
         </div>
         <div class="fld" id="ee_customBatchWrap" style="margin:0; display:none; max-width:120px;"><label>Custom size</label><input type="number" id="ee_customBatchSize" min="1" step="1" value="300"></div>
-        <button class="btn small secondary" onclick="exportEmailListCSV()">Export CSV (name + email)</button>
+        <button class="btn small secondary" onclick="exportEmailListCSV()">Export CSV (name + type + email)</button>
       </div>
       <div id="ee_batches" style="margin-top:14px;"></div>
     </div>
@@ -11633,6 +11640,11 @@ function cePctDelta(cur, prev) {
 function ceComparisonModeLabel() {
   return document.getElementById('ce_compare').value === 'lastyear' ? 'vs same period last year' : 'vs previous period';
 }
+// Round 131: every valid email on file for a customer (primary + secondary), for the Email(s) column / CSV.
+function ceEmailsFor(oid) {
+  const c = outletContactInfo(oid);
+  return [c.email, c.email2].map(e => (e || '').trim()).filter(e => e && e.indexOf('@') !== -1);
+}
 function ceBuildRows() {
   const periodKey = document.getElementById('ce_period').value;
   const [pStart, pEnd] = cePeriodBounds(periodKey);
@@ -11694,6 +11706,8 @@ function ceBuildRows() {
       kegVplCompare: ceVplPerWeek(kegCompareStats[oid], compareWeeks, KEG_UNIT_LITRES),
       cartonVpl: ceVplPerWeek(cartonPrimaryStats[oid], primaryWeeks, CARTON_UNIT_LITRES),
       cartonVplCompare: ceVplPerWeek(cartonCompareStats[oid], compareWeeks, CARTON_UNIT_LITRES),
+      emails: ceEmailsFor(oid),
+      emailsText: ceEmailsFor(oid).join(' '),
       lastInvoiceDayIdx,
       lastInvoice: lastInvoiceDayIdx != null ? dayLabel(lastInvoiceDayIdx) : '—',
       // Round 83: flag customers whose last order is more than 13 weeks before the last sales data
@@ -11727,6 +11741,7 @@ const CE_COLUMNS = [
   { key: 'kegVpl', label: 'Keg Vol/Listing/Wk <span class="muted" style="font-weight:400;">(50L)</span>', numCell: true, defaultDir: -1 },
   { key: 'cartonVpl', label: 'Carton Vol/Listing/Wk <span class="muted" style="font-weight:400;">(6L)</span>', numCell: true, defaultDir: -1 },
   { key: 'lastInvoiceDayIdx', label: 'Last invoice', numCell: false, defaultDir: -1 },
+  { key: 'emailsText', label: 'Email(s)', numCell: false, defaultDir: 1, noSort: true },
 ];
 function ceSetSort(col) {
   if (ceSortCol === col) {
@@ -11753,6 +11768,7 @@ function ceTheadHtml() {
   return '<tr>' + CE_COLUMNS.map(c => {
     const active = ceSortCol === c.key;
     const arrow = active ? `<span class="muted" style="font-size:10px;">${ceSortDir === 1 ? ' ▲' : ' ▼'}</span>` : '';
+    if (c.noSort) return `<th>${c.label}</th>`;
     return `<th class="${c.numCell ? 'num-cell ' : ''}sortable" onclick="ceSetSort('${c.key}')" title="Click to sort">${c.label}${arrow}</th>`;
   }).join('') + '</tr>';
 }
@@ -11782,10 +11798,11 @@ function renderCustomerExplorerPage() {
       <td class="num-cell mono">${ceVplDisplay(r.kegVpl)}<div class="muted" style="font-size:10px;">${ceVplDisplay(r.kegVplCompare)}</div></td>
       <td class="num-cell mono">${ceVplDisplay(r.cartonVpl)}<div class="muted" style="font-size:10px;">${ceVplDisplay(r.cartonVplCompare)}</div></td>
       <td class="mono${r.lastInvoiceStale ? ' ce-stale-invoice' : ''}"${r.lastInvoiceStale ? ' title="Last order was more than 13 weeks before the latest sales data"' : ''}>${r.lastInvoice}</td>
+      <td style="font-size:11px;">${r.emails.length ? r.emails.map(escapeHtml).join('<br>') : '<span class="muted">—</span>'}</td>
     </tr>`;
-  document.getElementById('ce_body').innerHTML = pageRows.length ? pageRows.map(ceRowHtml).join('') : `<tr><td colspan="9"><div class="empty">No customers match these filters for this period.</div></td></tr>`;
+  document.getElementById('ce_body').innerHTML = pageRows.length ? pageRows.map(ceRowHtml).join('') : `<tr><td colspan="10"><div class="empty">No customers match these filters for this period.</div></td></tr>`;
   // Print/PDF export shows every filtered customer, not just the current on-screen page.
-  document.getElementById('ce_printBody').innerHTML = rows.length ? rows.map(ceRowHtml).join('') : `<tr><td colspan="9"><div class="empty">No customers match these filters for this period.</div></td></tr>`;
+  document.getElementById('ce_printBody').innerHTML = rows.length ? rows.map(ceRowHtml).join('') : `<tr><td colspan="10"><div class="empty">No customers match these filters for this period.</div></td></tr>`;
 
   document.getElementById('ce_pageInfo').textContent = `Page ${cePage} of ${totalPages}`;
   document.getElementById('ce_prevPage').disabled = cePage <= 1;
@@ -11860,7 +11877,7 @@ function renderCeDrilldown(oid) {
     </div>`;
 }
 function exportCeCSV() {
-  const header = ['Customer','RSM','Customer Type','Volume (L)','Volume Comparison (L)','Volume Δ%','Volume Δ (L)','Listings','Listings Comparison','Listings Δ','Keg Volume per listing per week (50L kegs)','Keg Volume per listing per week Comparison','Carton Volume per listing per week (6L cartons)','Carton Volume per listing per week Comparison','Last Invoice'];
+  const header = ['Customer','RSM','Customer Type','Volume (L)','Volume Comparison (L)','Volume Δ%','Volume Δ (L)','Listings','Listings Comparison','Listings Δ','Keg Volume per listing per week (50L kegs)','Keg Volume per listing per week Comparison','Carton Volume per listing per week (6L cartons)','Carton Volume per listing per week Comparison','Last Invoice','Email 1','Email 2'];
   const lines = [header.join(',')];
   ceLastRows.forEach(r => {
     lines.push([
@@ -11868,6 +11885,7 @@ function exportCeCSV() {
       r.volumeDeltaPct==null?'':r.volumeDeltaPct.toFixed(1), r.volumeDeltaL.toFixed(1), r.listings, r.listingsCompare, r.listingsDelta,
       r.kegVpl==null?'':r.kegVpl.toFixed(2), r.kegVplCompare==null?'':r.kegVplCompare.toFixed(2),
       r.cartonVpl==null?'':r.cartonVpl.toFixed(2), r.cartonVplCompare==null?'':r.cartonVplCompare.toFixed(2), r.lastInvoice,
+      r.emails[0] || '', r.emails[1] || '',
     ].map(v => `"${String(v??'').replace(/"/g,'""')}"`).join(','));
   });
   downloadFile('YMT_Customer_Explorer.csv', lines.join('\n'), 'text/csv');
@@ -16274,7 +16292,7 @@ function renderEverything() {
   eeCustTypeMsel = initMultiSelect('ee_custtype', eeTypeVals, 'types', renderEmailExportPage);
   eeVolumeStreamMsel = initMultiSelect('ee_volumestream', eeVolumeStreamVals, 'streams', renderEmailExportPage);
   ['ee_search'].forEach(id => document.getElementById(id).addEventListener('input', renderEmailExportPage));
-  ['ee_rsm','ee_zone','ee_state','ee_whouse','ee_pricingupdated','ee_contact','ee_bannergroup','ee_subbanner','ee_universe','ee_activeMonths','ee_batchSize','ee_customBatchSize'].forEach(id => document.getElementById(id).addEventListener('change', renderEmailExportPage));
+  ['ee_rsm','ee_zone','ee_state','ee_whouse','ee_pricingupdated','ee_contact','ee_activity','ee_bannergroup','ee_subbanner','ee_universe','ee_activeMonths','ee_batchSize','ee_customBatchSize'].forEach(id => document.getElementById(id).addEventListener('change', renderEmailExportPage));
   renderEmailExportPage();
 
   // Data Refresh page
@@ -16631,6 +16649,8 @@ function getEmailExportOutlets() {
   const whouse = document.getElementById('ee_whouse').value;
   const pricingUpdated = document.getElementById('ee_pricingupdated').value;
   const contact = document.getElementById('ee_contact').value;
+  const activitySel = document.getElementById('ee_activity') ? document.getElementById('ee_activity').value : '';
+  const quarterAgo = localDateStr(new Date(PERF_TODAY.getTime() - 91 * 86400000));
   const bannerGroup = document.getElementById('ee_bannergroup').value;
   const subBanner = document.getElementById('ee_subbanner') ? document.getElementById('ee_subbanner').value : '';
   const volumeStreams = eeVolumeStreamMsel ? eeVolumeStreamMsel.getValues() : [];
@@ -16645,6 +16665,14 @@ function getEmailExportOutlets() {
     if (bannerGroup && o.majorGroup !== bannerGroup) return false;
     if (subBanner && o.banner !== subBanner) return false;
     if (volumeStreams.length && !volumeStreams.includes(o.volumeStream)) return false;
+    // Round 131: same rule as the Customer List Explorer Activity filter — "active" = bought within the
+    // last quarter (91 days to the last sales update); "not active" = everyone else with sales history.
+    if (activitySel) {
+      const os = outletSummary[o.id];
+      const isActive = !!(os && os.lastDate && os.lastDate >= quarterAgo);
+      if (activitySel === 'active' && !isActive) return false;
+      if (activitySel === 'inactive' && isActive) return false;
+    }
     if (pricingUpdated) {
       const isUpdated = flagsFor(o.id).pricingUpdated;
       if (pricingUpdated === 'yes' && !isUpdated) return false;
@@ -16727,13 +16755,14 @@ function eeCustomerListHtml(outletList) {
     return `<tr>
       <td class="no-print"><input type="checkbox" ${checked ? 'checked' : ''} onchange="eeToggleOutletSelection('${o.id}',this.checked)"></td>
       <td>${escapeHtml(o.name)}<div class="muted" style="font-size:10.5px;">${escapeHtml(o.suburb || '')}${o.state ? ' ' + escapeHtml(o.state) : ''}</div></td>
+      <td>${escapeHtml(o.custType || '—')}</td>
       <td>${escapeHtml(o.rsm || '—')}</td>
       <td>${escapeHtml(o.banner || o.majorGroup || '—')}</td>
       <td>${emails.length ? emails.map(escapeHtml).join('<br>') : '<span class="muted">No email on file</span>'}</td>
     </tr>`;
   }).join('');
   return `<div class="tablewrap"><table class="datatable">
-    <thead><tr><th class="no-print"></th><th>Customer</th><th>RSM</th><th>Banner</th><th>Email(s) on file</th></tr></thead>
+    <thead><tr><th class="no-print"></th><th>Customer</th><th>Customer type</th><th>RSM</th><th>Banner</th><th>Email(s) on file</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
@@ -16811,11 +16840,11 @@ function eeCopyAll() {
 function exportEmailListCSV() {
   const emailRows = eeCollectEmails(eeSelectedOutlets());
   if (!emailRows.length) { toast('No emails match the current filters/selection.'); return; }
-  const header = ['Customer', 'Suburb', 'State', 'RSM', 'Email'];
+  const header = ['Customer', 'Customer Type', 'Suburb', 'State', 'RSM', 'Email'];
   const lines = [header.join(',')];
   emailRows.forEach(r => {
     const o = allOutlets[r.outletId] || {};
-    const row = [o.name || '', o.suburb || '', o.state || '', o.rsm || '', r.email];
+    const row = [o.name || '', o.custType || '', o.suburb || '', o.state || '', o.rsm || '', r.email];
     lines.push(row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','));
   });
   downloadFile(`YMT_Customer_Emails_${emailRows.length}.csv`, lines.join('\n'), 'text/csv');
@@ -16823,7 +16852,7 @@ function exportEmailListCSV() {
 
 function clearEmailExportFilters() {
   document.getElementById('ee_search').value = '';
-  ['ee_rsm','ee_zone','ee_state','ee_whouse','ee_pricingupdated','ee_contact','ee_bannergroup','ee_subbanner'].forEach(id => document.getElementById(id).value = '');
+  ['ee_rsm','ee_zone','ee_state','ee_whouse','ee_pricingupdated','ee_contact','ee_activity','ee_bannergroup','ee_subbanner'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('ee_universe').value = 'everpurchased';
   document.getElementById('ee_activeMonths').value = '12';
   document.getElementById('ee_batchSize').value = 'all';
