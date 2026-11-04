@@ -3946,6 +3946,85 @@ function initMultiSelect(prefix, values, label, onChange, defaultSelected) {
   };
 }
 
+
+// ===================== Round 137: universal multi-select for <select> filters =====================
+// selVals(id): selected values of a filter as an array ([] = no restriction / "All"). Works for an
+// enhanced multi-select AND a plain <select>/stub element (value -> [value]).
+function selVals(id) {
+  const el = document.getElementById(id);
+  if (!el) return [];
+  if (el.__ms) return el.__ms.getValues();
+  return el.value ? [el.value] : [];
+}
+// Turns an existing single <select> (first option "" = All) into a checkbox-popover multi-select.
+// The <select> stays in the DOM (hidden) so existing change listeners, resets (el.value = '') and
+// option population keep working: setting .value selects exactly that one value, '' clears.
+function enhanceSelectMulti(id, label) {
+  const sel = document.getElementById(id);
+  if (!sel || sel.__ms || !sel.options || !sel.parentNode || typeof document.createElement !== 'function') return;
+  const wrap = document.createElement('div'); wrap.className = 'msel';
+  const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'msel-btn';
+  const menu = document.createElement('div'); menu.className = 'msel-menu';
+  wrap.appendChild(btn); wrap.appendChild(menu);
+  sel.parentNode.insertBefore(wrap, sel.nextSibling);
+  sel.style.display = 'none';
+  let selected = new Set();
+  const allLabel = () => { const o = [...sel.options].find(o => o.value === ''); return o ? o.textContent : ('All ' + label); };
+  const opts = () => [...sel.options].filter(o => o.value !== '').map(o => ({ v: o.value, l: o.textContent }));
+  function updateBtn() {
+    const n = selected.size;
+    if (n === 0) btn.textContent = allLabel() + ' ▾';
+    else if (n === 1) { const o = opts().find(x => x.v === [...selected][0]); btn.textContent = (o ? o.l : [...selected][0]) + ' ▾'; }
+    else btn.textContent = n + ' ' + label + ' selected ▾';
+  }
+  function render() {
+    menu.innerHTML = '';
+    opts().forEach(o => {
+      const lab = document.createElement('label'); lab.className = 'msel-item';
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = o.v; cb.checked = selected.has(o.v);
+      cb.addEventListener('change', () => {
+        if (cb.checked) selected.add(o.v); else selected.delete(o.v);
+        updateBtn();
+        sel.dispatchEvent(new Event('change'));
+      });
+      lab.appendChild(cb); lab.appendChild(document.createTextNode(' ' + o.l));
+      menu.appendChild(lab);
+    });
+  }
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    document.querySelectorAll('.msel-menu.show').forEach(m => { if (m !== menu) m.classList.remove('show'); });
+    menu.classList.toggle('show');
+  });
+  document.addEventListener('click', e => { if (!menu.contains(e.target) && e.target !== btn) menu.classList.remove('show'); });
+  Object.defineProperty(sel, 'value', {
+    configurable: true,
+    get() { return selected.size ? [...selected][0] : ''; },
+    set(v) { selected = new Set(v ? [String(v)] : []); render(); updateBtn(); }
+  });
+  sel.__ms = {
+    getValues: () => { const have = new Set(opts().map(o => o.v)); return [...selected].filter(v => have.has(v)); },
+    setValues: arr => { selected = new Set(arr || []); render(); updateBtn(); }
+  };
+  if (typeof MutationObserver === 'function') new MutationObserver(() => { const have = new Set(opts().map(o => o.v)); selected = new Set([...selected].filter(v => have.has(v))); render(); updateBtn(); }).observe(sel, { childList: true });
+  render(); updateBtn();
+}
+const MULTI_FILTER_SELECTS = [
+  ['g_rsm','RSMs'],['g_state','states'],['g_familyGroup','family groups'],['g_pkgtype','package types'],['g_whouse','wholesalers'],['g_contact','contact types'],
+  ['pp_statusFilter','statuses'],['pp_pkgtype','package types'],
+  ['vt_rsm','RSMs'],['vt_bannerGroup','banner groups'],['vt_subBanner','sub banners'],['vt_subbrand','beers'],
+  ['ce_rsm','RSMs'],['ce_pkgtype','package types'],['ce_whouse','wholesalers'],['ce_bannerGroup','banner groups'],['ce_subBanner','sub banners'],['ce_familyGroup','family groups'],['ce_activity','activity'],
+  ['dd_rsm','RSMs'],['dd_pkgtype','package types'],['dd_whouse','wholesalers'],['dd_bannerGroup','banner groups'],['dd_subBanner','sub banners'],['dd_familyGroup','family groups'],
+  ['ar_rsm','RSMs'],['ar_pkgtype','package types'],
+  ['bbs_bannerGroup','banner groups'],['bbs_subBanner','sub banners'],['hl_rsm','RSMs'],
+  ['ac_rsmFilter','RSMs'],['ac_pkgFilter','package types'],['cn_rsmFilter','RSMs'],['cn_outcomeFilter','outcomes'],
+  ['ord_statusFilter','statuses'],['ord_rsmFilter','RSMs'],['seg_rsm','RSMs'],
+  ['ee_rsm','RSMs'],['ee_zone','zones'],['ee_state','states'],['ee_whouse','wholesalers'],['ee_contact','contact types'],['ee_activity','activity'],['ee_bannergroup','banner groups'],['ee_subbanner','sub banners']
+];
+function enhanceFilterSelects() {
+  MULTI_FILTER_SELECTS.forEach(([id, label]) => { try { enhanceSelectMulti(id, label); } catch (e) { console.error('multi-select enhance failed for ' + id, e); } });
+}
+
 // ===================== PRICING GRID (main page) =====================
 let gridPage = 1;
 const GRID_PAGE_SIZE = 25;
@@ -3975,16 +4054,16 @@ function outletIdsWithWholesalerDeal() {
 
 function getGridFilteredOutlets() {
   const q = (document.getElementById('g_search').value||'').trim().toLowerCase();
-  const rsm = document.getElementById('g_rsm').value;
+  const rsm = selVals('g_rsm');
   const custTypes = gCustTypeMsel ? gCustTypeMsel.getValues() : [];
   const zones = gZoneMsel ? gZoneMsel.getValues() : [];
-  const state = document.getElementById('g_state').value;
-  const familyGroupSel = document.getElementById('g_familyGroup').value;
-  const whouse = document.getElementById('g_whouse').value;
+  const state = selVals('g_state');
+  const familyGroupSel = selVals('g_familyGroup');
+  const whouse = selVals('g_whouse');
   const wsDealFilter = document.getElementById('g_wsdeal').value;
   const wsDealOutletIds = wsDealFilter ? outletIdsWithWholesalerDeal() : null;
   const pricingUpdated = document.getElementById('g_pricingupdated').value;
-  const contact = document.getElementById('g_contact').value;
+  const contact = selVals('g_contact');
   const activeMonths = document.getElementById('g_active').value;
   const sort = document.getElementById('g_sort').value;
 
@@ -3994,13 +4073,13 @@ function getGridFilteredOutlets() {
 
   let list = Object.values(outlets).filter(o => {
     if (q && !((o.name||'').toLowerCase().includes(q) || (o.suburb||'').toLowerCase().includes(q))) return false;
-    if (rsm && o.rsm !== rsm) return false;
+    if (rsm.length && !rsm.includes(o.rsm)) return false;
     if (custTypes.length && !custTypes.includes(o.custType)) return false;
     if (zones.length && !zones.includes(o.zone)) return false;
-    if (state && o.state !== state) return false;
+    if (state.length && !state.includes(o.state)) return false;
     // Round 85 — same familyGroupOf() lookup used by the Customer List Explorer's equivalent filter.
-    if (familyGroupSel) { const fg = familyGroupOf(o.id); if (!fg || fg.name !== familyGroupSel) return false; }
-    if (whouse && (outletSummary[o.id]||{}).lastWhouse !== whouse) return false;
+    if (familyGroupSel.length) { const fg = familyGroupOf(o.id); if (!fg || !familyGroupSel.includes(fg.name)) return false; }
+    if (whouse.length && !whouse.includes((outletSummary[o.id]||{}).lastWhouse)) return false;
     if (wsDealFilter) {
       const has = wsDealOutletIds.has(o.id);
       if (wsDealFilter === 'yes' && !has) return false;
@@ -4011,10 +4090,9 @@ function getGridFilteredOutlets() {
       if (pricingUpdated === 'yes' && !isUpdated) return false;
       if (pricingUpdated === 'no' && isUpdated) return false;
     }
-    if (contact) {
+    if (contact.length) {
       const isMet = flagsFor(o.id).metWithCustomer;
-      if (contact === 'met' && !isMet) return false;
-      if (contact === 'email' && isMet) return false;
+      if (!contact.includes(isMet ? 'met' : 'email')) return false;
     }
     if (activeCutoff) {
       const os = outletSummary[o.id];
@@ -4091,8 +4169,8 @@ function coreKegGroupIds() { return groupOrder.filter(gid => groups[gid] && grou
 // Columns currently shown in the grid: enabled, in the personal column
 // picker, and matching the "Package type" quick filter (if set).
 function visibleGridCols() {
-  const pkgFilter = (document.getElementById('g_pkgtype')||{}).value || '';
-  return enabledGroupOrder().filter(gid => visibleCols.includes(gid)).filter(gid => !pkgFilter || bucketOf(groups[gid]) === pkgFilter);
+  const pkgFilter = selVals('g_pkgtype');
+  return enabledGroupOrder().filter(gid => visibleCols.includes(gid)).filter(gid => !pkgFilter.length || pkgFilter.includes(bucketOf(groups[gid])));
 }
 
 function renderGridHeader() {
@@ -4424,13 +4502,12 @@ function dealPriceRefHtml(g, listPrice) {
 
 function renderProductPrices() {
   const q = (document.getElementById('pp_search').value||'').trim().toLowerCase();
-  const statusFilter = document.getElementById('pp_statusFilter').value;
-  const pkgFilter = document.getElementById('pp_pkgtype').value;
+  const statusFilter = selVals('pp_statusFilter');
+  const pkgFilter = selVals('pp_pkgtype');
   let list = groupOrder.map(gid => groups[gid]);
   if (q) list = list.filter(g => (g.label||'').toLowerCase().includes(q) || (g.subbrand||'').toLowerCase().includes(q));
-  if (statusFilter === 'enabled') list = list.filter(g => isGroupEnabled(g.id));
-  if (statusFilter === 'disabled') list = list.filter(g => !isGroupEnabled(g.id));
-  if (pkgFilter) list = list.filter(g => bucketOf(g) === pkgFilter);
+  if (statusFilter.length) list = list.filter(g => statusFilter.includes(isGroupEnabled(g.id) ? 'enabled' : 'disabled'));
+  if (pkgFilter.length) list = list.filter(g => pkgFilter.includes(bucketOf(g)));
   const body = document.getElementById('pp_body');
   if (list.length === 0) { body.innerHTML = `<tr><td colspan="9"><div class="empty">No SKU groups match.</div></td></tr>`; return; }
   body.innerHTML = list.map(g => {
@@ -7166,14 +7243,17 @@ function exportArPDF() { window.print(); }
 // to assign directly, rather than writing them into ar_printSummary/ar_detail itself — the caller
 // decides where they go. Behaviour is otherwise byte-for-byte identical to before this round.
 function atRiskBodyHtml(rsmSel, pkgSel, asOfInput) {
+  // Round 137: rsmSel / pkgSel may be a string (legacy callers) or an array (multi-select filters)
+  rsmSel = Array.isArray(rsmSel) ? rsmSel : (rsmSel ? [rsmSel] : []);
+  pkgSel = Array.isArray(pkgSel) ? pkgSel : (pkgSel ? [pkgSel] : []);
   // Round 58 fix: "All RSMs" (no rsmSel) must still mean "Sales Team, any RSM" — not literally
   // every outlet in dailyVolume. A bare `() => true` here let National Accounts/Online
   // Distributor/Taproom/Events volume leak into New/Returned/At Risk/Current listings counts,
   // the same bug perfOutletFilter() on the Team Dashboard had (see its comment). Both pages are
   // meant to reconcile with each other (see test_v9_fixes.js), so both need the same Sales-Team
   // scoping.
-  const outletFilter = rsmSel ? (oid => outlets[oid] && outlets[oid].rsm === rsmSel) : (oid => !!outlets[oid]);
-  const buckets = pkgSel ? [pkgSel] : ['KEGS','CARTONS'];
+  const outletFilter = rsmSel.length ? (oid => outlets[oid] && rsmSel.includes(outlets[oid].rsm)) : (oid => !!outlets[oid]);
+  const buckets = pkgSel.length ? pkgSel : ['KEGS','CARTONS'];
 
   const asOfDate = asOfInput ? new Date(asOfInput+'T00:00:00') : PERF_TODAY;
   const isLatest = asOfInput === meta.salesDataTo || !asOfInput;
@@ -7244,7 +7324,7 @@ function atRiskBodyHtml(rsmSel, pkgSel, asOfInput) {
   // Shown both on screen and on the printed/PDF report — the filter panel above it is hidden
   // when printing, so this line is what tells you which RSM/package type/date the report covers.
   const printSummary =
-    `<strong>Listings Report</strong> — ${rsmSel ? escapeHtml(rsmSel) : 'All RSMs'} · ${pkgSel ? (pkgSel==='KEGS'?'Kegs only':'Cartons only') : 'Kegs + Cartons'} · as of ${asOfLabel}`;
+    `<strong>Listings Report</strong> — ${rsmSel.length ? escapeHtml(rsmSel.join(', ')) : 'All RSMs'} · ${pkgSel.length === 1 ? (pkgSel[0]==='KEGS'?'Kegs only':'Cartons only') : 'Kegs + Cartons'} · as of ${asOfLabel}`;
 
   const bodyHtml = `
     ${snapshotNote ? `<div class="hint no-print" style="margin-bottom:12px; color:var(--amber);">📅 ${snapshotNote.replace(/^ — /,'')}. Reset the date above to see the current picture.</div>` : ''}
@@ -7278,8 +7358,8 @@ function atRiskBodyHtml(rsmSel, pkgSel, asOfInput) {
   return { printSummary, bodyHtml };
 }
 function renderAtRiskPage() {
-  const rsmSel = document.getElementById('ar_rsm').value;
-  const pkgSel = document.getElementById('ar_pkgtype').value; // '', 'KEGS', 'CARTONS'
+  const rsmSel = selVals('ar_rsm');
+  const pkgSel = selVals('ar_pkgtype'); // [] or any of 'KEGS', 'CARTONS'
   const asOfInput = document.getElementById('ar_asof').value;
   const { printSummary, bodyHtml } = atRiskBodyHtml(rsmSel, pkgSel, asOfInput);
   document.getElementById('ar_printSummary').innerHTML = printSummary;
@@ -7450,14 +7530,14 @@ function renderActivationsList() {
   const { fy, q } = activationsQuarter;
   document.getElementById('ac_qlabel').textContent = quarterLabelOf(fy,q);
 
-  const rsmSel = document.getElementById('ac_rsmFilter').value;
-  const pkgSel = document.getElementById('ac_pkgFilter').value;
+  const rsmSel = selVals('ac_rsmFilter');
+  const pkgSel = selVals('ac_pkgFilter');
   const q2 = (document.getElementById('ac_search').value||'').trim().toLowerCase();
 
   let list = activationsInQuarter(fy, q, a => {
     const o = outlets[a.outletId];
-    if (rsmSel && (!o || o.rsm !== rsmSel)) return false;
-    if (pkgSel && a.productType !== pkgSel) return false;
+    if (rsmSel.length && (!o || !rsmSel.includes(o.rsm))) return false;
+    if (pkgSel.length && !pkgSel.includes(a.productType)) return false;
     if (q2 && !((o&&o.name||'').toLowerCase().includes(q2))) return false;
     return true;
   });
@@ -7874,14 +7954,14 @@ function renderCallNotesList_r94() {
   const { fy, q } = callNotesQuarter;
   document.getElementById('cn_qlabel').textContent = quarterLabelOf(fy,q);
 
-  const rsmSel = document.getElementById('cn_rsmFilter').value;
-  const outcomeSel = document.getElementById('cn_outcomeFilter').value;
+  const rsmSel = selVals('cn_rsmFilter');
+  const outcomeSel = selVals('cn_outcomeFilter');
   const q2 = (document.getElementById('cn_search').value||'').trim().toLowerCase();
 
   let list = callNotesInQuarter(fy, q, c => {
     const o = outlets[c.outletId];
-    if (rsmSel && c.rsm !== rsmSel) return false;
-    if (outcomeSel && c.outcome !== outcomeSel) return false;
+    if (rsmSel.length && !rsmSel.includes(c.rsm)) return false;
+    if (outcomeSel.length && !outcomeSel.includes(c.outcome)) return false;
     if (q2 && !((o&&o.name||'').toLowerCase().includes(q2))) return false;
     return true;
   });
@@ -8031,13 +8111,13 @@ function renderCallNotesList() {
   if (!body) return;
   const pr = cnPeriodRange();
   const pl = document.getElementById('cn_periodLabel'); if (pl) pl.textContent = pr.label;
-  const rsmSel = document.getElementById('cn_rsmFilter').value;
-  const outcomeSel = document.getElementById('cn_outcomeFilter').value;
+  const rsmSel = selVals('cn_rsmFilter');
+  const outcomeSel = selVals('cn_outcomeFilter');
   const q2 = (document.getElementById('cn_search').value || '').trim().toLowerCase();
   const list = callNotes.filter(c => {
     if (!c.visitDate || c.visitDate < pr.from || c.visitDate > pr.to) return false;
-    if (rsmSel && c.rsm !== rsmSel) return false;
-    if (outcomeSel && c.outcome !== outcomeSel) return false;
+    if (rsmSel.length && !rsmSel.includes(c.rsm)) return false;
+    if (outcomeSel.length && !outcomeSel.includes(c.outcome)) return false;
     if (q2) { const o = outlets[c.outletId]; if (!(((o && o.name) || '').toLowerCase().includes(q2) || (c.notes || '').toLowerCase().includes(q2))) return false; }
     return true;
   }).sort((a, b) => (b.visitDate || '').localeCompare(a.visitDate || '') || (b.updatedAt || '').localeCompare(a.updatedAt || ''));
@@ -9913,23 +9993,23 @@ function vtMonthLabelOf(y, m) {
   return new Date(y, m, 1).toLocaleDateString('en-AU', { month: 'short', year: '2-digit' });
 }
 function vtOutletFilter() {
-  const rsmSel = document.getElementById('vt_rsm').value;
+  const rsmSel = selVals('vt_rsm');
   const typeSel = vtTypeMsel ? vtTypeMsel.getValues() : [];
-  const bannerGroupSel = document.getElementById('vt_bannerGroup').value;
-  const subBannerSel = document.getElementById('vt_subBanner') ? document.getElementById('vt_subBanner').value : ''; // Round 70 — "sub banner" (o.banner), same pattern as Customer List Explorer / Export Emails.
+  const bannerGroupSel = selVals('vt_bannerGroup');
+  const subBannerSel = selVals('vt_subBanner'); // Round 70 — "sub banner" (o.banner), same pattern as Customer List Explorer / Export Emails.
   return oid => {
     const o = outlets[oid];
     if (!o) return false;
-    if (rsmSel && o.rsm !== rsmSel) return false;
+    if (rsmSel.length && !rsmSel.includes(o.rsm)) return false;
     if (typeSel.length && !typeSel.includes(o.custType)) return false;
-    if (bannerGroupSel && o.majorGroup !== bannerGroupSel) return false;
-    if (subBannerSel && o.banner !== subBannerSel) return false;
+    if (bannerGroupSel.length && !bannerGroupSel.includes(o.majorGroup)) return false;
+    if (subBannerSel.length && !subBannerSel.includes(o.banner)) return false;
     return true;
   };
 }
 function vtGroupFilter() {
-  const sub = document.getElementById('vt_subbrand').value;
-  return (gid, g) => !sub || g.subbrand === sub;
+  const sub = selVals('vt_subbrand');
+  return (gid, g) => !sub.length || sub.includes(g.subbrand);
 }
 // Bar chart matching the visual style used elsewhere on the Team Dashboard. `decimals` lets the
 // VPL charts show one decimal place instead of the usual rounded-to-whole-number formatting.
@@ -10171,8 +10251,8 @@ function toggleTvSeries(key, checked) { tvSeriesVisible[key] = checked; renderTo
 // or the sum across every RSM when no RSM filter is applied (matching how Team Dashboard's
 // "All" scope works).
 function vtTargetFor(quarterKey, rsmList) {
-  const rsmSel = document.getElementById('vt_rsm').value;
-  return rsmSel ? rsmTargetFor(rsmSel, quarterKey) : sumTargetsForAllRsms(quarterKey, rsmList);
+  const rsmSel = selVals('vt_rsm');
+  return rsmSel.length === 1 ? rsmTargetFor(rsmSel[0], quarterKey) : sumTargetsForAllRsms(quarterKey, rsmSel.length ? rsmSel : rsmList);
 }
 function renderVolumeTrendsPage() {
   const outletFilterFn = vtOutletFilter();
@@ -11619,36 +11699,36 @@ function cePeriodLabelWithDates(key, start, end) {
 }
 
 function ceOutletFilter() {
-  const rsmSel = document.getElementById('ce_rsm').value;
+  const rsmSel = selVals('ce_rsm');
   const typeSel = ceTypeMsel ? ceTypeMsel.getValues() : [];
-  const bannerGroupSel = document.getElementById('ce_bannerGroup').value;
-  const subBannerSel = document.getElementById('ce_subBanner') ? document.getElementById('ce_subBanner').value : '';
-  const familyGroupSel = document.getElementById('ce_familyGroup') ? document.getElementById('ce_familyGroup').value : '';
-  const whouseSel = document.getElementById('ce_whouse').value;
+  const bannerGroupSel = selVals('ce_bannerGroup');
+  const subBannerSel = selVals('ce_subBanner');
+  const familyGroupSel = selVals('ce_familyGroup');
+  const whouseSel = selVals('ce_whouse');
   const zoneSel = ceZoneMsel ? ceZoneMsel.getValues() : [];
   return oid => {
     const o = outlets[oid];
     if (!o) return false;
-    if (rsmSel && o.rsm !== rsmSel) return false;
+    if (rsmSel.length && !rsmSel.includes(o.rsm)) return false;
     if (typeSel.length && !typeSel.includes(o.custType)) return false;
-    if (bannerGroupSel && o.majorGroup !== bannerGroupSel) return false;
-    if (subBannerSel && o.banner !== subBannerSel) return false;
+    if (bannerGroupSel.length && !bannerGroupSel.includes(o.majorGroup)) return false;
+    if (subBannerSel.length && !subBannerSel.includes(o.banner)) return false;
     // Round 85: filters against the live familyGroupsData model (familyGroupOf), not any field on
     // the outlet record itself — group membership has no baked outlet field to compare against.
-    if (familyGroupSel) { const fg = familyGroupOf(oid); if (!fg || fg.name !== familyGroupSel) return false; }
+    if (familyGroupSel.length) { const fg = familyGroupOf(oid); if (!fg || !familyGroupSel.includes(fg.name)) return false; }
     if (zoneSel.length && !zoneSel.includes(o.zone)) return false;
-    if (whouseSel) {
+    if (whouseSel.length) {
       const os = outletSummary[oid];
-      if (!os || os.lastWhouse !== whouseSel) return false;
+      if (!os || !whouseSel.includes(os.lastWhouse)) return false;
     }
     return true;
   };
 }
 function ceGroupFilter() {
-  const pkgSel = document.getElementById('ce_pkgtype').value; // '', 'KEGS', 'CARTONS'
+  const pkgSel = selVals('ce_pkgtype'); // [] or any of 'KEGS', 'CARTONS'
   const subSel = ceSubbrandMsel ? ceSubbrandMsel.getValues() : [];
   return (gid, g) => {
-    if (pkgSel && bucketOf(g) !== pkgSel) return false;
+    if (pkgSel.length && !pkgSel.includes(bucketOf(g))) return false;
     if (subSel.length && !subSel.includes(g.subbrand)) return false;
     return true;
   };
@@ -11730,10 +11810,10 @@ function ceBuildRows() {
   // sales update), judged on each customer's TRUE last invoice across all time (under the same
   // beer/package filters), not just inside the chosen period — so choose any period and still get
   // every customer who has gone quiet.
-  const activitySel = document.getElementById('ce_activity') ? document.getElementById('ce_activity').value : '';
+  const activitySel = selVals('ce_activity');
   const allTimeStats = ceComputeAllOutletStats(0, todayDayIdx, groupFilterFn);
   const allOids = new Set([...Object.keys(primaryStats), ...Object.keys(compareStats)]);
-  if (activitySel === 'inactive') Object.keys(allTimeStats).forEach(k => allOids.add(k));
+  if (activitySel.includes('inactive')) Object.keys(allTimeStats).forEach(k => allOids.add(k));
   const rows = [];
   allOids.forEach(oid => {
     if (!outletFilterFn(oid)) return;
@@ -11744,8 +11824,7 @@ function ceBuildRows() {
     const at = allTimeStats[oid];
     const lastInvoiceDayIdx = at && at.lastInvoiceDayIdx != null ? at.lastInvoiceDayIdx : (p.lastInvoiceDayIdx != null ? p.lastInvoiceDayIdx : c.lastInvoiceDayIdx);
     const isActive = lastInvoiceDayIdx != null && (todayDayIdx - lastInvoiceDayIdx) <= STALE_INVOICE_DAYS;
-    if (activitySel === 'active' && !isActive) return;
-    if (activitySel === 'inactive' && isActive) return;
+    if (activitySel.length && !activitySel.includes(isActive ? 'active' : 'inactive')) return;
     rows.push({
       oid, name: o.name, rsm: o.rsm || '—', custType: o.custType || '—',
       volume: p.totalLitres, volumeCompare: c.totalLitres, volumeDeltaPct: cePctDelta(p.totalLitres, c.totalLitres),
@@ -12306,11 +12385,11 @@ function deleteOrder(orderId) {
   callServer('deleteOrder', [orderId], () => toast('Order deleted.'));
 }
 function renderOrdersList() {
-  const statusFilter = document.getElementById('ord_statusFilter').value;
-  const rsmFilter = document.getElementById('ord_rsmFilter').value;
+  const statusFilter = selVals('ord_statusFilter');
+  const rsmFilter = selVals('ord_rsmFilter');
   let list = orders.slice();
-  if (statusFilter) list = list.filter(o=>o.status===statusFilter);
-  if (rsmFilter) list = list.filter(o => (outlets[o.outletId]||{}).rsm === rsmFilter);
+  if (statusFilter.length) list = list.filter(o=>statusFilter.includes(o.status));
+  if (rsmFilter.length) list = list.filter(o => rsmFilter.includes((outlets[o.outletId]||{}).rsm));
   list.sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt));
   document.getElementById('ord_count').textContent = `(${list.length})`;
   const body = document.getElementById('ord_body');
@@ -14812,14 +14891,14 @@ function jumpBbsCurrentQuarter() { bbsQuarter = { fy: PERF_CURRENT_Q.fy, q: PERF
 function exportBbsPDF() { window.print(); }
 
 function bbsOutletFilter() {
-  const bannerGroupSel = document.getElementById('bbs_bannerGroup') ? document.getElementById('bbs_bannerGroup').value : '';
-  const subBannerSel = document.getElementById('bbs_subBanner') ? document.getElementById('bbs_subBanner').value : '';
+  const bannerGroupSel = selVals('bbs_bannerGroup');
+  const subBannerSel = selVals('bbs_subBanner');
   return oid => {
     const o = outlets[oid];
     if (!o) return false;
     if (!isBottleshop(o) || o.excluded) return false;
-    if (bannerGroupSel && o.majorGroup !== bannerGroupSel) return false;
-    if (subBannerSel && o.banner !== subBannerSel) return false;
+    if (bannerGroupSel.length && !bannerGroupSel.includes(o.majorGroup)) return false;
+    if (subBannerSel.length && !subBannerSel.includes(o.banner)) return false;
     return true;
   };
 }
@@ -14888,9 +14967,9 @@ function renderBannerBottleshopsPage() {
   const { fy, q } = bbsQuarter;
   qLabelEl.textContent = quarterLabelOf(fy, q);
 
-  const bannerGroupSel = document.getElementById('bbs_bannerGroup') ? document.getElementById('bbs_bannerGroup').value : '';
-  const subBannerSel = document.getElementById('bbs_subBanner') ? document.getElementById('bbs_subBanner').value : '';
-  const scopeLabel = [subBannerSel, bannerGroupSel].filter(Boolean).join(' · ') || 'All banners';
+  const bannerGroupSel = selVals('bbs_bannerGroup');
+  const subBannerSel = selVals('bbs_subBanner');
+  const scopeLabel = [subBannerSel.join(', '), bannerGroupSel.join(', ')].filter(Boolean).join(' · ') || 'All banners';
   const printSummaryEl = document.getElementById('bbs_printSummary');
   if (printSummaryEl) printSummaryEl.innerHTML = `<strong>Banner Bottleshop Analysis</strong> — ${escapeHtml(scopeLabel)} · ${escapeHtml(quarterLabelOf(fy, q))}`;
 
@@ -15133,7 +15212,7 @@ function hlQuarterStartDayIdx(quarterKey) {
 
 // ---------- Filters shared by every list ----------
 function hlFilteredRows(rows) {
-  const rsmSel = document.getElementById('hl_rsm') ? document.getElementById('hl_rsm').value : '';
+  const rsmSel = selVals('hl_rsm');
   const geoSel = hlGeoMsel ? hlGeoMsel.getValues() : [];
   const bannerSel = hlBannerMsel ? hlBannerMsel.getValues() : [];
   return rows.filter(r => {
@@ -15147,12 +15226,12 @@ function hlFilteredRows(rows) {
       // form, or resolved via the postcode database (Round 56). So filter on it normally, same as
       // a real outlet — only fall back to hiding under any RSM filter if this particular record
       // somehow still has no RSM at all.
-      if (r.outlet.rsm) { if (rsmSel && r.outlet.rsm !== rsmSel) return false; }
-      else if (rsmSel) return false;
+      if (r.outlet.rsm) { if (rsmSel.length && !rsmSel.includes(r.outlet.rsm)) return false; }
+      else if (rsmSel.length) return false;
       if (bannerSel.length && !bannerSel.includes(r.outlet.banner)) return false;
       return true;
     }
-    if (rsmSel && r.outlet.rsm !== rsmSel) return false;
+    if (rsmSel.length && !rsmSel.includes(r.outlet.rsm)) return false;
     if (geoSel.length && !geoSel.includes(r.outlet.geoTier)) return false;
     if (bannerSel.length && !bannerSel.includes(r.outlet.banner)) return false;
     return true;
@@ -15685,13 +15764,13 @@ function segSelectHtml(o, key) {
 }
 function segBuildRows() {
   const q = (document.getElementById('seg_search').value || '').toLowerCase().trim();
-  const rsm = document.getElementById('seg_rsm').value;
+  const rsm = selVals('seg_rsm');
   const view = document.getElementById('seg_view').value;
   const stream = document.getElementById('seg_stream').value;
   const rows = [];
   segPool().forEach(o => {
     if (o.excluded) return;
-    if (rsm && o.rsm !== rsm) return;
+    if (rsm.length && !rsm.includes(o.rsm)) return;
     if (stream && stream !== 'all' && (o.volumeStream || 'Sales Team') !== stream) return;
     if (q && !((o.name || '') + ' ' + o.id + ' ' + (o.postcode || '') + ' ' + (o.suburb || '') + ' ' + (o.banner || '') + ' ' + (o.majorGroup || '')).toLowerCase().includes(q)) return;
     const issues = segIssues(o);
@@ -15840,31 +15919,31 @@ function ddAsOfIso() { return (meta && meta.salesDataTo) || new Date().toISOStri
 function ddIsoMinusDays(iso, days) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - days); return d.toISOString().slice(0,10); }
 function ddDaysBetween(aIso, bIso) { return Math.round((new Date(bIso + 'T00:00:00Z') - new Date(aIso + 'T00:00:00Z')) / 86400000); }
 function ddOutletFilter() {
-  const v = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  const v = id => selVals(id);
   const rsmSel = v('dd_rsm'), bannerGroupSel = v('dd_bannerGroup'), subBannerSel = v('dd_subBanner'), familyGroupSel = v('dd_familyGroup'), whouseSel = v('dd_whouse');
   const typeSel = ddTypeMsel ? ddTypeMsel.getValues() : [];
   const zoneSel = ddZoneMsel ? ddZoneMsel.getValues() : [];
   return oid => {
     const o = outlets[oid];
     if (!o || o.excluded) return false;
-    if (rsmSel && o.rsm !== rsmSel) return false;
+    if (rsmSel.length && !rsmSel.includes(o.rsm)) return false;
     if (typeSel.length && !typeSel.includes(o.custType)) return false;
-    if (bannerGroupSel && o.majorGroup !== bannerGroupSel) return false;
-    if (subBannerSel && o.banner !== subBannerSel) return false;
-    if (familyGroupSel) { const fg = familyGroupOf(oid); if (!fg || fg.name !== familyGroupSel) return false; }
+    if (bannerGroupSel.length && !bannerGroupSel.includes(o.majorGroup)) return false;
+    if (subBannerSel.length && !subBannerSel.includes(o.banner)) return false;
+    if (familyGroupSel.length) { const fg = familyGroupOf(oid); if (!fg || !familyGroupSel.includes(fg.name)) return false; }
     if (zoneSel.length && !zoneSel.includes(o.zone)) return false;
-    if (whouseSel) { const os = outletSummary[oid]; if (!os || os.lastWhouse !== whouseSel) return false; }
+    if (whouseSel.length) { const os = outletSummary[oid]; if (!os || !whouseSel.includes(os.lastWhouse)) return false; }
     return true;
   };
 }
 function ddBuildRows() {
   const view = (document.getElementById('dd_view') || {}).value || 'notusing';
   const weeks = parseInt((document.getElementById('dd_weeks') || {}).value, 10) || 13;
-  const pkg = (document.getElementById('dd_pkgtype') || {}).value || '';
+  const pkg = selVals('dd_pkgtype');
   const asOf = ddAsOfIso();
   const cutoff = ddIsoMinusDays(asOf, weeks * 7);
   const filterFn = ddOutletFilter();
-  const groupFilter = pkg ? ((gid, g) => bucketOf(g) === pkg) : null;
+  const groupFilter = pkg.length ? ((gid, g) => pkg.includes(bucketOf(g))) : null;
   const recentStats = ceComputeAllOutletStats(dayIndexOf(new Date(cutoff + 'T00:00:00')), dayIndexOf(new Date(asOf + 'T00:00:00')), groupFilter);
   const matStats = ceComputeAllOutletStats(dayIndexOf(new Date(ddIsoMinusDays(asOf, 364) + 'T00:00:00')), dayIndexOf(new Date(asOf + 'T00:00:00')), groupFilter);
   const rows = [];
@@ -15891,7 +15970,7 @@ function ddBuildRows() {
     if (view === 'fallen' && !lastYmt) continue;
     const o = outlets[oid];
     const rs = recentStats[oid], ms = matStats[oid];
-    if (pkg && !rs && !ms) continue;
+    if (pkg.length && !rs && !ms) continue;
     rows.push({
       oid, name: o.name, rsm: o.rsm || '', custType: o.custType || '', banner: o.banner || '', zone: o.zone || '',
       lastWhouse: os.lastWhouse || '', lastOrder: os.lastDate, lastDirect: lastYmt || '',
@@ -16344,6 +16423,7 @@ function renderEverything() {
   eeVolumeStreamMsel = initMultiSelect('ee_volumestream', eeVolumeStreamVals, 'streams', renderEmailExportPage);
   ['ee_search'].forEach(id => document.getElementById(id).addEventListener('input', renderEmailExportPage));
   ['ee_rsm','ee_zone','ee_state','ee_whouse','ee_pricingupdated','ee_contact','ee_activity','ee_bannergroup','ee_subbanner','ee_universe','ee_activeMonths','ee_batchSize','ee_customBatchSize'].forEach(id => document.getElementById(id).addEventListener('change', renderEmailExportPage));
+  try { enhanceFilterSelects(); } catch (e) { console.error(e); }
   renderEmailExportPage();
 
   // Data Refresh page
@@ -16693,46 +16773,44 @@ function eeUniverseOutlets() {
 
 function getEmailExportOutlets() {
   const q = (document.getElementById('ee_search').value||'').trim().toLowerCase();
-  const rsm = document.getElementById('ee_rsm').value;
+  const rsm = selVals('ee_rsm');
   const custTypes = eeCustTypeMsel ? eeCustTypeMsel.getValues() : [];
-  const zone = document.getElementById('ee_zone').value;
-  const state = document.getElementById('ee_state').value;
-  const whouse = document.getElementById('ee_whouse').value;
+  const zone = selVals('ee_zone');
+  const state = selVals('ee_state');
+  const whouse = selVals('ee_whouse');
   const pricingUpdated = document.getElementById('ee_pricingupdated').value;
-  const contact = document.getElementById('ee_contact').value;
-  const activitySel = document.getElementById('ee_activity') ? document.getElementById('ee_activity').value : '';
+  const contact = selVals('ee_contact');
+  const activitySel = selVals('ee_activity');
   const quarterAgo = localDateStr(new Date(PERF_TODAY.getTime() - 91 * 86400000));
-  const bannerGroup = document.getElementById('ee_bannergroup').value;
-  const subBanner = document.getElementById('ee_subbanner') ? document.getElementById('ee_subbanner').value : '';
+  const bannerGroup = selVals('ee_bannergroup');
+  const subBanner = selVals('ee_subbanner');
   const volumeStreams = eeVolumeStreamMsel ? eeVolumeStreamMsel.getValues() : [];
 
   let list = eeUniverseOutlets().filter(o => {
     if (q && !((o.name||'').toLowerCase().includes(q) || (o.suburb||'').toLowerCase().includes(q))) return false;
-    if (rsm && o.rsm !== rsm) return false;
+    if (rsm.length && !rsm.includes(o.rsm)) return false;
     if (custTypes.length && !custTypes.includes(o.custType)) return false;
-    if (zone && o.zone !== zone) return false;
-    if (state && o.state !== state) return false;
-    if (whouse && (outletSummary[o.id]||{}).lastWhouse !== whouse) return false;
-    if (bannerGroup && o.majorGroup !== bannerGroup) return false;
-    if (subBanner && o.banner !== subBanner) return false;
+    if (zone.length && !zone.includes(o.zone)) return false;
+    if (state.length && !state.includes(o.state)) return false;
+    if (whouse.length && !whouse.includes((outletSummary[o.id]||{}).lastWhouse)) return false;
+    if (bannerGroup.length && !bannerGroup.includes(o.majorGroup)) return false;
+    if (subBanner.length && !subBanner.includes(o.banner)) return false;
     if (volumeStreams.length && !volumeStreams.includes(o.volumeStream)) return false;
     // Round 131: same rule as the Customer List Explorer Activity filter — "active" = bought within the
     // last quarter (91 days to the last sales update); "not active" = everyone else with sales history.
-    if (activitySel) {
+    if (activitySel.length) {
       const os = outletSummary[o.id];
       const isActive = !!(os && os.lastDate && os.lastDate >= quarterAgo);
-      if (activitySel === 'active' && !isActive) return false;
-      if (activitySel === 'inactive' && isActive) return false;
+      if (!activitySel.includes(isActive ? 'active' : 'inactive')) return false;
     }
     if (pricingUpdated) {
       const isUpdated = flagsFor(o.id).pricingUpdated;
       if (pricingUpdated === 'yes' && !isUpdated) return false;
       if (pricingUpdated === 'no' && isUpdated) return false;
     }
-    if (contact) {
+    if (contact.length) {
       const isMet = flagsFor(o.id).metWithCustomer;
-      if (contact === 'met' && !isMet) return false;
-      if (contact === 'email' && isMet) return false;
+      if (!contact.includes(isMet ? 'met' : 'email')) return false;
     }
     return true;
   });
