@@ -14564,6 +14564,8 @@ const BG_GAP_THRESHOLD = 0.25;
 
 function bannerGapMatrix(banner, rsmFilter, fy, q, mode, allowedGids, zoneFilters) {
   zoneFilters = zoneFilters || [];
+  const bannerList = Array.isArray(banner) ? banner : (banner ? [banner] : []);
+  const rsmList = Array.isArray(rsmFilter) ? rsmFilter : (rsmFilter ? [rsmFilter] : []);
   mode = mode === 'core' ? 'core' : 'all';
   const isCurrentQ = (fy === PERF_CURRENT_Q.fy && q === PERF_CURRENT_Q.q);
   let startIdx, endIdx;
@@ -14581,7 +14583,7 @@ function bannerGapMatrix(banner, rsmFilter, fy, q, mode, allowedGids, zoneFilter
   }
 
   const rowOutlets = Object.values(outlets).filter(o =>
-    o.banner === banner && isBottleshop(o) && !o.excluded && (!rsmFilter || o.rsm === rsmFilter) && (!zoneFilters.length || zoneFilters.includes(o.zone))
+    bannerList.includes(o.banner) && isBottleshop(o) && !o.excluded && (!rsmList.length || rsmList.includes(o.rsm)) && (!zoneFilters.length || zoneFilters.includes(o.zone))
   );
   const rowIds = new Set(rowOutlets.map(o => o.id));
 
@@ -14701,22 +14703,24 @@ function bgGapSeverity(pct, mode) {
 function renderBannerGapsPage() {
   const bannerSel = document.getElementById('bg_banner');
   const rsmSel = document.getElementById('bg_rsm');
-  const banner = bannerSel.value;
-  const rsmFilter = rsmSel.value;
+  const banners = selVals('bg_banner');
+  const rsmFilters = selVals('bg_rsm');
+  const banner = banners.join(', ');
+  const rsmFilter = rsmFilters.join(', ');
   const zoneFilters = bgZoneMsel ? bgZoneMsel.getValues() : [];
   const mode = 'core'; // report is core-SKU-only — bannerGapMatrix keeps dual-mode support internally
 
   document.getElementById('bg_qlabel').textContent = quarterLabelOf(bgQuarter.fy, bgQuarter.q);
 
   if (!banner) {
-    document.getElementById('bg_detail').innerHTML = `<div class="panel"><div class="empty">Choose a banner above to see its core SKU distribution matrix.</div></div>`;
+    document.getElementById('bg_detail').innerHTML = `<div class="panel"><div class="empty">Choose a banner (or several) above to see the core SKU distribution matrix.</div></div>`;
     document.getElementById('bg_printSummary').innerHTML = '';
     return;
   }
 
   const coreGids = coreCartonGroupIds();
   const allowedGids = new Set(coreGids.filter(gid => !bgHiddenSkus.has(gid)));
-  const data = bannerGapMatrix(banner, rsmFilter, bgQuarter.fy, bgQuarter.q, mode, allowedGids, zoneFilters);
+  const data = bannerGapMatrix(banners, rsmFilters, bgQuarter.fy, bgQuarter.q, mode, allowedGids, zoneFilters);
   const qLabel = quarterLabelOf(bgQuarter.fy, bgQuarter.q);
   const windowLabel = data.isCurrentQ
     ? `rolling 13 weeks to ${escapeHtml(dayLabel(data.endIdx))}`
@@ -14765,7 +14769,7 @@ function renderBannerGapsPage() {
       return `<td class="num-cell muted">—</td>`;
     }).join('');
     return `<tr>
-      <td>${escapeHtml(r.outlet.name)}<br><span class="hint" style="font-size:10.5px;">${escapeHtml(r.outlet.suburb || '')}${rsmFilter ? '' : ' · ' + escapeHtml(r.outlet.rsm || '—')}</span></td>
+      <td>${escapeHtml(r.outlet.name)}<br><span class="hint" style="font-size:10.5px;">${escapeHtml(r.outlet.suburb || '')}${banners.length > 1 ? ' · ' + escapeHtml(r.outlet.banner || '—') : ''}${rsmFilters.length === 1 ? '' : ' · ' + escapeHtml(r.outlet.rsm || '—')}</span></td>
       <td class="num-cell"><span class="badge ${r.gapCount > 0 ? 'amber' : 'green'}">${fmtNum(r.gapCount)}</span></td>
       ${cells}
     </tr>`;
@@ -14815,8 +14819,10 @@ function bgRunSkuCompare() {
   const resultsEl = document.getElementById('bg_cmp_results');
   const hasGid = document.getElementById('bg_cmpHas').value;
   const missGid = document.getElementById('bg_cmpMiss').value;
-  const banner = document.getElementById('bg_banner').value;
-  const rsmFilter = document.getElementById('bg_rsm').value;
+  const banners = selVals('bg_banner');
+  const rsmFilters = selVals('bg_rsm');
+  const banner = banners.join(', ');
+  const rsmFilter = rsmFilters.join(', ');
   const zoneFilters = bgZoneMsel ? bgZoneMsel.getValues() : [];
   bgCompareResults = [];
   bgCompareLabels = null;
@@ -14827,7 +14833,7 @@ function bgRunSkuCompare() {
 
   // Comparisons run against the full core SKU set, regardless of the matrix's on-screen SKU
   // visibility toggle — this tool is about real purchasing behaviour, not what's currently displayed.
-  const data = bannerGapMatrix(banner, rsmFilter, bgQuarter.fy, bgQuarter.q, 'core', null, zoneFilters);
+  const data = bannerGapMatrix(banners, rsmFilters, bgQuarter.fy, bgQuarter.q, 'core', null, zoneFilters);
   const hasG = groups[hasGid], missG = groups[missGid];
   const rows = data.rows
     .filter(r => data.activeSet.has(r.outlet.id + '|' + hasGid) && !data.activeSet.has(r.outlet.id + '|' + missGid))
@@ -16264,11 +16270,12 @@ function renderEverything() {
     });
     const bannerVals = Object.keys(bannerCounts).sort((a, b) => bannerCounts[b] - bannerCounts[a] || a.localeCompare(b));
     const bgBannerSel = document.getElementById('bg_banner');
-    bgBannerSel.innerHTML = bannerVals.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)} (${bannerCounts[b]})</option>`).join('');
+    bgBannerSel.innerHTML = '<option value="">Choose banners…</option>' + bannerVals.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)} (${bannerCounts[b]})</option>`).join('');
     bgBannerSel.addEventListener('change', renderBannerGapsPage);
     populateSelect('bg_rsm', rsmVals);
     document.getElementById('bg_rsm').addEventListener('change', renderBannerGapsPage);
     bgZoneMsel = initMultiSelect('bg_zone', zoneVals, 'zones', renderBannerGapsPage);
+    try { enhanceSelectMulti('bg_banner', 'banners'); enhanceSelectMulti('bg_rsm', 'RSMs'); if (bannerVals.length) bgBannerSel.value = bannerVals[0]; } catch (e) { console.error(e); }
     renderBgSkuToggles();
     renderBgCompareSkuSelects();
     renderBannerGapsPage();
