@@ -125,6 +125,7 @@ async function readAll(s) {
   const familyGroupsDataRaw = await s.get('familyGroupsData', { type: 'json' });
   const familyGroupsData = familyGroupsDataRaw || FAMILY_GROUPS_SEED;
   const familyGroupDeals = (await s.get('familyGroupDeals', { type: 'json' })) || {};
+  const bannerActivationDeals = (await s.get('bannerActivationDeals', { type: 'json' })) || []; // Round 140
   // One-time batch seed (Round 48): merge the LMG Bottlemart QLD/Northern NSW import into
   // manualOutlets — same "seed once" idea as vipContacts above, but flag-gated (lmgSeedApplied)
   // rather than null-gated, since manualOutlets is very likely already non-empty from real usage
@@ -275,6 +276,7 @@ async function readAll(s) {
     groupLastUpdated: groupLastUpdated || {},
     familyGroupsData: familyGroupsData || [],
     familyGroupDeals: familyGroupDeals || {},
+    bannerActivationDeals: bannerActivationDeals || [],
     journeyPlans: journeyPlans || {},
     jpRsmSettings: jpRsmSettings || {},
     jpCadenceOverrides: jpCadenceOverrides || {},
@@ -1358,6 +1360,25 @@ export default async (req) => {
       Object.keys(currentDeals).forEach((key) => { if (!key.startsWith(id + '|')) nextDeals[key] = currentDeals[key]; });
       await s.setJSON('familyGroupDeals', nextDeals);
       return json({ ok: true, familyGroupsData: nextGroups, familyGroupDeals: nextDeals });
+    }
+
+    if (action === 'saveBannerActivationDeal') {
+      // Round 140: upsert a whole banner activation deal by id (name, list, subBanners, dates, SKU lines).
+      const { deal } = payload;
+      if (!deal || !deal.id || !deal.list || !deal.start || !deal.end || !deal.lines) return json({ error: 'Invalid activation deal' }, 400);
+      const current = (await s.get('bannerActivationDeals', { type: 'json' })) || [];
+      const idx = current.findIndex((d) => d.id === deal.id);
+      if (idx >= 0) current[idx] = deal; else current.push(deal);
+      await s.setJSON('bannerActivationDeals', current);
+      return json({ ok: true, bannerActivationDeals: current });
+    }
+
+    if (action === 'deleteBannerActivationDeal') {
+      const { id } = payload;
+      const current = (await s.get('bannerActivationDeals', { type: 'json' })) || [];
+      const next = current.filter((d) => d.id !== id);
+      await s.setJSON('bannerActivationDeals', next);
+      return json({ ok: true, bannerActivationDeals: next });
     }
 
     if (action === 'saveFamilyGroupDeal') {
