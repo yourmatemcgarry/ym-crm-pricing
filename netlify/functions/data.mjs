@@ -62,7 +62,7 @@ function json(body, status = 200) {
 }
 
 async function readAll(s) {
-  const [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, customerDeliveryFeeOverrides, rsmTargets, rsmTargetProtected, activations, callNotes, trucks, orders, deliveryRuns, manualOutletsRaw, customerDeliveryDetails, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlDismissals, postcodeZoneOverrides, customerRsmOverrides, groupLastUpdated, journeyPlans, jpRsmSettings, jpCadenceOverrides, customerSegmentOverrides, postcodeEditLog] = await Promise.all([
+  let [groupPrices, customerDeals, wholesalerDeals, tempDeals, customerFlags, customerGlassPricing, customerPickFees, customerOffPremisePricing, customerCartonDeliveryFees, customerDeliveryFeeOverrides, rsmTargets, rsmTargetProtected, activations, callNotes, trucks, orders, deliveryRuns, manualOutletsRaw, customerDeliveryDetails, naDistributions, rsmZoneOverrides, naTargets, customGroups, groupMemberOverrides, fyForecastInputs, naSkuTargets, naSkuQuarterOverrides, hlDismissals, postcodeZoneOverrides, customerRsmOverrides, groupLastUpdated, journeyPlans, jpRsmSettings, jpCadenceOverrides, customerSegmentOverrides, postcodeEditLog] = await Promise.all([
     s.get('groupPrices', { type: 'json' }),
     s.get('customerDeals', { type: 'json' }),
     s.get('wholesalerDeals', { type: 'json' }),
@@ -126,6 +126,19 @@ async function readAll(s) {
   const familyGroupsData = familyGroupsDataRaw || FAMILY_GROUPS_SEED;
   const familyGroupDeals = (await s.get('familyGroupDeals', { type: 'json' })) || {};
   const bannerActivationDeals = (await s.get('bannerActivationDeals', { type: 'json' })) || []; // Round 140
+  // Round 141: one-time RSM allocation (flag-gated, like the seeds above): every zone -> Paradiso Rep; the top 60 active
+  // keg + top 120 active carton customers (90 days to 2 Nov 2026, Sales Team, events excluded) pinned to Kayla Miller.
+  const R141 = {"zoneRsm":"Paradiso Rep","pinRsm":"Kayla Miller","zones":["ACT","Cairns","East Brisbane","Gold Coast","Granite Belt","Inner Brisbane North","Inner Brisbane South","Ipswich","Lockyer Valley","Logan/Beaudesert","Mackay / Airlie","Moreton Bay North","Moreton Bay South","NSW","NT","North Brisbane","Northern NSW","Northern Rivers","Outback Queensland North","Outback Queensland South","Rockhampton","SA","South Brisbane","Sunshine Coast North","Sunshine Coast South","TAS","Toowoomba","Townsville","VIC","WA","West Brisbane","Wide Bay Burnett North","Wide Bay Burnett South"],"pins":["10023","10161","10163","10172","1019","10283","10440","1055","11345","114983","114986","11859","11883","11884","12131","12186","124094","124303","125317","125538","125761","127650","12776","127762","129560","130094","130395","130837","131041","131295","132555","13282","133555","133609","134091","14358","1462","15662","16321","17526","17688","18361","18759","18919","19143","19519","20168","20741","21072","21352","2151","2152","21662","21773","22041","22383","23916","23975","23989","2421","24216","2422","2426","2427","24291","2463","26096","27334","27389","27436","28311","29879","31005","31300","31584","32336","32697","32801","33557","34868","35119","35153","36451","38044","38064","38605","38608","38730","40679","41474","41636","42010","42295","42701","4283","43315","43984","45055","45234","4822","4836","4845","4851","4878","4920","5129","51475","52165","632","637","663","678","694","699","733","75341","75447","75684","75767","75791","76217","76390","76612","76938","76939","76972","76989","77232","77424","77428","77458","77621","77804","78137","78173","78177","78669","78671","78936","79220","79279","79289","79385","79789","79904","79933","79934","79995","80128","80150","80216","80377","80576","80586","81085","81420","81801","81926","82150","82692","82747","82808","9309","9325","935","9505"]};
+  const r141Applied = await s.get('r141RsmAllocApplied', { type: 'json' });
+  if (!r141Applied || !r141Applied.applied) {
+    rsmZoneOverrides = rsmZoneOverrides || {};
+    customerRsmOverrides = customerRsmOverrides || {};
+    R141.zones.forEach((z) => { rsmZoneOverrides[z] = R141.zoneRsm; });
+    R141.pins.forEach((id) => { customerRsmOverrides[id] = R141.pinRsm; });
+    await s.setJSON('rsmZoneOverrides', rsmZoneOverrides);
+    await s.setJSON('customerRsmOverrides', customerRsmOverrides);
+    await s.setJSON('r141RsmAllocApplied', { applied: true, appliedAt: new Date().toISOString(), zones: R141.zones.length, pins: R141.pins.length });
+  }
   // One-time batch seed (Round 48): merge the LMG Bottlemart QLD/Northern NSW import into
   // manualOutlets — same "seed once" idea as vipContacts above, but flag-gated (lmgSeedApplied)
   // rather than null-gated, since manualOutlets is very likely already non-empty from real usage
