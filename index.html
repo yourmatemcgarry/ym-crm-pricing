@@ -15093,17 +15093,22 @@ function lrRowHtml(r, dismissed) {
   const o = outlets[r.oid], g = groups[r.gid];
   const stillBuying = asOf - lastAny[r.oid] < 30;
   return `<tr>
-    <td><a href="#" onclick="blOpenOutlet('${r.oid}'); return false;"><strong>${escapeHtml(o.name)}</strong></a><div class="hint">${escapeHtml(o.suburb || '')} ${escapeHtml(o.state || '')}</div></td>
-    <td>${escapeHtml(o.rsm || '')}</td>
-    <td>${escapeHtml(g.label)}<div class="hint">${r.bucket === 'KEGS' ? 'Keg - 30 day rule' : 'Carton - 90 day rule'}</div></td>
-    <td>${fmtDate(lrIso(r.lastIdx))}</td>
-    <td class="mono">${r.daysSince}</td>
-    <td>${fmtDate(lrIso(r.lostIdx))}</td>
-    <td class="mono">${fmtNum(r.vol12)} L</td>
-    <td>${stillBuying ? '<span class="badge amber">still buying other SKUs</span>' : '<span class="badge red">no orders at all (30d)</span>'}<div class="hint">last order any SKU ${fmtDate(lrIso(lastAny[r.oid]))}</div></td>
+    <td><a href="#" onclick="blOpenOutlet('${r.oid}'); return false;"><strong>${escapeHtml(o.name)}</strong></a><div class="hint">${escapeHtml(o.suburb || '')} ${escapeHtml(o.state || '')} &middot; ${escapeHtml(o.rsm || '')}</div></td>
+    <td>${escapeHtml(g.label)}<div class="hint">${fmtNum(r.vol12)} L (12m)</div></td>
+    <td>${fmtDate(lrIso(r.lastIdx))}<div class="hint">${r.daysSince} days ago</div></td>
+    <td>${stillBuying ? '<span class="badge amber">buying other SKUs</span>' : '<span class="badge red">no orders (30d)</span>'}</td>
     <td>${dismissed ? `${escapeHtml(LR_REASONS[dismissed.reason] || dismissed.reason)}<div class="hint">${escapeHtml(dismissed.updatedBy || '')}</div><button class="btn small secondary" onclick="lrRestore('${r.oid}|${r.gid}')">Restore</button>`
       : `<select onchange="lrDismissFromSelect(this,'${r.oid}','${r.gid}')"><option value="">Dismiss…</option>${Object.entries(LR_REASONS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>`}</td>
   </tr>`;
+}
+function lrByRecent(a, b) { return b.lastIdx - a.lastIdx || b.vol12 - a.vol12; } // most recently ordered first
+function lrColumnHtml(title, rows, dismissedMap) {
+  const head = '<thead><tr><th>Customer</th><th>SKU</th><th>Last ordered</th><th>Status</th><th></th></tr></thead>';
+  const body = rows.length ? `<div class="tablewrap" style="max-height:75vh;overflow:auto;"><table class="datatable">${head}<tbody>${rows.slice(0, 800).map(r => lrRowHtml(r, dismissedMap ? dismissedMap[lrKey(r)] : null)).join('')}</tbody></table></div>${rows.length > 800 ? '<div class="hint">Showing the 800 most recent - narrow the filters or export CSV for the rest.</div>' : ''}` : '<div class="empty">None match these filters.</div>';
+  return `<div style="min-width:0;"><h3 style="margin:0 0 6px;">${title} <span class="muted" style="font-weight:400;">(${rows.length})</span></h3>${body}</div>`;
+}
+function lrTwoCols(rows, dismissedMap) {
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:16px;align-items:start;">${lrColumnHtml('Kegs - lost after 30 days', rows.filter(r => r.bucket === 'KEGS').sort(lrByRecent), dismissedMap)}${lrColumnHtml('Cartons - lost after 90 days', rows.filter(r => r.bucket === 'CARTONS').sort(lrByRecent), dismissedMap)}</div>`;
 }
 function renderLostListingsPage() {
   const root = document.getElementById('lr_table'); if (!root) return;
@@ -15119,19 +15124,18 @@ function renderLostListingsPage() {
   const all = lrFiltered();
   const active = all.filter(r => !lostDismissals[lrKey(r)]);
   const dismissed = all.filter(r => lostDismissals[lrKey(r)]);
-  active.sort((a, b) => b.vol12 - a.vol12);
   const lostAll = lrLostRows(rows).filter(r => !lostDismissals[lrKey(r)]);
   const newly = lrNewlyLost(rows, asOf, 7).filter(r => !lostDismissals[lrKey(r)]);
   const card = (n, l) => `<div class="card"><div class="num">${fmtNum(n)}</div><div class="lbl">${l}</div></div>`;
-  document.getElementById('lr_meta').innerHTML = `Sales data to <strong>${fmtDate(lrIso(asOf))}</strong>. A listing is lost the moment it reaches its threshold with no order and stays here until it is ordered again.`;
+  document.getElementById('lr_meta').innerHTML = `Sales data to <strong>${fmtDate(lrIso(asOf))}</strong>. A listing is lost the moment it reaches its threshold with no order and stays here until it is ordered again. Most recently ordered at the top.`;
   document.getElementById('lr_cards').innerHTML = `<div class="cards">${card(lostAll.filter(r => r.bucket === 'KEGS').length, 'Lost keg listings (all time)')}${card(lostAll.filter(r => r.bucket === 'CARTONS').length, 'Lost carton listings (all time)')}${card(new Set(lostAll.map(r => r.oid)).size, 'Customers with a lost listing')}${card(newly.length, 'Newly lost in the last 7 days')}${card(active.length, 'Showing with current filters')}</div>`;
   document.getElementById('lr_count').textContent = active.length + ' listings';
-  const head = '<thead><tr><th>Customer</th><th>RSM</th><th>SKU</th><th>Last order</th><th>Days since</th><th>Lost on</th><th>Size (12m to last order)</th><th>Customer status</th><th></th></tr></thead>';
-  root.innerHTML = active.length ? `<div class="tablewrap"><table class="datatable">${head}<tbody>${active.slice(0, 1500).map(r => lrRowHtml(r, null)).join('')}</tbody></table></div>${active.length > 1500 ? '<div class="hint">Showing the 1,500 biggest - narrow the filters or export CSV for the rest.</div>' : ''}` : '<div class="empty">No lost listings match these filters.</div>';
-  document.getElementById('lr_dismissed').innerHTML = dismissed.length ? `<details><summary><strong>Dismissed (${dismissed.length})</strong> - hidden from this page and the weekly emails</summary><div class="tablewrap"><table class="datatable">${head}<tbody>${dismissed.map(r => lrRowHtml(r, lostDismissals[lrKey(r)])).join('')}</tbody></table></div></details>` : '';
+  root.innerHTML = lrTwoCols(active, null);
+  const dm = {}; dismissed.forEach(r => { dm[lrKey(r)] = lostDismissals[lrKey(r)]; });
+  document.getElementById('lr_dismissed').innerHTML = dismissed.length ? `<details><summary><strong>Dismissed (${dismissed.length})</strong> - hidden from this page and the weekly emails</summary>${lrTwoCols(dismissed, dm)}</details>` : '';
 }
 function exportLostListingsCSV() {
-  const rows = lrFiltered().filter(r => !lostDismissals[lrKey(r)]).sort((a, b) => b.vol12 - a.vol12);
+  const rows = lrFiltered().filter(r => !lostDismissals[lrKey(r)]).sort((a, b) => (a.bucket === b.bucket ? 0 : a.bucket === 'KEGS' ? -1 : 1) || lrByRecent(a, b));
   if (!rows.length) { toast('Nothing to export.'); return; }
   const { lastAny } = lrData();
   const lines = [['Customer', 'OutletID', 'RSM', 'SKU', 'Type', 'Last order', 'Days since', 'Lost on', 'Litres 12m to last order', 'Last order any SKU'].join(',')];
