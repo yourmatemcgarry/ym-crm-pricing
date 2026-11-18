@@ -10,6 +10,11 @@
 [functions."scheduled-data-refresh"]
   schedule = "0 19 * * *"
 
+# Round 142: weekly emails (Monday call review + weekly listings update). Runs every hour; the function checks the
+# Email Reports settings saved in the Hub and sends each email once its day/hour (Brisbane time) has been reached.
+[functions."weekly-emails"]
+  schedule = "0 * * * *"
+
 # Round 106: shared team-password login. This Edge Function runs in front of every request (the
 # site itself and every Netlify Function) and only lets it through if the visitor has a valid
 # signed session cookie - see netlify/edge-functions/auth-gate.mjs for the full explanation and

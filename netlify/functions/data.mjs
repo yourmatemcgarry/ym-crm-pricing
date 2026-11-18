@@ -126,6 +126,8 @@ async function readAll(s) {
   const familyGroupsData = familyGroupsDataRaw || FAMILY_GROUPS_SEED;
   const familyGroupDeals = (await s.get('familyGroupDeals', { type: 'json' })) || {};
   const bannerActivationDeals = (await s.get('bannerActivationDeals', { type: 'json' })) || []; // Round 140
+  const lostListingDismissals = (await s.get('lostListingDismissals', { type: 'json' })) || {}; // Round 142
+  const emailSettings = (await s.get('emailSettings', { type: 'json' })) || null; // Round 142
   // Round 141: one-time RSM allocation (flag-gated, like the seeds above): every zone -> Paradiso Rep; the top 60 active
   // keg + top 120 active carton customers (90 days to 2 Nov 2026, Sales Team, events excluded) pinned to Kayla Miller.
   const R141 = {"zoneRsm":"Paradiso Rep","pinRsm":"Kayla Miller","zones":["ACT","Cairns","East Brisbane","Gold Coast","Granite Belt","Inner Brisbane North","Inner Brisbane South","Ipswich","Lockyer Valley","Logan/Beaudesert","Mackay / Airlie","Moreton Bay North","Moreton Bay South","NSW","NT","North Brisbane","Northern NSW","Northern Rivers","Outback Queensland North","Outback Queensland South","Rockhampton","SA","South Brisbane","Sunshine Coast North","Sunshine Coast South","TAS","Toowoomba","Townsville","VIC","WA","West Brisbane","Wide Bay Burnett North","Wide Bay Burnett South"],"pins":["10023","10161","10163","10172","1019","10283","10440","1055","11345","114983","114986","11859","11883","11884","12131","12186","124094","124303","125317","125538","125761","127650","12776","127762","129560","130094","130395","130837","131041","131295","132555","13282","133555","133609","134091","14358","1462","15662","16321","17526","17688","18361","18759","18919","19143","19519","20168","20741","21072","21352","2151","2152","21662","21773","22041","22383","23916","23975","23989","2421","24216","2422","2426","2427","24291","2463","26096","27334","27389","27436","28311","29879","31005","31300","31584","32336","32697","32801","33557","34868","35119","35153","36451","38044","38064","38605","38608","38730","40679","41474","41636","42010","42295","42701","4283","43315","43984","45055","45234","4822","4836","4845","4851","4878","4920","5129","51475","52165","632","637","663","678","694","699","733","75341","75447","75684","75767","75791","76217","76390","76612","76938","76939","76972","76989","77232","77424","77428","77458","77621","77804","78137","78173","78177","78669","78671","78936","79220","79279","79289","79385","79789","79904","79933","79934","79995","80128","80150","80216","80377","80576","80586","81085","81420","81801","81926","82150","82692","82747","82808","9309","9325","935","9505"]};
@@ -290,6 +292,8 @@ async function readAll(s) {
     familyGroupsData: familyGroupsData || [],
     familyGroupDeals: familyGroupDeals || {},
     bannerActivationDeals: bannerActivationDeals || [],
+    lostListingDismissals: lostListingDismissals || {},
+    emailSettings: emailSettings || null,
     journeyPlans: journeyPlans || {},
     jpRsmSettings: jpRsmSettings || {},
     jpCadenceOverrides: jpCadenceOverrides || {},
@@ -1373,6 +1377,40 @@ export default async (req) => {
       Object.keys(currentDeals).forEach((key) => { if (!key.startsWith(id + '|')) nextDeals[key] = currentDeals[key]; });
       await s.setJSON('familyGroupDeals', nextDeals);
       return json({ ok: true, familyGroupsData: nextGroups, familyGroupDeals: nextDeals });
+    }
+
+    if (action === 'saveLostDismissal') {
+      // Round 142: dismiss one lost listing ("outletId|groupId") - hidden from the Lost Listings page and the weekly emails.
+      const { key, reason, updatedBy } = payload;
+      if (!key || !String(key).includes('|')) return json({ error: 'Invalid listing key' }, 400);
+      const current = (await s.get('lostListingDismissals', { type: 'json' })) || {};
+      current[key] = { reason: reason || 'closed', updatedBy: updatedBy || '', updatedAt: now };
+      await s.setJSON('lostListingDismissals', current);
+      return json({ ok: true, lostListingDismissals: current });
+    }
+
+    if (action === 'deleteLostDismissal') {
+      const { key } = payload;
+      const current = (await s.get('lostListingDismissals', { type: 'json' })) || {};
+      delete current[key];
+      await s.setJSON('lostListingDismissals', current);
+      return json({ ok: true, lostListingDismissals: current });
+    }
+
+    if (action === 'saveEmailSettings') {
+      // Round 142: recipients / day / hour for the two weekly emails. lastSent is owned by the scheduler and is preserved.
+      const { settings } = payload;
+      const clean = (arr) => (Array.isArray(arr) ? arr : []).map((x) => String(x).trim()).filter((x) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x));
+      const one = (v = {}) => ({ enabled: !!v.enabled, recipients: clean(v.recipients), dayOfWeek: Math.min(6, Math.max(0, parseInt(v.dayOfWeek, 10) || 0)), hour: Math.min(23, Math.max(0, parseInt(v.hour, 10) || 0)) });
+      const prev = (await s.get('emailSettings', { type: 'json' })) || {};
+      const next = {
+        callReview: one(settings && settings.callReview), listings: one(settings && settings.listings),
+        callReviewRsms: (settings && Array.isArray(settings.callReviewRsms) ? settings.callReviewRsms : []).map((x) => String(x).trim()).filter(Boolean),
+        defaultWeeklyCallTarget: Math.max(1, parseInt(settings && settings.defaultWeeklyCallTarget, 10) || 25),
+        lastSent: prev.lastSent || { callReview: '', listings: '' },
+      };
+      await s.setJSON('emailSettings', next);
+      return json({ ok: true, emailSettings: next });
     }
 
     if (action === 'saveBannerActivationDeal') {
