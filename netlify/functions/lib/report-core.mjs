@@ -102,8 +102,18 @@ export function buildContext(crm, blobs) {
   c.asOf = lrDayIdx(c.epoch, c.asOfIso);
   c.rsmOf = {};
   Object.values(crm.outlets).forEach(o => { c.rsmOf[o.id] = resolveRsm(o, c); });
+  // Mate tier per customer = trailing-365-day litres (all SKUs) up to the data date; same thresholds as the Hub's Journey Planner
+  // (>= 5,000 L Best Mate, >= 2,500 L Good Mate, anything below = Mate).
+  c.t12 = {};
+  const lo = c.asOf - 364;
+  for (const key in crm.dailyVolume) {
+    const oid = key.slice(0, key.indexOf('|')); const arr = crm.dailyVolume[key]; let s = 0;
+    for (let i = 0; i < arr.length; i += 2) { if (arr[i] >= lo && arr[i] <= c.asOf) s += arr[i + 1]; }
+    if (s > 0) c.t12[oid] = (c.t12[oid] || 0) + s;
+  }
   return c;
 }
+export function mateTierOf(litres) { return litres >= 5000 ? 'best' : litres >= 2500 ? 'good' : litres > 0 ? 'mate' : 'unrated'; }
 const eligible = (c) => (oid) => { const o = c.crm.outlets[oid]; return !!o && o.volumeStream === 'Sales Team' && !o.excluded && o.custType !== 'Event'; };
 const bucketOfGroup = (c) => (gid) => { const g = c.crm.groups[gid]; if (!g) return null; return g.bucket || (g.format === 'Pack' ? 'CARTONS' : 'KEGS'); };
 function custName(c, oid) { const o = c.crm.outlets[oid] || c.manualOutlets[oid]; return o ? o.name : ('Customer ' + oid); }
@@ -115,10 +125,10 @@ export function listingsReport(c) {
   const live = r => !c.lostDismissals[r.oid + '|' + r.gid];
   const enrich = r => ({ oid: r.oid, gid: r.gid, customer: custName(c, r.oid), suburb: custSub(c, r.oid), rsm: c.rsmOf[r.oid] || 'Sales MGR', sku: (c.crm.groups[r.gid] || {}).label || r.gid, bucket: r.bucket,
     first: lrIdxToIso(c.epoch, r.firstIdx), last: lrIdxToIso(c.epoch, r.lastIdx), lostOn: lrIdxToIso(c.epoch, r.lostIdx), daysSince: r.daysSince, vol12: r.vol12,
-    stillBuying: c.asOf - lastAny[r.oid] < 30 });
-  const sortBig = (a, b) => b.vol12 - a.vol12;
-  const newL = lrNewListings(rows, c.asOf, 7).map(enrich).sort((a, b) => a.rsm.localeCompare(b.rsm) || b.vol12 - a.vol12);
-  const lostNow = lrNewlyLost(rows, c.asOf, 7).filter(live).map(enrich).sort((a, b) => a.rsm.localeCompare(b.rsm) || sortBig(a, b));
+    stillBuying: c.asOf - lastAny[r.oid] < 30, t12: Math.round(c.t12[r.oid] || 0), tier: mateTierOf(c.t12[r.oid] || 0) });
+  // Most recent date first (ISO dates compare as strings); ties -> biggest customer first.
+  const newL = lrNewListings(rows, c.asOf, 7).map(enrich).sort((a, b) => b.first.localeCompare(a.first) || b.t12 - a.t12);
+  const lostNow = lrNewlyLost(rows, c.asOf, 7).filter(live).map(enrich).sort((a, b) => b.last.localeCompare(a.last) || b.t12 - a.t12);
   const allLost = lrLostRows(rows).filter(live);
   return { asOfIso: c.asOfIso, windowFrom: lrIdxToIso(c.epoch, c.asOf - 6), newListings: newL, newlyLost: lostNow,
     totalLostKegs: allLost.filter(r => r.bucket === 'KEGS').length, totalLostCartons: allLost.filter(r => r.bucket === 'CARTONS').length };
@@ -168,7 +178,7 @@ export function callReview(c, todayIso) {
 const esc = s => (s == null ? '' : String(s)).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 const TH = 'text-align:left;padding:6px 8px;background:#1F3864;color:#fff;font-size:12px;';
 const TD = 'padding:6px 8px;border-bottom:1px solid #e3e6ec;font-size:13px;vertical-align:top;';
-const wrap = (title, sub, body) => `<div style="font-family:Arial,Helvetica,sans-serif;color:#1c2330;max-width:900px;"><h2 style="margin:0 0 4px;color:#1F3864;">${esc(title)}</h2><div style="color:#667;font-size:13px;margin-bottom:14px;">${esc(sub)}</div>${body}<div style="color:#99a;font-size:11px;margin-top:20px;">Sent automatically by Your Mates Sales Hub.</div></div>`;
+const wrap = (title, sub, body) => `<div style="font-family:Arial,Helvetica,sans-serif;color:#1c2330;max-width:1000px;"><h2 style="margin:0 0 4px;color:#1F3864;">${esc(title)}</h2><div style="color:#667;font-size:13px;margin-bottom:14px;">${esc(sub)}</div>${body}<div style="color:#99a;font-size:11px;margin-top:20px;">Sent automatically by Your Mates Sales Hub.</div></div>`;
 const table = (heads, rowsHtml) => `<table style="border-collapse:collapse;width:100%;margin:6px 0 16px;"><thead><tr>${heads.map(h => `<th style="${TH}">${h}</th>`).join('')}</tr></thead><tbody>${rowsHtml}</tbody></table>`;
 
 export function renderCallReview(r) {
@@ -184,12 +194,34 @@ export function renderCallReview(r) {
   }).join('<hr style="border:none;border-top:1px solid #d5d9e2;margin:18px 0;">') || '<div>No activity found for this week.</div>';
   return { subject: `Weekly call review: ${fmtAu(r.weekStart)} - ${fmtAu(r.weekEnd)} (${r.totalCalls} calls)`, html: wrap('Weekly call review', `Week ${fmtAu(r.weekStart)} to ${fmtAu(r.weekEnd)}`, body) };
 }
+const TIER_STYLE = {
+  best:    { label: 'Best Mate',  bg: '#DCE9FF', bar: '#2F6FDE', pill: '#2F6FDE', fg: '#fff' },
+  good:    { label: 'Good Mate',  bg: '#DDF3E4', bar: '#1a7f37', pill: '#1a7f37', fg: '#fff' },
+  mate:    { label: 'Mate',       bg: '#F1F2F4', bar: '#9aa1ad', pill: '#8a909c', fg: '#fff' },
+  unrated: { label: 'Unrated',    bg: '#ffffff', bar: '#d5d9e2', pill: '#b5bac4', fg: '#fff' },
+};
+const tierPill = t => { const m = TIER_STYLE[t] || TIER_STYLE.unrated; return `<span style="display:inline-block;background:${m.pill};color:${m.fg};font-size:10px;font-weight:bold;padding:1px 6px;border-radius:9px;">${m.label}</span>`; };
 export function renderListings(r) {
-  const row = (x, extra) => `<tr><td style="${TD}"><strong>${esc(x.customer)}</strong><br><span style="color:#667;font-size:12px;">${esc(x.suburb)}</span></td><td style="${TD}">${esc(x.rsm)}</td><td style="${TD}">${esc(x.sku)}<br><span style="color:#667;font-size:12px;">${x.bucket === 'KEGS' ? 'Keg' : 'Carton'}</span></td>${extra(x)}</tr>`;
-  const newT = r.newListings.length ? table(['Customer', 'RSM', 'SKU', 'First order'], r.newListings.map(x => row(x, y => `<td style="${TD}">${esc(fmtAu(y.first))}</td>`)).join('')) : '<div style="color:#667;font-size:13px;margin-bottom:14px;">No new listings this week.</div>';
-  const lostT = r.newlyLost.length ? table(['Customer', 'RSM', 'SKU', 'Last order', 'Days', 'Size (12m, L)', 'Customer'], r.newlyLost.map(x => row(x, y => `<td style="${TD}">${esc(fmtAu(y.last))}</td><td style="${TD}">${y.daysSince}</td><td style="${TD}">${y.vol12}</td><td style="${TD}">${y.stillBuying ? 'still buying other SKUs' : '<span style="color:#c0392b;">no orders in 30d</span>'}</td>`)).join('')) : '<div style="color:#667;font-size:13px;margin-bottom:14px;">No listings were newly lost this week.</div>';
-  const body = `<h3 style="color:#1F3864;margin:8px 0 2px;">New listings (${r.newListings.length})</h3><div style="color:#667;font-size:12px;">First-ever order for the customer + SKU in the last 7 days.</div>${newT}
-    <h3 style="color:#1F3864;margin:8px 0 2px;">Lost listings this week (${r.newlyLost.length})</h3><div style="color:#667;font-size:12px;">Kegs: 30 days with no order. Cartons: 90 days with no order. Listed when they crossed the line in the last 7 days.</div>${lostT}
+  // One compact list per bucket; rows tinted + left-barred by Mate tier. Date column is the sort key (newest first).
+  const list = (rows, dateHead, dateOf, subOf, emptyMsg) => {
+    if (!rows.length) return `<div style="color:#667;font-size:13px;padding:6px 0;">${emptyMsg}</div>`;
+    const body = rows.map(x => { const m = TIER_STYLE[x.tier] || TIER_STYLE.unrated;
+      return `<tr style="background:${m.bg};"><td style="padding:6px 8px;border-bottom:1px solid #e3e6ec;border-left:4px solid ${m.bar};font-size:13px;vertical-align:top;"><strong>${esc(x.customer)}</strong> ${tierPill(x.tier)}<br><span style="color:#667;font-size:12px;">${esc(x.suburb)} &middot; ${esc(x.rsm)}</span>${subOf(x)}</td><td style="${TD}">${esc(x.sku)}</td><td style="${TD}white-space:nowrap;">${dateOf(x)}</td></tr>`; }).join('');
+    return `<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="${TH}">Customer</th><th style="${TH}">SKU</th><th style="${TH}">${dateHead}</th></tr></thead><tbody>${body}</tbody></table>`;
+  };
+  const twoCols = (leftHtml, rightHtml, leftTitle, rightTitle) => `<table style="width:100%;border-collapse:separate;border-spacing:0;margin:6px 0 16px;table-layout:fixed;"><tr>
+    <td style="width:50%;vertical-align:top;padding-right:8px;"><div style="font-weight:bold;color:#1F3864;margin:0 0 4px;">${leftTitle}</div>${leftHtml}</td>
+    <td style="width:50%;vertical-align:top;padding-left:8px;"><div style="font-weight:bold;color:#1F3864;margin:0 0 4px;">${rightTitle}</div>${rightHtml}</td></tr></table>`;
+  const split = rows => [rows.filter(x => x.bucket === 'KEGS'), rows.filter(x => x.bucket === 'CARTONS')];
+  const [nk, nc] = split(r.newListings), [lk, lc] = split(r.newlyLost);
+  const newDate = y => esc(fmtAu(y.first));
+  const lostDate = y => `${esc(fmtAu(y.last))}<br><span style="color:#667;font-size:12px;">${y.daysSince} days ago</span>`;
+  const lostSub = y => `<br><span style="font-size:11px;">${y.stillBuying ? '<span style="color:#667;">still buying other SKUs</span>' : '<span style="color:#c0392b;">no orders in 30d</span>'}</span>`;
+  const legend = `<div style="margin:0 0 12px;font-size:12px;color:#445;">Customer size (last 12 months): ${tierPill('best')} 5,000 L+ &nbsp; ${tierPill('good')} 2,500 L+ &nbsp; ${tierPill('mate')} under 2,500 L</div>`;
+  const body = `${legend}<h3 style="color:#1F3864;margin:8px 0 2px;">New listings (${r.newListings.length})</h3><div style="color:#667;font-size:12px;">First-ever order for the customer + SKU in the last 7 days. Most recent first.</div>
+    ${twoCols(list(nk, 'First order', newDate, () => '', 'No new keg listings.'), list(nc, 'First order', newDate, () => '', 'No new carton listings.'), `Kegs (${nk.length})`, `Cartons (${nc.length})`)}
+    <h3 style="color:#1F3864;margin:8px 0 2px;">Lost listings this week (${r.newlyLost.length})</h3><div style="color:#667;font-size:12px;">Kegs: 30 days with no order. Cartons: 90 days with no order. Listed when they crossed the line in the last 7 days. Most recent last order first.</div>
+    ${twoCols(list(lk, 'Last order', lostDate, lostSub, 'No keg listings were newly lost.'), list(lc, 'Last order', lostDate, lostSub, 'No carton listings were newly lost.'), `Kegs (${lk.length})`, `Cartons (${lc.length})`)}
     <div style="font-size:13px;">Still lost in total: <strong>${r.totalLostKegs}</strong> keg listings, <strong>${r.totalLostCartons}</strong> carton listings (see the Lost Listings page in the Hub).</div>`;
   return { subject: `Weekly listings: ${r.newListings.length} new, ${r.newlyLost.length} lost (data to ${fmtAu(r.asOfIso)})`, html: wrap('Weekly listings update', `Sales data to ${fmtAu(r.asOfIso)} (last 7 days: ${fmtAu(r.windowFrom)} to ${fmtAu(r.asOfIso)})`, body) };
 }
