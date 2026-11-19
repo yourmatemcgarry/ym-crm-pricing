@@ -120,6 +120,7 @@ function custName(c, oid) { const o = c.crm.outlets[oid] || c.manualOutlets[oid]
 function custSub(c, oid) { const o = c.crm.outlets[oid] || c.manualOutlets[oid]; return o ? [o.suburb, o.state].filter(Boolean).join(' ') : ''; }
 
 // ---------------- listings report ----------------
+export const LISTINGS_LOOKBACK_DAYS = 28; // email covers the last 4 weeks so a missed email doesn't hide a lost listing; rows from the latest 7 days are flagged NEW
 export function listingsReport(c) {
   const { rows, lastAny } = lrComputeListings(c.crm.dailyVolume, bucketOfGroup(c), eligible(c), c.asOf);
   const live = r => !c.lostDismissals[r.oid + '|' + r.gid];
@@ -127,10 +128,12 @@ export function listingsReport(c) {
     first: lrIdxToIso(c.epoch, r.firstIdx), last: lrIdxToIso(c.epoch, r.lastIdx), lostOn: lrIdxToIso(c.epoch, r.lostIdx), daysSince: r.daysSince, vol12: r.vol12,
     stillBuying: c.asOf - lastAny[r.oid] < 30, t12: Math.round(c.t12[r.oid] || 0), tier: mateTierOf(c.t12[r.oid] || 0) });
   // Most recent date first (ISO dates compare as strings); ties -> biggest customer first.
-  const newL = lrNewListings(rows, c.asOf, 7).map(enrich).sort((a, b) => b.first.localeCompare(a.first) || b.t12 - a.t12);
-  const lostNow = lrNewlyLost(rows, c.asOf, 7).filter(live).map(enrich).sort((a, b) => b.last.localeCompare(a.last) || b.t12 - a.t12);
+  const LOOKBACK = LISTINGS_LOOKBACK_DAYS; const weekFrom = lrIdxToIso(c.epoch, c.asOf - 6);
+  const flag = (x, k) => Object.assign(x, { thisWeek: x[k] >= weekFrom });
+  const newL = lrNewListings(rows, c.asOf, LOOKBACK).map(enrich).map(x => flag(x, 'first')).sort((a, b) => b.first.localeCompare(a.first) || b.t12 - a.t12);
+  const lostNow = lrNewlyLost(rows, c.asOf, LOOKBACK).filter(live).map(enrich).map(x => flag(x, 'lostOn')).sort((a, b) => b.last.localeCompare(a.last) || b.t12 - a.t12);
   const allLost = lrLostRows(rows).filter(live);
-  return { asOfIso: c.asOfIso, windowFrom: lrIdxToIso(c.epoch, c.asOf - 6), newListings: newL, newlyLost: lostNow,
+  return { asOfIso: c.asOfIso, lookbackDays: LOOKBACK, windowFrom: lrIdxToIso(c.epoch, c.asOf - (LOOKBACK - 1)), weekFrom, newListings: newL, newlyLost: lostNow,
     totalLostKegs: allLost.filter(r => r.bucket === 'KEGS').length, totalLostCartons: allLost.filter(r => r.bucket === 'CARTONS').length };
 }
 
@@ -214,16 +217,26 @@ export function renderListings(r) {
     <td style="width:50%;vertical-align:top;padding-left:8px;"><div style="font-weight:bold;color:#1F3864;margin:0 0 4px;">${rightTitle}</div>${rightHtml}</td></tr></table>`;
   const split = rows => [rows.filter(x => x.bucket === 'KEGS'), rows.filter(x => x.bucket === 'CARTONS')];
   const [nk, nc] = split(r.newListings), [lk, lc] = split(r.newlyLost);
-  const newDate = y => esc(fmtAu(y.first));
-  const lostDate = y => `${esc(fmtAu(y.last))}<br><span style="color:#667;font-size:12px;">${y.daysSince} days ago</span>`;
+  const thisTag = '<span style="display:inline-block;background:#c0392b;color:#fff;font-size:10px;font-weight:bold;padding:1px 5px;border-radius:3px;">THIS WEEK</span>';
+  const newTag = y => y.thisWeek ? ' ' + thisTag : '';
+  const newDate = y => esc(fmtAu(y.first)) + newTag(y);
+  const lostDate = y => `${esc(fmtAu(y.last))}${newTag(y)}<br><span style="color:#667;font-size:12px;">${y.daysSince} days ago</span>`;
   const lostSub = y => `<br><span style="font-size:11px;">${y.stillBuying ? '<span style="color:#667;">still buying other SKUs</span>' : '<span style="color:#c0392b;">no orders in 30d</span>'}</span>`;
-  const legend = `<div style="margin:0 0 12px;font-size:12px;color:#445;">Customer size (last 12 months): ${tierPill('best')} 5,000 L+ &nbsp; ${tierPill('good')} 2,500 L+ &nbsp; ${tierPill('mate')} under 2,500 L</div>`;
-  const body = `${legend}<h3 style="color:#1F3864;margin:8px 0 2px;">New listings (${r.newListings.length})</h3><div style="color:#667;font-size:12px;">First-ever order for the customer + SKU in the last 7 days. Most recent first.</div>
+  const legend = `<div style="margin:0 0 12px;font-size:12px;color:#445;"><strong>Customer size</strong> (litres bought in the last 12 months): ${tierPill('best')} 5,000 L or more &nbsp; ${tierPill('good')} 2,500 L or more &nbsp; ${tierPill('mate')} under 2,500 L</div>`;
+  const box = (bg, bd, html) => `<div style="background:${bg};border:1px solid ${bd};border-radius:6px;padding:10px 14px;margin:0 0 14px;font-size:13px;line-height:1.5;color:#1c2330;">${html}</div>`;
+  const nThisNew = r.newListings.filter(x => x.thisWeek).length, nThisLost = r.newlyLost.filter(x => x.thisWeek).length;
+  const intro = box('#F4F7FC', '#d5deee', `<strong>What is this email?</strong><br>
+    A weekly check on which customers have <strong>started buying a new product</strong> (new listings) and which have <strong>stopped buying a product</strong> (lost listings). A &ldquo;listing&rdquo; is one customer buying one product, e.g. Club Hotel + Larry keg.<br>
+    <strong>This week:</strong> ${nThisNew} new and ${nThisLost} lost. <strong>Last ${r.lookbackDays} days:</strong> ${r.newListings.length} new and ${r.newlyLost.length} lost. The last ${r.lookbackDays} days are shown so nothing is missed if an email is skipped &mdash; items from the most recent 7 days carry a ${thisTag} tag.<br>
+    <strong>How to read the tables:</strong> Kegs are on the left, Cartons on the right. Newest first. Row colour shows how big the customer is (key below), so start with the blue and green rows.`);
+  const newHelp = `<div style="color:#445;font-size:12px;margin-bottom:2px;"><strong>Good news.</strong> These customers ordered this product for the first time ever in the last ${r.lookbackDays} days. Worth a thank-you and a follow-up to get a repeat order.</div>`;
+  const lostHelp = `<div style="color:#445;font-size:12px;margin-bottom:2px;"><strong>Worth a call.</strong> These customers used to buy this product but haven&rsquo;t ordered it recently. As a general rule, a good keg customer reorders about <strong>once every 30 days</strong> and a good carton customer about <strong>once every 90 days</strong>, so that&rsquo;s when a listing shows up here. <em>This is a guide, not a hard rule</em> &mdash; they may have ordered plenty last time, or the beer may simply be moving slower than expected. Treat it as a prompt to check in, not proof the customer is gone. Each row shows the date of their last order and how many days ago that was. &ldquo;Still buying other SKUs&rdquo; means they are still an active customer, just dropped this product; &ldquo;no orders in 30d&rdquo; means they have gone quiet entirely.</div>`;
+  const body = `${intro}${legend}<h3 style="color:#1F3864;margin:8px 0 2px;">New listings (${r.newListings.length})</h3>${newHelp}
     ${twoCols(list(nk, 'First order', newDate, () => '', 'No new keg listings.'), list(nc, 'First order', newDate, () => '', 'No new carton listings.'), `Kegs (${nk.length})`, `Cartons (${nc.length})`)}
-    <h3 style="color:#1F3864;margin:8px 0 2px;">Lost listings this week (${r.newlyLost.length})</h3><div style="color:#667;font-size:12px;">Kegs: 30 days with no order. Cartons: 90 days with no order. Listed when they crossed the line in the last 7 days. Most recent last order first.</div>
+    <h3 style="color:#1F3864;margin:8px 0 2px;">Lost listings (${r.newlyLost.length})</h3>${lostHelp}
     ${twoCols(list(lk, 'Last order', lostDate, lostSub, 'No keg listings were newly lost.'), list(lc, 'Last order', lostDate, lostSub, 'No carton listings were newly lost.'), `Kegs (${lk.length})`, `Cartons (${lc.length})`)}
-    <div style="font-size:13px;">Still lost in total: <strong>${r.totalLostKegs}</strong> keg listings, <strong>${r.totalLostCartons}</strong> carton listings (see the Lost Listings page in the Hub).</div>`;
-  return { subject: `Weekly listings: ${r.newListings.length} new, ${r.newlyLost.length} lost (data to ${fmtAu(r.asOfIso)})`, html: wrap('Weekly listings update', `Sales data to ${fmtAu(r.asOfIso)} (last 7 days: ${fmtAu(r.windowFrom)} to ${fmtAu(r.asOfIso)})`, body) };
+    <div style="font-size:13px;">Overall, across all time: <strong>${r.totalLostKegs}</strong> keg listings and <strong>${r.totalLostCartons}</strong> carton listings are currently lost (full list on the Lost Listings page in the Hub, where you can dismiss ones that are closed or intentional).</div>`;
+  return { subject: `Weekly listings: ${r.newListings.filter(x=>x.thisWeek).length} new / ${r.newlyLost.filter(x=>x.thisWeek).length} lost this week, ${r.newlyLost.length} lost in 4 wks (data to ${fmtAu(r.asOfIso)})`, html: wrap('Weekly listings update', `Sales data to ${fmtAu(r.asOfIso)} (last ${r.lookbackDays} days: ${fmtAu(r.windowFrom)} to ${fmtAu(r.asOfIso)})`, body) };
 }
 
 // ---------------- sending (Resend) ----------------
