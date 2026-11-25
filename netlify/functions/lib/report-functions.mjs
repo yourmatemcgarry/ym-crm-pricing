@@ -29,7 +29,7 @@ export async function loadCrmData(env) {
   return crm;
 }
 export async function loadBlobs(s) {
-  const keys = ['callNotes', 'journeyPlans', 'jpRsmSettings', 'customerRsmOverrides', 'rsmZoneOverrides', 'postcodeZoneOverrides', 'lostListingDismissals', 'manualOutlets', 'emailSettings'];
+  const keys = ['callNotes', 'journeyPlans', 'jpRsmSettings', 'customerRsmOverrides', 'rsmZoneOverrides', 'postcodeZoneOverrides', 'lostListingDismissals', 'manualOutlets', 'emailSettings', 'salesProspects'];
   const vals = await Promise.all(keys.map(k => s.get(k, { type: 'json' })));
   const out = {}; keys.forEach((k, i) => { out[k] = vals[i]; });
   return out;

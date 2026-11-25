@@ -561,6 +561,7 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
     <button class="tab-btn" data-tab="summary" data-group="rsm">Customer Visit</button>
     <button class="tab-btn" data-tab="callnotes" data-group="rsm">Call Notes Summary</button>
     <button class="tab-btn" data-tab="journeyplanner" data-group="rsm">Journey Planner</button>
+    <button class="tab-btn" data-tab="newbusiness" data-group="rsm">New Business</button>
     <button class="tab-btn" data-tab="activations" data-group="rsm">Activations</button>
     <span class="tab-sub-label">Performance</span>
     <button class="tab-btn active" data-tab="performance" data-group="rsm">Team Dashboard</button>
@@ -596,6 +597,7 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
     <button class="tab-btn" data-tab="segments" data-group="mgmt">Segments</button>
     <button class="tab-btn" data-tab="bannerlists" data-group="mgmt">Banner Store Lists</button>
     <button class="tab-btn" data-tab="banneractivation" data-group="mgmt">Banner Activation Deals</button>
+    <button class="tab-btn" data-tab="bannerclaims" data-group="mgmt">Banner Claims</button>
     <button class="tab-btn" data-tab="emailreports" data-group="mgmt">Email Reports</button>
     <button class="tab-btn" data-tab="postcodedb" data-group="mgmt">Postcode Database</button>
     <span class="tab-sub-label">Data Clean-up</span>
@@ -1531,6 +1533,69 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
     </div>
     <div class="panel"><h3 style="margin-top:0;">Deals</h3><div id="bad_table"></div></div>
     <div id="bad_detail"></div>
+  </div>
+
+  <div class="tabpage" id="tab-bannerclaims">
+    <style>.bc-sec td{background:#f1f5f9;} .bc-tot td{font-weight:600;border-top:2px solid #cbd5e1;} .bc-neg{color:#b91c1c;}</style>
+    <div class="panel" id="bc_form">
+      <h2 style="margin:0;">Banner Claims <span class="muted" id="bc_count" style="font-weight:400;"></span></h2>
+      <div class="hint" style="margin-top:6px;">A banner group sends us an invoice saying its stores bought a number of units in a period. Pick the banner and the invoice period, then type the <strong>claimed units per SKU</strong>. The page shows the units <strong>we actually sold</strong> to that banner's stores in the same period (kegs for keg SKUs, cartons for carton SKUs), the variance, and the stores behind each number. Narrow it to the wholesalers the claim relates to (e.g. only ALM) if needed. Save the check to keep a shared log. Our units count positive invoice lines only (credits are not netted) and stop at the sales data date shown below.</div>
+      <h3 id="bc_formtitle" style="margin:14px 0 6px;">Check a banner claim</h3>
+      <div class="rowflex" style="gap:14px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
+        <div class="fld" style="margin:0;"><label>Banner group</label><select id="bc_banner" onchange="bcBannerChange()" style="min-width:220px;"></select></div>
+        <div class="fld" style="margin:0;"><label>Sub-banners</label><select id="bc_sub" onchange="bcRender()"></select></div>
+        <div class="fld" style="margin:0;"><label>Wholesalers</label><select id="bc_wh" onchange="bcRender()"></select></div>
+        <div class="fld" style="margin:0;"><label>Invoice period from</label><input id="bc_start" type="date" onchange="bcRender()"></div>
+        <div class="fld" style="margin:0;"><label>to</label><input id="bc_end" type="date" onchange="bcRender()"></div>
+        <div class="fld" style="margin:0;"><label>Claim / invoice ref</label><input id="bc_ref" placeholder="e.g. INV-10234" style="min-width:160px;"></div>
+        <div class="fld" style="margin:0;"><label>Tolerance %</label><input id="bc_tol" type="number" min="0" step="0.5" value="2" style="width:70px;" oninput="bcRecalc()"></div>
+      </div>
+      <div style="margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;"><span class="muted">Quick period:</span>
+        <button class="btn small secondary" onclick="bcSetPreset('lastmonth')">Last month</button>
+        <button class="btn small secondary" onclick="bcSetPreset('lastquarter')">Last quarter</button>
+        <button class="btn small secondary" onclick="bcSetPreset('mtd')">This month to date</button></div>
+      <div id="bc_result"></div>
+      <div class="fld" style="margin:12px 0 0;"><label>Note</label><input id="bc_note" placeholder="optional, e.g. why we dispute it" style="min-width:420px;"></div>
+      <div style="margin-top:10px;"><button class="btn" onclick="bcSave()">Save check to log</button> <button class="btn secondary" onclick="bcExportCheck()">Export this check (CSV)</button> <button class="btn secondary" id="bc_cancel" style="display:none;" onclick="bcFormReset()">Start a new check</button></div>
+    </div>
+    <div class="panel"><h3 style="margin-top:0;">Saved claim checks <button class="btn small secondary" style="float:right;" onclick="bcExportLog()">Export log (CSV)</button></h3><div id="bc_log"></div></div>
+  </div>
+
+  <div class="tabpage" id="tab-newbusiness">
+    <style>
+      .nb-board { display:flex; gap:10px; overflow-x:auto; padding-bottom:10px; align-items:flex-start; }
+      .nb-col { flex:0 0 230px; background:#f4f6fa; border-radius:8px; padding:8px; min-height:160px; }
+      .nb-col-over { background:#e3ecfb; outline:2px dashed #6b8fd6; }
+      .nb-col-head { margin-bottom:6px; }
+      .nb-col-body { display:flex; flex-direction:column; gap:6px; }
+      .nb-col-empty { color:#9aa3b2; font-size:12px; text-align:center; padding:14px 0; }
+      .nb-card { background:#fff; border:1px solid var(--border); border-radius:8px; padding:8px; cursor:grab; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+      .nb-card:hover { border-color:#6b8fd6; }
+      .nb-card-name { font-weight:600; font-size:13px; }
+      .nb-card-badges { display:flex; gap:4px; flex-wrap:wrap; margin:4px 0; }
+      .nb-next { font-size:11px; margin-top:3px; color:#475569; }
+      .nb-overdue { color:#b91c1c; font-weight:600; }
+      .nb-move { margin-top:6px; width:100%; font-size:11px; }
+      .nb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
+      .nb-grid input, .nb-grid select, .nb-grid textarea { width:100%; box-sizing:border-box; }
+      .nb-two { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+      @media (max-width:900px) { .nb-two { grid-template-columns:1fr; } }
+      .nb-acts { max-height:320px; overflow:auto; margin-top:8px; }
+      .nb-act { border-left:3px solid #cbd5e1; padding:4px 8px; margin:6px 0; font-size:12.5px; }
+      .nb-modal-bg { position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:100; display:flex; align-items:center; justify-content:center; }
+      .nb-modal { background:#fff; border-radius:10px; padding:18px; width:420px; max-width:92vw; }
+      .nb-nearby { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:8px 10px; margin-bottom:10px; }
+      .nb-nearby-sub { margin-right:14px; display:inline-block; }
+    </style>
+    <div class="panel">
+      <h2 style="margin:0;">New Business <span class="muted" id="nb_count" style="font-weight:400;"></span></h2>
+      <div class="hint" style="margin-top:6px;">Build each quarter's target hit list of new customers, move them through the funnel, and see them in the Journey Planner alongside your existing customer visits. Prospects on a rep's hit list show up as chips in that rep's Quarter Planner and Weekly View, and each week shows the prospects sitting in the suburbs you are already visiting.</div>
+      <div id="nb_subtabs" style="margin-top:10px;"></div>
+      <div id="nb_filters"></div>
+    </div>
+    <div id="nb_profile"></div>
+    <div class="panel"><div id="nb_body"></div></div>
+    <div id="nb_modal"></div>
   </div>
 
   <div class="tabpage" id="tab-segments">
@@ -2593,7 +2658,7 @@ const CRM_DATA = {"meta":{"salesDataFrom":"2023-07-11","salesDataTo":"2026-11-22
   // totalValidPaidLines, totalValidPaidLinesAll }). Passing prevData=null/undefined reproduces the
   // exact pre-Round-84 single-batch behavior (used by verify_datarefresh.js Part 1 and any other
   // caller that doesn't have a previous dataset yet).
-  function buildSalesAggregates(salesRows, outlets, products, productToGroup, prevData) {
+  function buildSalesAggregates(salesRows, outlets, products, productToGroup, prevData, groups) {
     const rowsBuffer = [];
     let maxDate = null;
     let minDate = null;
@@ -2645,6 +2710,13 @@ const CRM_DATA = {"meta":{"salesDataFrom":"2023-07-11","salesDataTo":"2026-11-22
     // earlier-than-this-batch) epochDate established above.
     const dailyVolume = {};
     const dailyVolumeOrder = [];
+    // Round 145 (Banner Claims): claimLines "oid|gid" -> { 'dayIdx|whIdx': saleable units } for THIS batch
+    // (kegs = kegs, cartons = units / pack qty), split by wholesaler code (row.Whouse). dailyVolume only carries
+    // litres, so a banner's invoice claim (units, by SKU, by wholesaler) can't be checked from it.
+    const claimMap = {};
+    const claimOrder = [];
+    const claimWh = [];
+    const claimWhIdx = {};
 
     let nValid = 0;
     let nValidSalesTeam = 0;
@@ -2744,6 +2816,18 @@ const CRM_DATA = {"meta":{"salesDataFrom":"2023-07-11","salesDataTo":"2026-11-22
           let dv = dailyVolume[dvKey];
           if (!dv) { dv = {}; dailyVolume[dvKey] = dv; dailyVolumeOrder.push(dvKey); }
           dv[dayIdx] = (dv[dayIdx] || 0) + litres;
+
+          // Round 145: saleable units by wholesaler (see claimMap above)
+          const _g = groups && groups[gid];
+          const _isCarton = _g ? _g.bucket === 'CARTONS' : ((products[pid].packQty || 1) > 1);
+          const _saleUnits = _isCarton ? units / (products[pid].packQty || 1) : units;
+          const _wh = row['Whouse'] || '';
+          let _wi = claimWhIdx[_wh];
+          if (_wi === undefined) { _wi = claimWh.length; claimWhIdx[_wh] = _wi; claimWh.push(_wh); }
+          let _cm = claimMap[dvKey];
+          if (!_cm) { _cm = {}; claimMap[dvKey] = _cm; claimOrder.push(dvKey); }
+          const _ck = dayIdx + '|' + _wi;
+          _cm[_ck] = (_cm[_ck] || 0) + _saleUnits;
         }
       }
     }
@@ -2765,6 +2849,29 @@ const CRM_DATA = {"meta":{"salesDataFrom":"2023-07-11","salesDataTo":"2026-11-22
             let dv = dailyVolume[key];
             if (!dv) { dv = {}; dailyVolume[key] = dv; dailyVolumeOrder.push(key); }
             dv[dayIdxAbs] = flat[i + 1];
+          }
+        }
+      }
+    }
+
+    // ---- Round 145: claimLines history (same rule as dailyVolume: keep previous days strictly before this batch's window) ----
+    if (prevData && prevData.claimLines) {
+      const offsetDaysC = prevEpochMs !== null ? Math.round((prevEpochMs - epochDate) / MS_PER_DAY) : 0;
+      const prevWh = prevData.claimWh || [];
+      for (const key in prevData.claimLines) {
+        const oid = splitKey(key)[0];
+        if (!hasOwn.call(outlets, oid)) continue;
+        const flat = prevData.claimLines[key];
+        for (let i = 0; i < flat.length; i += 3) {
+          const dayAbs = flat[i] + offsetDaysC;
+          if (newWindowStartDayIdx === null || dayAbs < newWindowStartDayIdx) {
+            const wh = prevWh[flat[i + 1]] || '';
+            let wi = claimWhIdx[wh];
+            if (wi === undefined) { wi = claimWh.length; claimWhIdx[wh] = wi; claimWh.push(wh); }
+            let cm = claimMap[key];
+            if (!cm) { cm = {}; claimMap[key] = cm; claimOrder.push(key); }
+            const ck = dayAbs + '|' + wi;
+            cm[ck] = (cm[ck] || 0) + flat[i + 2];
           }
         }
       }
@@ -2942,10 +3049,22 @@ const CRM_DATA = {"meta":{"salesDataFrom":"2023-07-11","salesDataTo":"2026-11-22
       dailyVolumeOut[key] = flat;
     }
 
+    // Round 145: claimLines out: flat [day, whIdx, units, ...] sorted by day then wholesaler
+    const claimLinesOut = {};
+    for (const key of claimOrder) {
+      const cm = claimMap[key];
+      if (!cm) continue;
+      const ents = Object.keys(cm).map((k) => { const [d, w] = k.split('|'); return [Number(d), Number(w), cm[k]]; })
+        .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      const flat = [];
+      for (const e of ents) { flat.push(e[0]); flat.push(e[1]); flat.push(pyRound(e[2], 4)); }
+      claimLinesOut[key] = flat;
+    }
+
     const outletGroupCombosSalesTeam = Object.keys(groupSummary).filter((key) => outlets[splitKey(key)[0]].volumeStream === 'Sales Team').length;
 
     return {
-      groupSummary, outletSummary, dailyVolumeOut,
+      groupSummary, outletSummary, dailyVolumeOut, claimLinesOut, claimWh,
       nRows, nValid, nValidSalesTeam,
       maxDate, minDate, epochDate,
       outletGroupCombosSalesTeam,
@@ -2974,6 +3093,8 @@ const CRM_DATA = {"meta":{"salesDataFrom":"2023-07-11","salesDataTo":"2026-11-22
     const m = previousCrmData.meta || {};
     return {
       dailyVolume: previousCrmData.dailyVolume || {},
+      claimLines: previousCrmData.claimLines || null, // Round 145
+      claimWh: previousCrmData.claimWh || [],
       groupSummary: previousCrmData.groupSummary || {},
       outletSummary: previousCrmData.outletSummary || {},
       epochDateMs: m.epochDate ? parseISOToMs(m.epochDate) : null,
@@ -3010,7 +3131,7 @@ const CRM_DATA = {"meta":{"salesDataFrom":"2023-07-11","salesDataTo":"2026-11-22
     }
     const { products, groups, groupOrder, productToGroup } = buildProductsAndGroups(productRows);
     const prevData = buildPrevDataForMerge(previousCrmData);
-    const sales = buildSalesAggregates(salesRows, outlets, products, productToGroup, prevData);
+    const sales = buildSalesAggregates(salesRows, outlets, products, productToGroup, prevData, groups);
 
     const meta = {
       // Round 84: salesDataFrom is now the accumulated historical floor (sales.epochDate), not just
@@ -3043,6 +3164,8 @@ const CRM_DATA = {"meta":{"salesDataFrom":"2023-07-11","salesDataTo":"2026-11-22
       groupSummary: sales.groupSummary,
       outletSummary: sales.outletSummary,
       dailyVolume: sales.dailyVolumeOut,
+      claimLines: sales.claimLinesOut, // Round 145
+      claimWh: sales.claimWh,
     };
   }
 
@@ -3147,6 +3270,8 @@ const CRM_DATA = {"meta":{"salesDataFrom":"2023-07-11","salesDataTo":"2026-11-22
       groupSummary: fresh.groupSummary,
       outletSummary,
       dailyVolume: fresh.dailyVolume,
+      claimLines: fresh.claimLines, // Round 145
+      claimWh: fresh.claimWh,
       familyGroups: prev.familyGroups,
       vipContactsSeed: prev.vipContactsSeed,
     };
@@ -3864,6 +3989,10 @@ function buildServerPayload(fnName, args) {
     case 'deleteFamilyGroupDeal': return { groupId: args[0], skuGroupId: args[1] };
     case 'saveBannerActivationDeal': return { deal: args[0] };
     case 'deleteBannerActivationDeal': return { id: args[0] };
+    case 'saveBannerClaim': return { claim: args[0] };
+    case 'deleteBannerClaim': return { id: args[0] };
+    case 'saveProspect': return { prospect: args[0] };
+    case 'deleteProspect': return { id: args[0] };
     case 'saveLostDismissal': return { key: args[0], reason: args[1], updatedBy: args[2] };
     case 'deleteLostDismissal': return { key: args[0] };
     case 'saveEmailSettings': return { settings: args[0] };
@@ -8568,7 +8697,8 @@ function jpAllRowsForRsm(rsm, quarterKey) {
   const hitlist = jpHitlistForRsm(rsm, quarterKey)
     .filter(o => !seenIds.has(o.id) && plan.selectedHitlist[o.id])
     .map(o => ({ o, isHitlist: true }));
-  return actives.concat(hitlist).map(r => {
+  const nbRows = (typeof nbJpOutlets === 'function' ? nbJpOutlets(rsm, quarterKey) : []).filter(o => o && !seenIds.has(o.id)).map(o => ({ o, isHitlist: true })); // Round 146: new-business prospects
+  return actives.concat(hitlist).concat(nbRows).map(r => {
     const tierKey = jpTierKeyFor(r.o.id, r.isHitlist);
     return { o: r.o, isHitlist: r.isHitlist, tierKey, tierMeta: jpTierMeta(tierKey), segmentKey: jpSegmentKeyFor(r.o, r.isHitlist), st: jpStatus(r.o.id) };
   });
@@ -8851,7 +8981,8 @@ function jpSettingsPanelHtml() {
 }
 function jpChipHtml(outletId, extra) {
   extra = extra || {};
-  const o = outlets[outletId] || {};
+  const o = outlets[outletId] || (typeof nbPseudoOutlet === 'function' && nbPseudoOutlet(outletId)) || {}; // Round 146: prospects are chips too
+  const isNb = typeof nbIsProspectId === 'function' && nbIsProspectId(outletId);
   const st = jpStatus(outletId);
   const tierMeta = jpTierMeta(jpTierKeyFor(outletId));
   const selected = jpSelectedBench === outletId;
@@ -8861,8 +8992,8 @@ function jpChipHtml(outletId, extra) {
   return `<div class="jp-chip ${selected?'jp-chip-selected':''} ${extra.moving?'jp-chip-moving':''}" onclick="jpSelectBench('${outletId}')">
     <span class="jp-chip-name">${escapeHtml(o.name || outletId)}</span>
     <span class="jp-chip-badges">
-      <span class="badge ${tierMeta.badge}">${escapeHtml(tierMeta.label)}</span>
-      <span class="badge ${st.cls}">${escapeHtml(st.label)}</span>
+      ${isNb ? nbChipBadges(outletId) : `<span class="badge ${tierMeta.badge}">${escapeHtml(tierMeta.label)}</span>
+      <span class="badge ${st.cls}">${escapeHtml(st.label)}</span>`}
       ${countBadge}
     </span>
     ${moveBtn}${removeBtn}
@@ -8944,7 +9075,7 @@ function jpQuarterPlannerHtml() {
       }).join('')
     : `<div class="hint">Nothing left to schedule with the current filters.</div>`;
   const movingHtml = jpMovingFrom
-    ? `<div class="hint jp-moving-hint">Moving ${escapeHtml((outlets[jpMovingFrom.outletId]||{}).name || jpMovingFrom.outletId)} — click a week to move it there. <button class="btn small secondary" onclick="jpCancelMove()">Cancel</button></div>`
+    ? `<div class="hint jp-moving-hint">Moving ${escapeHtml(nbNameOf(jpMovingFrom.outletId))} — click a week to move it there. <button class="btn small secondary" onclick="jpCancelMove()">Cancel</button></div>`
     : '';
   const weekCols = weeks.map(w => {
     const assignedIds = Object.keys(plan.wkAssign).filter(oid => (plan.wkAssign[oid]||[]).includes(w.idx) && byId[oid]);
@@ -8960,9 +9091,10 @@ function jpQuarterPlannerHtml() {
         })).join('')
       : `<div class="jp-col-empty">Click a customer, then here.</div>`;
     const note = plan.weekNotes[w.idx] || '';
+    const nbBadge = typeof nbNearbyBadge === 'function' ? nbNearbyBadge(assignedIds) : ''; // Round 146
     return `<div class="jp-col ${jpMovingFrom?'jp-col-move-target':''}" onclick="jpColumnClick(${w.idx})">
       <div class="jp-col-head">${w.label} <span class="muted" style="font-weight:400; font-size:10px;">${escapeHtml(w.sub)}</span></div>
-      <div class="rowflex" style="gap:4px; margin-bottom:6px; flex-wrap:wrap;"><span class="badge ${totalCls}">${total}/${settings.weeklyTarget}</span><span class="badge ${hlCls}">${hitlistCount}/${settings.hitlistQuota} HL</span></div>
+      <div class="rowflex" style="gap:4px; margin-bottom:6px; flex-wrap:wrap;"><span class="badge ${totalCls}">${total}/${settings.weeklyTarget}</span><span class="badge ${hlCls}">${hitlistCount}/${settings.hitlistQuota} HL</span>${nbBadge}</div>
       <div class="jp-col-note" onclick="event.stopPropagation()"><input type="text" value="${escapeHtml(note)}" placeholder="Note (e.g. Annual Leave)" onchange="onJpWeekNoteChange(${w.idx}, this.value)"></div>
       <div class="jp-col-body">${chips}</div>
     </div>`;
@@ -9013,6 +9145,7 @@ function jpWeeklyViewHtml() {
       <div class="fld" style="margin:0;"><label>Week</label><select id="jp_weekIdx" onchange="onJpWeekIdxChange()">${weekOptions}</select></div>
     </div>
     ${noteHtml}
+    ${typeof nbNearbyHtml === 'function' ? nbNearbyHtml(weekOutletIds) : ''}
     <div class="hint" style="margin-bottom:10px;">Pick a week, click a customer, then click a day to place their visit.</div>
     <div class="jp-board-wrap">
       <div class="jp-bench">
@@ -15425,6 +15558,826 @@ function renderBannerActivationPage() {
   document.getElementById('bad_detail').innerHTML = det ? badDetailHtml(det) : '';
 }
 
+
+// ===================== BANNER CLAIMS (Round 145) =====================
+// Verify a banner group's invoice claim against our own sales. The banner (LMG, Star Liquor, IBA ...) sends an invoice
+// saying "our stores bought N units of SKU X between A and B". Enter the claimed units per SKU; the tool shows the units
+// WE sold to that banner's stores in the same period (optionally only via chosen wholesalers), the variance, and the
+// stores behind each number. Checks are saved to a shared claims log.
+// Data: CRM_DATA.claimLines  "outletId|groupId" -> [day, wholesalerIdx, units, ...]  (units = kegs for keg SKUs, cartons for
+// carton SKUs; wholesaler code list = CRM_DATA.claimWh). Written by the data refresh (netlify_datarefresh.js, Round 145).
+// Banner membership = the outlet's Hub banner group / sub-banner (the same tags every other banner filter uses).
+// Persistence: static build = localStorage; Netlify build = server (callServer). Not part of CRM_DATA.
+var LS_BANNER_CLAIMS = 'ymtBannerClaimsV1';
+var bannerClaims = [];      // [{id,ref,banner,subBanners,whs,start,end,tolerance,note,status,lines:{gid:{claimed,ours}},totals,dataTo,createdBy,createdAt,updatedAt}]
+var bcEditingId = null;
+var bcClaimed = {};         // gid -> claimed units (number) typed on the form
+var bcExtra = [];           // SKU groups added by hand (claimed but maybe no sales)
+var bcOpenGid = null;       // SKU whose store list is expanded
+var bcRes = null;           // last computed result
+
+function bcUser() { return (typeof currentUserEmail !== 'undefined' && currentUserEmail) || (typeof LS_NAME_KEY !== 'undefined' && localStorage.getItem(LS_NAME_KEY)) || 'Unknown'; }
+function bcPersist(claim, deleteId) {
+  if (typeof callServer === 'function') {
+    if (deleteId) callServer('deleteBannerClaim', [deleteId], (d) => { bannerClaims = d.bannerClaims || bannerClaims; renderBannerClaimsPage(); }, null);
+    else callServer('saveBannerClaim', [claim], (d) => { bannerClaims = d.bannerClaims || bannerClaims; renderBannerClaimsPage(); }, null);
+  } else {
+    try { localStorage.setItem(LS_BANNER_CLAIMS, JSON.stringify(bannerClaims)); } catch (e) { console.error(e); }
+  }
+}
+function bcLoadLocal() { try { bannerClaims = JSON.parse(localStorage.getItem(LS_BANNER_CLAIMS)) || []; } catch (e) { bannerClaims = []; } }
+
+// ---------- core maths ----------
+function bcHasData() { return typeof CRM_DATA !== 'undefined' && !!CRM_DATA.claimLines && Object.keys(CRM_DATA.claimLines).length > 0; }
+function bcDayIdx(iso) { return Math.round((new Date(iso + 'T00:00:00') - EPOCH_DATE) / 86400000); }
+function bcIsoOfDay(d) {
+  const dt = new Date(EPOCH_DATE.getFullYear(), EPOCH_DATE.getMonth(), EPOCH_DATE.getDate() + d);
+  return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+}
+function bcOutletOf(oid) {
+  let o = allOutlets[oid];
+  if (o && o.mergedInto && allOutlets[o.mergedInto]) o = allOutlets[o.mergedInto];
+  return o || null;
+}
+function bcBannerGroups() {
+  const c = {};
+  Object.keys(allOutlets).forEach(id => { const o = allOutlets[id]; if (o && o.majorGroup && !o.excluded) c[o.majorGroup] = (c[o.majorGroup] || 0) + 1; });
+  return Object.keys(c).sort((a, b) => c[b] - c[a]).map(k => ({ name: k, n: c[k] }));
+}
+function bcSubBanners(banner) {
+  const s = new Set();
+  Object.keys(allOutlets).forEach(id => { const o = allOutlets[id]; if (o && !o.excluded && o.majorGroup === banner && o.banner) s.add(o.banner); });
+  return [...s].sort();
+}
+function bcWholesalers() { return ((typeof CRM_DATA !== 'undefined' && CRM_DATA.claimWh) || []).filter(w => w !== '' ); }
+// p = { banner, subs:[], whs:[], start:'YYYY-MM-DD', end:'YYYY-MM-DD' }
+// returns { byGid: { gid: { units, byWh:{wh:u}, byOutlet:{oid:{units,wh:{},lastDay}} } }, totalOutlets }
+function bcCompute(p) {
+  const out = { byGid: {}, outlets: new Set() };
+  if (!bcHasData() || !p.banner || !p.start || !p.end) return out;
+  const d0 = bcDayIdx(p.start), d1 = bcDayIdx(p.end);
+  const wl = CRM_DATA.claimWh || [];
+  const whSet = (p.whs && p.whs.length) ? new Set(p.whs) : null;
+  const subs = p.subs || [];
+  const cl = CRM_DATA.claimLines;
+  for (const key in cl) {
+    const i = key.indexOf('|'); const oid = key.slice(0, i), gid = key.slice(i + 1);
+    if (!groups[gid]) continue;
+    const o = bcOutletOf(oid); if (!o || o.majorGroup !== p.banner) continue;
+    if (subs.length && !subs.includes(o.banner)) continue;
+    const flat = cl[key];
+    for (let k = 0; k < flat.length; k += 3) {
+      const d = flat[k]; if (d < d0 || d > d1) continue;
+      const wh = wl[flat[k + 1]] || '';
+      if (whSet && !whSet.has(wh)) continue;
+      const u = flat[k + 2];
+      const g = out.byGid[gid] || (out.byGid[gid] = { units: 0, byWh: {}, byOutlet: {} });
+      g.units += u; g.byWh[wh] = (g.byWh[wh] || 0) + u;
+      const ro = g.byOutlet[oid] || (g.byOutlet[oid] = { units: 0, wh: {}, lastDay: -1 });
+      ro.units += u; ro.wh[wh] = (ro.wh[wh] || 0) + u; if (d > ro.lastDay) ro.lastDay = d;
+      out.outlets.add(oid);
+    }
+  }
+  return out;
+}
+// claimed may be null/'' (nothing claimed for this SKU). tolPct = tolerance in % of the larger number.
+function bcJudge(claimed, ours, tolPct) {
+  const has = claimed !== null && claimed !== undefined && claimed !== '' && !isNaN(claimed);
+  const c = has ? Number(claimed) : 0;
+  const v = c - ours;
+  if (!has) return ours > 0.0049 ? { v: -ours, pct: null, st: 'unclaimed', label: 'Not claimed', cls: 'grey' } : { v: 0, pct: null, st: 'none', label: '—', cls: 'grey' };
+  const big = Math.max(Math.abs(c), Math.abs(ours));
+  const pct = big > 0 ? (v / big) * 100 : 0;
+  if (Math.abs(v) < 0.005 || (big > 0 && Math.abs(pct) <= (Number(tolPct) || 0))) return { v, pct, st: 'match', label: 'Matches', cls: 'green' };
+  if (ours <= 0.0049) return { v, pct, st: 'nosales', label: 'No sales found', cls: 'red' };
+  return v > 0 ? { v, pct, st: 'over', label: 'Over-claimed', cls: 'red' } : { v, pct, st: 'under', label: 'Under-claimed', cls: 'amber' };
+}
+function bcN(n) { if (n === null || n === undefined || isNaN(n)) return '—'; const r = Math.round(n * 100) / 100; return r.toLocaleString('en-AU', { maximumFractionDigits: 2 }); }
+function bcSigned(n) { if (n === null || n === undefined || isNaN(n)) return '—'; const r = Math.round(n * 100) / 100; return (r > 0 ? '+' : '') + r.toLocaleString('en-AU', { maximumFractionDigits: 2 }); }
+function bcParams() {
+  return {
+    banner: (document.getElementById('bc_banner') || {}).value || '',
+    subs: selVals('bc_sub'), whs: selVals('bc_wh'),
+    start: (document.getElementById('bc_start') || {}).value || '', end: (document.getElementById('bc_end') || {}).value || ''
+  };
+}
+function bcTol() { const e = document.getElementById('bc_tol'); const v = e ? parseFloat(e.value) : 2; return isNaN(v) ? 0 : v; }
+function bcGids(res) {
+  const set = new Set(Object.keys(res.byGid));
+  Object.keys(bcClaimed).forEach(g => { if (bcClaimed[g] !== '' && bcClaimed[g] !== null && bcClaimed[g] !== undefined) set.add(g); });
+  bcExtra.forEach(g => set.add(g));
+  return [...set].filter(g => groups[g]).sort((a, b) => groupOrder.indexOf(a) - groupOrder.indexOf(b));
+}
+function bcBucketLabel(b) { return b === 'KEGS' ? 'Kegs' : 'Cartons'; }
+function bcUnitLabel(gid) { return bucketOf(groups[gid]) === 'KEGS' ? 'kegs' : 'cartons'; }
+// totals per bucket from a result + claimed map
+function bcTotals(res, gids) {
+  const t = { KEGS: { claimed: 0, ours: 0 }, CARTONS: { claimed: 0, ours: 0 } };
+  gids.forEach(g => {
+    const b = bucketOf(groups[g]);
+    const c = bcClaimed[g];
+    if (c !== '' && c !== null && c !== undefined && !isNaN(c)) t[b].claimed += Number(c);
+    t[b].ours += (res.byGid[g] ? res.byGid[g].units : 0);
+  });
+  return t;
+}
+
+// ---------- form ----------
+function bcSetPreset(kind) {
+  const base = PERF_TODAY ? new Date(PERF_TODAY.getTime()) : new Date();
+  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  let a, b;
+  if (kind === 'lastmonth') { a = new Date(base.getFullYear(), base.getMonth() - 1, 1); b = new Date(base.getFullYear(), base.getMonth(), 0); }
+  else if (kind === 'mtd') { a = new Date(base.getFullYear(), base.getMonth(), 1); b = base; }
+  else { const q = Math.floor(base.getMonth() / 3); a = new Date(base.getFullYear(), q * 3 - 3, 1); b = new Date(base.getFullYear(), q * 3, 0); }
+  document.getElementById('bc_start').value = iso(a); document.getElementById('bc_end').value = iso(b);
+  bcRender();
+}
+function bcBannerChange() {
+  const sel = document.getElementById('bc_sub'); if (!sel) return;
+  const b = document.getElementById('bc_banner').value;
+  sel.innerHTML = '<option value="">All sub-banners</option>' + bcSubBanners(b).map(x => `<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('');
+  try { enhanceSelectMulti('bc_sub', 'sub-banners'); if (sel.__ms) sel.__ms.setValues([]); } catch (e) { console.error(e); }
+  bcRender();
+}
+function bcInitForm() {
+  const bs = document.getElementById('bc_banner');
+  bs.innerHTML = '<option value="">Choose banner group…</option>' + bcBannerGroups().map(b => `<option value="${escapeHtml(b.name)}">${escapeHtml(b.name)} (${b.n} stores)</option>`).join('');
+  const wh = document.getElementById('bc_wh');
+  wh.innerHTML = '<option value="">All wholesalers</option>' + bcWholesalers().map(w => `<option value="${escapeHtml(w)}">${escapeHtml(w)}${w === 'YMT' ? ' (direct)' : ''}</option>`).join('');
+  try { enhanceSelectMulti('bc_wh', 'wholesalers'); } catch (e) { console.error(e); }
+  bcBannerChange();
+}
+function bcFormReset() {
+  bcEditingId = null; bcClaimed = {}; bcExtra = []; bcOpenGid = null;
+  ['bc_ref', 'bc_start', 'bc_end', 'bc_note'].forEach(i => { const e = document.getElementById(i); if (e) e.value = ''; });
+  document.getElementById('bc_banner').value = ''; document.getElementById('bc_tol').value = '2';
+  bcBannerChange();
+  const wh = document.getElementById('bc_wh'); if (wh && wh.__ms) wh.__ms.setValues([]);
+  document.getElementById('bc_formtitle').textContent = 'Check a banner claim';
+  document.getElementById('bc_cancel').style.display = 'none';
+  bcRender();
+}
+function bcClaimInput(gid, val) {
+  const v = String(val).trim();
+  if (v === '' || isNaN(v)) delete bcClaimed[gid]; else bcClaimed[gid] = Number(v);
+  bcRecalc();
+}
+function bcAddSku() {
+  const sel = document.getElementById('bc_addsku'); const g = sel.value; if (!g) return;
+  if (!bcExtra.includes(g)) bcExtra.push(g);
+  sel.value = ''; bcRender();
+}
+function bcToggle(gid) { bcOpenGid = (bcOpenGid === gid ? null : gid); bcRender(); }
+
+// ---------- render of the comparison ----------
+function bcStatusBadge(j) { return j.st === 'none' ? '<span class="muted">—</span>' : `<span class="badge ${j.cls}">${j.label}</span>`; }
+function bcRender() {
+  const root = document.getElementById('bc_result'); if (!root) return;
+  if (!bcHasData()) { root.innerHTML = '<div class="empty">This data build has no unit-by-wholesaler record yet. Run a Data Refresh (Round 145 or later) to enable Banner Claims.</div>'; return; }
+  const p = bcParams();
+  const warn = [];
+  if (!p.banner || !p.start || !p.end) { root.innerHTML = '<div class="empty">Choose a banner group and the invoice period to see our sales for it.</div>'; bcRes = null; return; }
+  if (p.end < p.start) { root.innerHTML = '<div class="empty">The end date is before the start date.</div>'; bcRes = null; return; }
+  const to = (meta && meta.salesDataTo) || '';
+  if (to && p.end > to) warn.push(`The period runs past our sales data (to ${fmtDate(to)}). Days after that are missing, so our units will be understated.`);
+  const res = bcCompute(p); bcRes = res;
+  const gids = bcGids(res);
+  const tol = bcTol();
+  const addOpts = groupOrder.filter(g => groups[g] && !gids.includes(g)).map(g => `<option value="${g}">${escapeHtml(groups[g].label)} (${bcBucketLabel(bucketOf(groups[g])).toLowerCase()})</option>`).join('');
+  let html = `<div class="hint" style="margin-bottom:8px;">${res.outlets.size} stores on <strong>${escapeHtml(p.banner)}</strong>${p.subs.length ? ' (' + p.subs.map(escapeHtml).join(', ') + ')' : ''} bought from us in this period${p.whs.length ? ' via ' + p.whs.map(escapeHtml).join(', ') : ' (all wholesalers)'}. Sales data to ${fmtDate(to)}.</div>`;
+  warn.forEach(w => { html += `<div class="hint" style="color:#b45309;margin-bottom:6px;">⚠ ${escapeHtml(w)}</div>`; });
+  let body = '';
+  ['KEGS', 'CARTONS'].forEach(bk => {
+    const rows = gids.filter(g => bucketOf(groups[g]) === bk);
+    if (!rows.length) return;
+    body += `<tr class="bc-sec"><td colspan="8"><strong>${bcBucketLabel(bk)}</strong> <span class="muted">(units = ${bk === 'KEGS' ? 'kegs' : 'cartons'})</span></td></tr>`;
+    rows.forEach(g => {
+      const r = res.byGid[g]; const ours = r ? r.units : 0;
+      const c = bcClaimed[g]; const j = bcJudge(c, ours, tol);
+      const whTxt = r ? Object.keys(r.byWh).sort().map(w => `${escapeHtml(w || '—')} ${bcN(r.byWh[w])}`).join(' · ') : '';
+      body += `<tr id="bc_row_${g}"><td>${escapeHtml(groups[g].label)}</td>
+        <td><input type="number" step="any" min="0" id="bc_c_${g}" style="width:90px;" value="${c === undefined ? '' : c}" oninput="bcClaimInput('${g}', this.value)" placeholder="0"></td>
+        <td class="mono" id="bc_o_${g}">${bcN(ours)}</td>
+        <td class="mono" id="bc_v_${g}">${j.st === 'none' || j.st === 'unclaimed' ? '—' : bcSigned(j.v)}</td>
+        <td class="mono" id="bc_p_${g}">${j.pct === null ? '—' : bcSigned(Math.round(j.pct * 10) / 10) + '%'}</td>
+        <td id="bc_s_${g}">${bcStatusBadge(j)}</td>
+        <td style="font-size:12px;" class="muted">${whTxt}</td>
+        <td style="white-space:nowrap;">${r ? `<button class="btn small secondary" onclick="bcToggle('${g}')">${bcOpenGid === g ? 'Hide' : 'Stores'} (${Object.keys(r.byOutlet).length})</button>` : ''}</td></tr>`;
+      if (bcOpenGid === g && r) body += `<tr><td colspan="8" style="background:#f8fafc;">${bcStoresHtml(g, r)}</td></tr>`;
+    });
+    body += `<tr class="bc-tot"><td><strong>${bcBucketLabel(bk)} total</strong></td><td class="mono" id="bc_tc_${bk}"></td><td class="mono" id="bc_to_${bk}"></td><td class="mono" id="bc_tv_${bk}"></td><td class="mono" id="bc_tp_${bk}"></td><td id="bc_ts_${bk}"></td><td></td><td></td></tr>`;
+  });
+  if (!body) body = '<tr><td colspan="8" class="muted">We recorded no sales to this banner in the period. Add the claimed SKUs below.</td></tr>';
+  html += `<div class="tablewrap"><table class="datatable"><thead><tr><th>SKU</th><th>Claimed (invoice)</th><th>Our sales</th><th>Variance (claimed − ours)</th><th>%</th><th>Result</th><th>Our sales by wholesaler</th><th></th></tr></thead><tbody>${body}</tbody></table></div>
+    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><select id="bc_addsku" style="min-width:240px;"><option value="">Add a SKU the banner claimed…</option>${addOpts}</select><button class="btn small secondary" onclick="bcAddSku()">Add SKU</button></div>`;
+  root.innerHTML = html;
+  bcRecalc();
+}
+// update variance / status / totals cells in place (keeps focus while typing)
+function bcRecalc() {
+  if (!bcRes) return;
+  const res = bcRes; const tol = bcTol(); const gids = bcGids(res);
+  gids.forEach(g => {
+    const ours = res.byGid[g] ? res.byGid[g].units : 0;
+    const j = bcJudge(bcClaimed[g], ours, tol);
+    const set = (id, t, h) => { const e = document.getElementById(id); if (e) { if (h) e.innerHTML = t; else e.textContent = t; } };
+    set('bc_v_' + g, j.st === 'none' || j.st === 'unclaimed' ? '—' : bcSigned(j.v));
+    set('bc_p_' + g, j.pct === null ? '—' : bcSigned(Math.round(j.pct * 10) / 10) + '%');
+    set('bc_s_' + g, bcStatusBadge(j), true);
+  });
+  const t = bcTotals(res, gids);
+  ['KEGS', 'CARTONS'].forEach(bk => {
+    const e = document.getElementById('bc_tc_' + bk); if (!e) return;
+    const has = gids.some(g => bucketOf(groups[g]) === bk && bcClaimed[g] !== undefined);
+    const j = bcJudge(has ? t[bk].claimed : null, t[bk].ours, tol);
+    e.textContent = has ? bcN(t[bk].claimed) : '—';
+    document.getElementById('bc_to_' + bk).textContent = bcN(t[bk].ours);
+    document.getElementById('bc_tv_' + bk).textContent = has ? bcSigned(j.v) : '—';
+    document.getElementById('bc_tp_' + bk).textContent = j.pct === null ? '—' : bcSigned(Math.round(j.pct * 10) / 10) + '%';
+    document.getElementById('bc_ts_' + bk).innerHTML = has ? bcStatusBadge(j) : '';
+  });
+}
+function bcStoresHtml(gid, r) {
+  const rows = Object.keys(r.byOutlet).map(oid => ({ oid, o: bcOutletOf(oid), x: r.byOutlet[oid] })).sort((a, b) => b.x.units - a.x.units);
+  return `<div class="hint" style="margin-bottom:4px;">Stores that bought ${escapeHtml(groups[gid].label)} in the period (${rows.length}). Use this to find which stores the banner may have counted differently.</div>
+    <div class="tablewrap"><table class="datatable"><thead><tr><th>Store</th><th>Sub-banner</th><th>OutletID</th><th>${bcUnitLabel(gid)}</th><th>By wholesaler</th><th>Last order</th></tr></thead><tbody>${
+      rows.map(x => `<tr><td>${escapeHtml(x.o ? x.o.name : x.oid)}<div class="hint">${escapeHtml(x.o ? [x.o.suburb, x.o.state].filter(Boolean).join(' ') : '')}</div></td><td>${escapeHtml(x.o && x.o.banner || '—')}</td><td class="mono">${escapeHtml(x.oid)}</td><td class="mono">${bcN(x.x.units)}</td><td style="font-size:12px;">${Object.keys(x.x.wh).sort().map(w => escapeHtml(w || '—') + ' ' + bcN(x.x.wh[w])).join(' · ')}</td><td>${fmtDate(bcIsoOfDay(x.x.lastDay))}</td></tr>`).join('')
+    }</tbody></table></div>`;
+}
+
+// ---------- save / log ----------
+function bcBuildClaim() {
+  const p = bcParams();
+  if (!p.banner) { toast('Choose a banner group.'); return null; }
+  if (!p.start || !p.end) { toast('Set the invoice period.'); return null; }
+  if (p.end < p.start) { toast('End date is before the start date.'); return null; }
+  const res = bcCompute(p); const gids = bcGids(res);
+  const lines = {};
+  gids.forEach(g => {
+    const c = bcClaimed[g]; const ours = res.byGid[g] ? res.byGid[g].units : 0;
+    if ((c === undefined) && ours <= 0) return;
+    lines[g] = { claimed: c === undefined ? null : c, ours: Math.round(ours * 100) / 100 };
+  });
+  if (!Object.values(lines).some(l => l.claimed !== null)) { toast('Enter at least one claimed quantity.'); return null; }
+  const t = bcTotals(res, gids);
+  const prev = bannerClaims.find(x => x.id === bcEditingId);
+  const now = new Date().toISOString();
+  return {
+    id: prev ? prev.id : 'bc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+    ref: document.getElementById('bc_ref').value.trim(), banner: p.banner, subBanners: p.subs, whs: p.whs, start: p.start, end: p.end,
+    tolerance: bcTol(), note: document.getElementById('bc_note').value.trim(), status: prev ? prev.status : 'open',
+    lines, totals: { KEGS: { claimed: Math.round(t.KEGS.claimed * 100) / 100, ours: Math.round(t.KEGS.ours * 100) / 100 }, CARTONS: { claimed: Math.round(t.CARTONS.claimed * 100) / 100, ours: Math.round(t.CARTONS.ours * 100) / 100 } },
+    dataTo: (meta && meta.salesDataTo) || '', createdBy: prev ? prev.createdBy : bcUser(), createdAt: prev ? prev.createdAt : now, updatedBy: bcUser(), updatedAt: now
+  };
+}
+function bcSave() {
+  const c = bcBuildClaim(); if (!c) return;
+  const i = bannerClaims.findIndex(x => x.id === c.id);
+  if (i >= 0) bannerClaims[i] = c; else bannerClaims.push(c);
+  bcPersist(c);
+  bcFormReset();
+  renderBannerClaimsPage();
+  toast('Claim check saved to the log.');
+}
+function bcLoad(id) {
+  const c = bannerClaims.find(x => x.id === id); if (!c) return;
+  bcEditingId = id; bcOpenGid = null;
+  bcClaimed = {}; bcExtra = [];
+  Object.keys(c.lines || {}).forEach(g => { if (c.lines[g].claimed !== null && c.lines[g].claimed !== undefined) bcClaimed[g] = c.lines[g].claimed; else bcExtra.push(g); });
+  document.getElementById('bc_ref').value = c.ref || ''; document.getElementById('bc_start').value = c.start; document.getElementById('bc_end').value = c.end;
+  document.getElementById('bc_note').value = c.note || ''; document.getElementById('bc_tol').value = c.tolerance === undefined ? 2 : c.tolerance;
+  document.getElementById('bc_banner').value = c.banner;
+  bcBannerChange();
+  const sub = document.getElementById('bc_sub'); if (sub && sub.__ms) sub.__ms.setValues(c.subBanners || []);
+  const wh = document.getElementById('bc_wh'); if (wh && wh.__ms) wh.__ms.setValues(c.whs || []);
+  document.getElementById('bc_formtitle').textContent = 'Re-checking: ' + (c.ref || c.banner) + ' (recalculated with the latest sales data)';
+  document.getElementById('bc_cancel').style.display = '';
+  bcRender();
+  document.getElementById('bc_form').scrollIntoView({ behavior: 'smooth' });
+}
+function bcSetStatus(id, st) {
+  const c = bannerClaims.find(x => x.id === id); if (!c) return;
+  c.status = st; c.updatedAt = new Date().toISOString(); c.updatedBy = bcUser();
+  bcPersist(c);
+}
+function bcDelete(id) {
+  const c = bannerClaims.find(x => x.id === id); if (!c) return;
+  if (!confirm('Delete the saved check for "' + (c.ref || c.banner) + '"? This cannot be undone.')) return;
+  bannerClaims = bannerClaims.filter(x => x.id !== id);
+  bcPersist(null, id); renderBannerClaimsPage();
+}
+function bcCsvCell(v) { const s = (v === null || v === undefined) ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function bcExportCheck() {
+  const p = bcParams(); if (!bcRes || !p.banner) { toast('Nothing to export yet.'); return; }
+  const gids = bcGids(bcRes); const tol = bcTol();
+  const L = [];
+  L.push(['Banner claim check', p.banner, p.subs.join('; '), 'Period', p.start, p.end, 'Wholesalers', p.whs.join('; ') || 'All', 'Sales data to', (meta && meta.salesDataTo) || ''].map(bcCsvCell).join(','));
+  L.push('');
+  L.push(['SKU', 'Format', 'Claimed', 'Our sales', 'Variance (claimed - ours)', 'Variance %', 'Result', 'Our sales by wholesaler'].join(','));
+  gids.forEach(g => {
+    const r = bcRes.byGid[g]; const ours = r ? r.units : 0; const j = bcJudge(bcClaimed[g], ours, tol);
+    L.push([groups[g].label, bcBucketLabel(bucketOf(groups[g])), bcClaimed[g] === undefined ? '' : bcClaimed[g], Math.round(ours * 100) / 100, j.st === 'none' || j.st === 'unclaimed' ? '' : Math.round(j.v * 100) / 100, j.pct === null ? '' : Math.round(j.pct * 10) / 10, j.label, r ? Object.keys(r.byWh).sort().map(w => (w || '-') + ' ' + bcN(r.byWh[w])).join(' | ') : ''].map(bcCsvCell).join(','));
+  });
+  L.push(''); L.push(['Store detail'].join(','));
+  L.push(['SKU', 'Store', 'Suburb', 'State', 'Sub-banner', 'OutletID', 'Units', 'By wholesaler', 'Last order'].join(','));
+  gids.forEach(g => {
+    const r = bcRes.byGid[g]; if (!r) return;
+    Object.keys(r.byOutlet).map(oid => ({ oid, o: bcOutletOf(oid), x: r.byOutlet[oid] })).sort((a, b) => b.x.units - a.x.units).forEach(x => {
+      L.push([groups[g].label, x.o ? x.o.name : x.oid, x.o ? x.o.suburb : '', x.o ? x.o.state : '', x.o ? x.o.banner : '', x.oid, Math.round(x.x.units * 100) / 100, Object.keys(x.x.wh).sort().map(w => (w || '-') + ' ' + bcN(x.x.wh[w])).join(' | '), bcIsoOfDay(x.x.lastDay)].map(bcCsvCell).join(','));
+    });
+  });
+  downloadFile('YMT_Banner_Claim_Check_' + p.banner.replace(/[^A-Za-z0-9]+/g, '_') + '_' + p.start + '_to_' + p.end + '.csv', L.join('\n'), 'text/csv');
+}
+function bcExportLog() {
+  const L = [['Ref', 'Banner', 'Sub-banners', 'Wholesalers', 'Period start', 'Period end', 'Kegs claimed', 'Kegs ours', 'Cartons claimed', 'Cartons ours', 'Status', 'Note', 'Saved by', 'Saved', 'Sales data to'].join(',')];
+  bannerClaims.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).forEach(c => {
+    L.push([c.ref, c.banner, (c.subBanners || []).join('; '), (c.whs || []).join('; ') || 'All', c.start, c.end, c.totals.KEGS.claimed, c.totals.KEGS.ours, c.totals.CARTONS.claimed, c.totals.CARTONS.ours, c.status, c.note, c.createdBy, (c.createdAt || '').slice(0, 10), c.dataTo].map(bcCsvCell).join(','));
+  });
+  downloadFile('YMT_Banner_Claims_Log.csv', L.join('\n'), 'text/csv');
+}
+function bcVarCell(t) {
+  const j = bcJudge(t.claimed, t.ours, 0);
+  if (!t.claimed && !t.ours) return '<span class="muted">—</span>';
+  return `${bcN(t.claimed)} vs ${bcN(t.ours)} <span class="${Math.abs(t.claimed - t.ours) < 0.005 ? 'muted' : (t.claimed > t.ours ? 'bc-neg' : '')}">(${bcSigned(t.claimed - t.ours)})</span>`;
+}
+function renderBannerClaimsPage() {
+  const log = document.getElementById('bc_log'); if (!log) return;
+  if (!document.getElementById('bc_banner').dataset.init) { document.getElementById('bc_banner').dataset.init = '1'; if (bcHasData()) bcInitForm(); }
+  bcRender();
+  const cs = bannerClaims.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  document.getElementById('bc_count').textContent = cs.length ? cs.filter(c => c.status === 'open' || c.status === 'disputed').length + ' open/disputed of ' + cs.length : '';
+  const stCls = { open: 'blue', verified: 'green', disputed: 'red', settled: 'grey' };
+  log.innerHTML = cs.length ? `<div class="tablewrap"><table class="datatable"><thead><tr><th>Claim</th><th>Banner</th><th>Period</th><th>Kegs (claimed vs ours)</th><th>Cartons (claimed vs ours)</th><th>Status</th><th>Saved</th><th></th></tr></thead><tbody>${cs.map(c => `<tr>
+    <td><strong>${escapeHtml(c.ref || '(no reference)')}</strong>${c.note ? `<div class="hint">${escapeHtml(c.note)}</div>` : ''}</td>
+    <td>${escapeHtml(c.banner)}${(c.subBanners || []).length ? `<div class="hint">${c.subBanners.map(escapeHtml).join(', ')}</div>` : ''}<div class="hint">${(c.whs || []).length ? 'via ' + c.whs.map(escapeHtml).join(', ') : 'all wholesalers'}</div></td>
+    <td>${fmtDate(c.start)} → ${fmtDate(c.end)}</td>
+    <td>${bcVarCell(c.totals.KEGS)}</td><td>${bcVarCell(c.totals.CARTONS)}</td>
+    <td><select onchange="bcSetStatus('${c.id}', this.value)">${['open', 'verified', 'disputed', 'settled'].map(s => `<option value="${s}" ${c.status === s ? 'selected' : ''}>${s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select></td>
+    <td style="font-size:12px;">${fmtDate((c.createdAt || '').slice(0, 10))}<div class="hint">${escapeHtml(c.createdBy || '')} · data to ${fmtDate(c.dataTo)}</div></td>
+    <td style="white-space:nowrap;"><button class="btn small secondary" onclick="bcLoad('${c.id}')">Re-check</button> <button class="btn small secondary" onclick="bcDelete('${c.id}')">Delete</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No saved claim checks yet.</div>';
+}
+
+
+// ===================== NEW BUSINESS FUNNEL (Round 146, Phase 1) =====================
+// Prospects (new customers we want to win) with a quarterly hit list, a 7-stage drag-and-drop pipeline, a profile
+// (contact, ranging, suppliers, notes history, links, next action), My Tasks, and integration with the Journey Planner:
+//   - a prospect is a "chip" in the rep's journey plan under the id 'pr_...' (the plan's wkAssign/wAssign already key on any
+//     string id, so scheduling, moving and day placement work unchanged); see nbJpOutlets / nbPseudoOutlet / nbChipBadges;
+//   - each week of the plan shows the prospects sitting in the suburbs of the customers being visited (nbNearby*).
+// Won -> can create the customer record (manualOutlets) from the profile, so nothing is re-typed.
+// Persistence: static build = localStorage; Netlify build = server (callServer saveProspect / deleteProspect, blob 'salesProspects').
+// Not part of CRM_DATA, so a Data Refresh never touches it.
+var LS_SALES_PROSPECTS = 'ymtSalesProspectsV1';
+var LS_NB_REP = 'ymtNbRepV1';
+var salesProspects = [];
+var nbView = 'pipeline';          // 'pipeline' | 'hitlist' | 'tasks'
+var nbFilter = { rep: '', quarter: '', channel: '', zone: '', search: '' };
+var nbEditingId = null;           // prospect id being edited, or 'new'
+var nbDragId = null;
+var nbLostFor = null;             // prospect id awaiting a lost reason
+
+var NB_STAGES = [
+  { id: 'hitlist',  label: 'Quarterly Hit List', cls: 'grey' },
+  { id: 'meeting1', label: '1st Meeting',        cls: 'blue' },
+  { id: 'proposal', label: 'Proposal Sent',      cls: 'amber' },
+  { id: 'meeting2', label: '2nd Meeting',        cls: 'blue' },
+  { id: 'won',      label: 'Won',                cls: 'green' },
+  { id: 'lost',     label: 'Lost',               cls: 'red' },
+  { id: 'followup', label: 'Follow Up – 3 Months', cls: 'amber' }
+];
+var NB_LOST_REASONS = ['Price / margin', 'Locked into a supplier contract', 'Happy with existing supplier', 'No tap or range space', 'Not interested', 'Venue closed / changed hands', 'Other'];
+var NB_PRIORITY = { high: { label: 'High', cls: 'red' }, medium: { label: 'Medium', cls: 'amber' }, low: { label: 'Low', cls: 'grey' } };
+var NB_PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
+
+function nbUser() { return (typeof currentUserEmail !== 'undefined' && currentUserEmail) || (typeof LS_NAME_KEY !== 'undefined' && localStorage.getItem(LS_NAME_KEY)) || 'Unknown'; }
+function nbStageLabel(id) { const s = NB_STAGES.find(x => x.id === id); return s ? s.label : id; }
+function nbStageCls(id) { const s = NB_STAGES.find(x => x.id === id); return s ? s.cls : 'grey'; }
+function nbIsProspectId(id) { return String(id).indexOf('pr_') === 0; }
+function nbById(id) { return salesProspects.find(p => p.id === id) || null; }
+function nbIsActive(p) { return p.stage !== 'won' && p.stage !== 'lost'; }
+function nbAddDays(iso, n) { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function nbDaysBetween(a, b) { return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000); }
+function nbNewId() { return 'pr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+function nbPersist(p, deleteId) {
+  if (typeof callServer === 'function') {
+    if (deleteId) callServer('deleteProspect', [deleteId], (d) => { if (d && d.salesProspects) salesProspects = d.salesProspects; nbRenderAll(); }, null);
+    else callServer('saveProspect', [p], (d) => { if (d && d.salesProspects) salesProspects = d.salesProspects; nbRenderAll(); }, null);
+  } else {
+    try { localStorage.setItem(LS_SALES_PROSPECTS, JSON.stringify(salesProspects)); } catch (e) { console.error(e); }
+  }
+}
+function nbLoadLocal() {
+  try { salesProspects = JSON.parse(localStorage.getItem(LS_SALES_PROSPECTS)) || []; } catch (e) { salesProspects = []; }
+  try { nbFilter.rep = localStorage.getItem(LS_NB_REP) || ''; } catch (e) { /* ignore */ }
+}
+function nbLog(p, type, text, dateIso) {
+  (p.activity = p.activity || []).push({ id: 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 4), date: dateIso || todayStr(), type, text, by: nbUser(), at: new Date().toISOString() });
+}
+
+// ---------- quarters / filters ----------
+function nbQuarterKeys() {
+  const cur = PERF_CURRENT_Q; const keys = [];
+  for (let d = -1; d <= 3; d++) { const q = shiftQuarter(cur.fy, cur.q, d); keys.push(quarterKeyOf(q.fy, q.q)); }
+  salesProspects.forEach(p => { if (p.targetQuarter && !keys.includes(p.targetQuarter)) keys.push(p.targetQuarter); });
+  return keys.sort();
+}
+function nbCurrentQuarterKey() { return quarterKeyOf(PERF_CURRENT_Q.fy, PERF_CURRENT_Q.q); }
+function nbNextQuarterKey(k) {
+  const m = /^FY(\d\d)-Q(\d)$/.exec(k || ''); if (!m) return k;
+  const q = shiftQuarter(2000 + parseInt(m[1], 10), parseInt(m[2], 10), 1);
+  return quarterKeyOf(q.fy, q.q);
+}
+function nbReps() { const s = new Set(uniqueVals('rsm', outlets)); salesProspects.forEach(p => { if (p.rsm) s.add(p.rsm); }); return [...s].filter(Boolean).sort(); }
+function nbZones() { const s = new Set(Object.keys(typeof ZONE_DEFS_SEED !== 'undefined' ? ZONE_DEFS_SEED : {})); salesProspects.forEach(p => { if (p.zone) s.add(p.zone); }); return [...s].filter(Boolean).sort(); }
+function nbFiltered() {
+  const f = nbFilter; const q = (f.search || '').trim().toLowerCase();
+  return salesProspects.filter(p => {
+    if (f.rep && p.rsm !== f.rep) return false;
+    if (f.quarter && p.targetQuarter !== f.quarter) return false;
+    if (f.channel && p.channel !== f.channel) return false;
+    if (f.zone && p.zone !== f.zone) return false;
+    if (q && !((p.name || '') + ' ' + (p.suburb || '') + ' ' + (p.banner || '') + ' ' + ((p.contact || {}).name || '')).toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+function nbSetFilter(key, val) {
+  nbFilter[key] = val;
+  if (key === 'rep') { try { localStorage.setItem(LS_NB_REP, val); } catch (e) { /* ignore */ } }
+  nbRenderAll();
+}
+function nbSetView(v) { nbView = v; nbRenderAll(); }
+
+// ---------- stage movement ----------
+function nbMove(id, stage) {
+  const p = nbById(id); if (!p || p.stage === stage) return;
+  if (stage === 'lost') { nbAskLost(id); return; }
+  nbApplyStage(p, stage, {});
+}
+function nbApplyStage(p, stage, extra) {
+  const from = p.stage; const today = todayStr();
+  p.stage = stage; p.stageChangedAt = today;
+  if (from === 'lost' && stage !== 'lost') { p.lostReason = ''; p.lostDetail = ''; p.lostAt = ''; }
+  if (stage === 'lost') { p.lostReason = extra.reason; p.lostDetail = extra.detail || ''; p.lostAt = today; p.nextAction = ''; p.nextActionDue = ''; }
+  if (stage === 'won') { p.wonAt = today; p.nextAction = ''; p.nextActionDue = ''; }
+  if (stage === 'followup') { p.followUpDue = nbAddDays(today, 90); p.nextAction = '3-month follow up'; p.nextActionDue = p.followUpDue; }
+  if (stage === 'proposal') { p.lastContact = today; p.nextAction = 'Chase proposal'; p.nextActionDue = nbAddDays(today, 7); }
+  if (stage === 'meeting1' || stage === 'meeting2') { p.lastContact = today; if (!p.nextAction) { p.nextAction = 'Log meeting notes and next steps'; p.nextActionDue = today; } }
+  nbLog(p, 'stage', 'Moved: ' + nbStageLabel(from) + ' → ' + nbStageLabel(stage) + (extra.reason ? ' (' + extra.reason + (extra.detail ? ': ' + extra.detail : '') + ')' : ''));
+  p.updatedAt = new Date().toISOString(); p.updatedBy = nbUser();
+  nbPersist(p); nbRenderAll();
+  if (stage === 'meeting1' || stage === 'meeting2') toast('Moved. Add the meeting notes and next steps on the profile.');
+  else if (stage === 'proposal') toast('Moved. A follow-up task is set for 7 days from now.');
+  else if (stage === 'followup') toast('Moved. A follow-up task is set for 90 days from now.');
+  else if (stage === 'won') toast('Won! Open the profile to create the customer record.');
+}
+function nbAskLost(id) { nbLostFor = id; nbRenderModal(); }
+function nbCancelLost() { nbLostFor = null; nbRenderAll(); }
+function nbConfirmLost() {
+  const p = nbById(nbLostFor); if (!p) { nbLostFor = null; return; }
+  const reason = document.getElementById('nb_lost_reason').value;
+  const detail = (document.getElementById('nb_lost_detail').value || '').trim();
+  if (!reason) { toast('A reason for losing the opportunity is required.'); return; }
+  nbLostFor = null;
+  nbApplyStage(p, 'lost', { reason, detail });
+}
+function nbDragStart(ev, id) { nbDragId = id; try { ev.dataTransfer.setData('text/plain', id); ev.dataTransfer.effectAllowed = 'move'; } catch (e) { /* ignore */ } }
+function nbDrop(ev, stage) {
+  if (ev && ev.preventDefault) ev.preventDefault();
+  let id = nbDragId; try { id = ev.dataTransfer.getData('text/plain') || id; } catch (e) { /* ignore */ }
+  nbDragId = null;
+  if (id) nbMove(id, stage);
+}
+
+// ---------- pipeline view ----------
+function nbNextActionHtml(p) {
+  if (!p.nextAction && !p.nextActionDue) return '';
+  const od = nbIsActive(p) && p.nextActionDue && p.nextActionDue < todayStr();
+  return `<div class="nb-next ${od ? 'nb-overdue' : ''}">${od ? '⚠ ' : '➜ '}${escapeHtml(p.nextAction || 'Next action')}${p.nextActionDue ? ' · ' + fmtDate(p.nextActionDue) : ''}</div>`;
+}
+function nbVol(p) { return p.estUnits ? (Math.round(p.estUnits * 10) / 10) + ' ' + (p.estUnitType === 'cartons' ? 'cartons' : 'kegs') + '/yr' : ''; }
+function nbCardHtml(p) {
+  const pr = NB_PRIORITY[p.priority] || NB_PRIORITY.medium;
+  const opts = NB_STAGES.map(s => `<option value="${s.id}" ${s.id === p.stage ? 'selected' : ''}>${escapeHtml(s.label)}</option>`).join('');
+  return `<div class="nb-card" draggable="true" ondragstart="nbDragStart(event,'${p.id}')" onclick="nbOpen('${p.id}')">
+    <div class="nb-card-name">${escapeHtml(p.name)}</div>
+    <div class="muted" style="font-size:11px;">${escapeHtml([p.suburb, p.zone].filter(Boolean).join(' · ') || '—')}</div>
+    <div class="nb-card-badges"><span class="badge ${p.channel === 'on' ? 'blue' : 'green'}">${p.channel === 'on' ? 'On-prem' : 'Off-prem'}</span><span class="badge ${pr.cls}">${pr.label}</span>${nbVol(p) ? `<span class="badge grey">${escapeHtml(nbVol(p))}</span>` : ''}${p.outletId ? '<span class="badge green">customer</span>' : ''}</div>
+    <div class="muted" style="font-size:11px;">${escapeHtml(p.rsm || 'No rep')} · ${escapeHtml(p.targetQuarter || '')}</div>
+    ${nbNextActionHtml(p)}
+    <select class="nb-move" onclick="event.stopPropagation()" onchange="nbMove('${p.id}', this.value)" title="Move to stage">${opts}</select>
+  </div>`;
+}
+function nbPipelineHtml() {
+  const list = nbFiltered();
+  const cols = NB_STAGES.map(s => {
+    const items = list.filter(p => p.stage === s.id).sort((a, b) => (NB_PRIORITY_ORDER[a.priority] - NB_PRIORITY_ORDER[b.priority]) || (a.name || '').localeCompare(b.name || ''));
+    return `<div class="nb-col" ondragover="event.preventDefault(); this.classList.add('nb-col-over')" ondragleave="this.classList.remove('nb-col-over')" ondrop="this.classList.remove('nb-col-over'); nbDrop(event,'${s.id}')">
+      <div class="nb-col-head"><span class="badge ${s.cls}">${escapeHtml(s.label)}</span> <span class="muted">${items.length}</span></div>
+      <div class="nb-col-body">${items.map(nbCardHtml).join('') || '<div class="nb-col-empty">Drop here</div>'}</div></div>`;
+  }).join('');
+  return `<div class="hint" style="margin-bottom:8px;">Drag a card between stages (or use the stage menu on the card, which also works on a phone). You can move a customer to any stage at any time. Moving to <strong>Lost</strong> asks for a reason; <strong>Proposal Sent</strong> sets a 7-day chase task; <strong>Follow Up – 3 Months</strong> sets a 90-day task.</div><div class="nb-board">${cols}</div>`;
+}
+
+// ---------- hit list view ----------
+function nbPlanWeeksOf(p) {
+  const qk = p.targetQuarter; if (!qk || !p.rsm) return [];
+  const plan = (journeyPlans[p.rsm] || {})[qk]; if (!plan || !plan.wkAssign) return [];
+  const w = plan.wkAssign[p.id]; return Array.isArray(w) ? w.map(i => i + 1) : [];
+}
+function nbHitlistHtml() {
+  const list = nbFiltered().sort((a, b) => (NB_PRIORITY_ORDER[a.priority] - NB_PRIORITY_ORDER[b.priority]) || (a.suburb || '').localeCompare(b.suburb || '') || (a.name || '').localeCompare(b.name || ''));
+  const rows = list.map(p => {
+    const pr = NB_PRIORITY[p.priority] || NB_PRIORITY.medium; const wk = nbPlanWeeksOf(p);
+    return `<tr><td><a href="#" onclick="nbOpen('${p.id}'); return false;"><strong>${escapeHtml(p.name)}</strong></a><div class="hint">${escapeHtml(p.address || '')}</div></td>
+      <td>${escapeHtml(p.suburb || '—')}<div class="hint">${escapeHtml(p.zone || '')}</div></td>
+      <td><span class="badge ${p.channel === 'on' ? 'blue' : 'green'}">${p.channel === 'on' ? 'On-prem' : 'Off-prem'}</span></td>
+      <td><span class="badge ${pr.cls}">${pr.label}</span></td>
+      <td>${escapeHtml(p.rsm || '—')}</td><td>${escapeHtml(p.targetQuarter || '—')}</td>
+      <td>${escapeHtml(nbVol(p) || '—')}${p.estValue ? `<div class="hint">${fmtMoney(p.estValue)}/yr</div>` : ''}</td>
+      <td>${escapeHtml((p.contact || {}).name || '—')}<div class="hint">${escapeHtml((p.contact || {}).phone || '')}</div></td>
+      <td><span class="badge ${nbStageCls(p.stage)}">${escapeHtml(nbStageLabel(p.stage))}</span></td>
+      <td>${wk.length ? 'Wk ' + wk.join(', ') : '<span class="muted">not planned</span>'}</td>
+      <td style="white-space:nowrap;">${nbIsActive(p) ? `<button class="btn small secondary" onclick="nbPlanVisit('${p.id}')">Plan visit</button> ` : ''}<button class="btn small secondary" onclick="nbOpen('${p.id}')">Open</button></td></tr>`;
+  }).join('');
+  return `<div style="margin-bottom:8px;"><button class="btn small secondary" onclick="nbExportCsv()">Export hit list (CSV)</button> <button class="btn small secondary" onclick="nbRollQuarter()">Roll open opportunities into next quarter…</button></div>
+    ${list.length ? `<div class="tablewrap"><table class="datatable"><thead><tr><th>Business</th><th>Suburb / territory</th><th>Channel</th><th>Priority</th><th>Rep</th><th>Quarter</th><th>Est. volume / value</th><th>Decision maker</th><th>Stage</th><th>Journey plan</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No prospects match these filters. Use “+ Add prospect” to build the hit list.</div>'}`;
+}
+function nbPlanVisit(id) {
+  const p = nbById(id); if (!p) return;
+  if (!p.rsm) { toast('Allocate a rep to this prospect first.'); nbOpen(id); return; }
+  try {
+    jpRsm = p.rsm;
+    const m = /^FY(\d\d)-Q(\d)$/.exec(p.targetQuarter || '');
+    jpQuarter = m ? { fy: 2000 + parseInt(m[1], 10), q: parseInt(m[2], 10) } : { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q };
+    jpActiveTab = 'quarter'; jpSelectedBench = p.id;
+    const sel = document.getElementById('jp_rsm'); if (sel) sel.value = p.rsm;
+    const btn = document.querySelector('.tab-btn[data-tab="journeyplanner"]'); if (btn) btn.click();
+    renderJourneyPlannerPage();
+    toast('Now click a week to schedule this visit.');
+  } catch (e) { console.error(e); toast('Open the Journey Planner and pick ' + p.rsm + '.'); }
+}
+function nbRollQuarter() {
+  const from = nbFilter.quarter || nbCurrentQuarterKey(); const to = nbNextQuarterKey(from);
+  const open = salesProspects.filter(p => nbIsActive(p) && p.targetQuarter === from && (!nbFilter.rep || p.rsm === nbFilter.rep));
+  if (!open.length) { toast('No open opportunities in ' + from + '.'); return; }
+  if (!confirm('Roll ' + open.length + ' open opportunities from ' + from + ' into ' + to + '? Their history and stage stay as they are.')) return;
+  open.forEach(p => { p.carriedFrom = (p.carriedFrom || []).concat([from]); p.targetQuarter = to; nbLog(p, 'stage', 'Rolled forward ' + from + ' → ' + to); p.updatedAt = new Date().toISOString(); p.updatedBy = nbUser(); nbPersist(p); });
+  nbFilter.quarter = to; nbRenderAll(); toast(open.length + ' opportunities rolled into ' + to + '.');
+}
+function nbCsvCell(v) { const s = (v === null || v === undefined) ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function nbExportCsv() {
+  const L = [['Business', 'Address', 'Suburb', 'State', 'Postcode', 'Territory', 'Channel', 'Group/Banner/Independent', 'Banner', 'Rep', 'Quarter', 'Priority', 'Stage', 'Est volume', 'Unit', 'Est annual value', 'Decision maker', 'Role', 'Phone', 'Email', 'Current suppliers', 'Ranging', 'Last contact', 'Next action', 'Next action due', 'Lost reason'].join(',')];
+  nbFiltered().forEach(p => { const c = p.contact || {}; L.push([p.name, p.address, p.suburb, p.state, p.postcode, p.zone, p.channel === 'on' ? 'On-premise' : 'Off-premise', p.bannerType, p.banner, p.rsm, p.targetQuarter, p.priority, nbStageLabel(p.stage), p.estUnits, p.estUnitType, p.estValue, c.name, c.role, c.phone, c.email, p.suppliers, p.ranging, p.lastContact, p.nextAction, p.nextActionDue, p.lostReason].map(nbCsvCell).join(',')); });
+  downloadFile('YMT_New_Business_Hit_List.csv', L.join('\n'), 'text/csv');
+}
+
+// ---------- my tasks ----------
+function nbTasksHtml() {
+  const today = todayStr(); const weekEnd = nbAddDays(today, 7);
+  const act = nbFiltered().filter(nbIsActive);
+  const withDue = act.filter(p => p.nextActionDue).sort((a, b) => a.nextActionDue.localeCompare(b.nextActionDue));
+  const none = act.filter(p => !p.nextActionDue && p.stage !== 'hitlist');
+  const groups = [
+    { t: 'Overdue', cls: 'red', rows: withDue.filter(p => p.nextActionDue < today) },
+    { t: 'Due today', cls: 'amber', rows: withDue.filter(p => p.nextActionDue === today) },
+    { t: 'Next 7 days', cls: 'blue', rows: withDue.filter(p => p.nextActionDue > today && p.nextActionDue <= weekEnd) },
+    { t: 'Later', cls: 'grey', rows: withDue.filter(p => p.nextActionDue > weekEnd) }
+  ];
+  const row = p => `<tr><td>${fmtDate(p.nextActionDue)}</td><td><a href="#" onclick="nbOpen('${p.id}'); return false;"><strong>${escapeHtml(p.name)}</strong></a><div class="hint">${escapeHtml(p.suburb || '')}</div></td><td><span class="badge ${nbStageCls(p.stage)}">${escapeHtml(nbStageLabel(p.stage))}</span></td><td>${escapeHtml(p.nextAction || '')}</td><td>${escapeHtml(p.rsm || '')}</td><td style="white-space:nowrap;"><button class="btn small secondary" onclick="nbOpen('${p.id}')">Open</button> <button class="btn small secondary" onclick="nbDoneTask('${p.id}')">Done</button></td></tr>`;
+  let html = `<div class="hint" style="margin-bottom:8px;">${nbFilter.rep ? 'Tasks for ' + escapeHtml(nbFilter.rep) : 'Tasks for all reps (pick a rep above to see just theirs)'}. Tasks come from each prospect's “next action”, plus the automatic 7-day proposal chase and 90-day follow-up.</div>`;
+  groups.forEach(g => { if (g.rows.length) html += `<h3 style="margin:10px 0 4px;"><span class="badge ${g.cls}">${g.t}</span> <span class="muted">${g.rows.length}</span></h3><div class="tablewrap"><table class="datatable"><thead><tr><th>Due</th><th>Prospect</th><th>Stage</th><th>Next action</th><th>Rep</th><th></th></tr></thead><tbody>${g.rows.map(row).join('')}</tbody></table></div>`; });
+  if (none.length) html += `<h3 style="margin:14px 0 4px;"><span class="badge grey">No next action set</span> <span class="muted">${none.length}</span></h3><div class="tablewrap"><table class="datatable"><tbody>${none.map(p => `<tr><td><a href="#" onclick="nbOpen('${p.id}'); return false;">${escapeHtml(p.name)}</a></td><td><span class="badge ${nbStageCls(p.stage)}">${escapeHtml(nbStageLabel(p.stage))}</span></td><td>${escapeHtml(p.rsm || '')}</td><td><button class="btn small secondary" onclick="nbOpen('${p.id}')">Set next action</button></td></tr>`).join('')}</tbody></table></div>`;
+  if (!withDue.length && !none.length) html += '<div class="empty">Nothing outstanding. 🎉</div>';
+  return html;
+}
+function nbDoneTask(id) {
+  const p = nbById(id); if (!p) return;
+  nbLog(p, 'note', 'Completed: ' + (p.nextAction || 'next action'));
+  p.lastContact = todayStr(); p.nextAction = ''; p.nextActionDue = ''; p.updatedAt = new Date().toISOString(); p.updatedBy = nbUser();
+  nbPersist(p); nbRenderAll(); toast('Marked done. Open the profile to set the next action.');
+}
+
+// ---------- profile ----------
+function nbOpen(id) {
+  if (document.getElementById('tab-newbusiness') && !document.getElementById('tab-newbusiness').classList.contains('active')) {
+    const btn = document.querySelector('.tab-btn[data-tab="newbusiness"]'); if (btn) btn.click();
+  }
+  nbEditingId = id; nbRenderAll();
+  const el = document.getElementById('nb_profile'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth' });
+}
+function nbCloseProfile() { nbEditingId = null; nbRenderAll(); }
+function nbNew() { nbEditingId = 'new'; nbRenderAll(); const el = document.getElementById('nb_profile'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth' }); }
+function nbPostcodeChange() {
+  const pc = document.getElementById('nbf_postcode').value.trim();
+  if (typeof zoneForPostcode !== 'function') return;
+  const z = zoneForPostcode(pc); if (!z) return;
+  const ze = document.getElementById('nbf_zone'); if (ze && !ze.value.trim()) ze.value = z;
+  const re = document.getElementById('nbf_rsm');
+  if (re && !re.value && typeof rsmForZone === 'function') { const r = rsmForZone(z); if (r && [...re.options].some(o => o.value === r)) re.value = r; }
+}
+function nbField(id) { const e = document.getElementById('nbf_' + id); return e ? e.value : ''; }
+function nbSaveProfile() {
+  const name = nbField('name').trim();
+  if (!name) { toast('Enter the business name.'); return; }
+  const isNew = nbEditingId === 'new';
+  const p = isNew ? { id: nbNewId(), stage: 'hitlist', stageChangedAt: todayStr(), activity: [], links: [], createdBy: nbUser(), createdAt: new Date().toISOString() } : nbById(nbEditingId);
+  if (!p) return;
+  const prevStage = p.stage;
+  Object.assign(p, {
+    name, address: nbField('address').trim(), suburb: nbField('suburb').trim(), state: nbField('state').trim(), postcode: nbField('postcode').trim(), zone: nbField('zone').trim(),
+    channel: nbField('channel') || 'on', bannerType: nbField('bannerType') || 'independent', banner: nbField('banner').trim(),
+    rsm: nbField('rsm'), targetQuarter: nbField('quarter') || nbCurrentQuarterKey(), priority: nbField('priority') || 'medium',
+    ranging: nbField('ranging').trim(), estUnits: parseFloat(nbField('estUnits')) || 0, estUnitType: nbField('estUnitType') || 'kegs', estValue: parseFloat(nbField('estValue')) || 0,
+    contact: { name: nbField('contactName').trim(), role: nbField('contactRole').trim(), phone: nbField('contactPhone').trim(), email: nbField('contactEmail').trim() },
+    suppliers: nbField('suppliers').trim(), nextAction: nbField('nextAction').trim(), nextActionDue: nbField('nextActionDue'),
+    updatedAt: new Date().toISOString(), updatedBy: nbUser()
+  });
+  const newStage = nbField('stage') || p.stage;
+  if (isNew) { nbLog(p, 'stage', 'Added to the ' + p.targetQuarter + ' hit list'); salesProspects.push(p); }
+  if (!isNew && newStage !== prevStage) { nbPersist(p); nbMove(p.id, newStage); nbEditingId = p.id; return; }
+  if (isNew && newStage !== 'hitlist') { nbPersist(p); nbMove(p.id, newStage); nbEditingId = p.id; return; }
+  nbPersist(p); nbEditingId = p.id; nbRenderAll(); toast('Prospect saved.');
+}
+function nbDeleteProspect(id) {
+  const p = nbById(id); if (!p) return;
+  if (!confirm('Delete "' + p.name + '" and its history? This cannot be undone.')) return;
+  salesProspects = salesProspects.filter(x => x.id !== id); nbEditingId = null;
+  nbPersist(null, id); nbRenderAll();
+}
+function nbAddActivity() {
+  const p = nbById(nbEditingId); if (!p) { toast('Save the prospect first, then add notes.'); return; }
+  const text = (document.getElementById('nb_act_text').value || '').trim(); const type = document.getElementById('nb_act_type').value; const date = document.getElementById('nb_act_date').value || todayStr();
+  if (!text) { toast('Write the note first.'); return; }
+  nbLog(p, type, text, date);
+  if (type !== 'note') { if (!p.lastContact || date > p.lastContact) p.lastContact = date; }
+  p.updatedAt = new Date().toISOString(); p.updatedBy = nbUser();
+  nbPersist(p); nbRenderAll();
+}
+function nbAddLink() {
+  const p = nbById(nbEditingId); if (!p) { toast('Save the prospect first.'); return; }
+  const label = (document.getElementById('nb_link_label').value || '').trim(); const url = (document.getElementById('nb_link_url').value || '').trim();
+  if (!url) { toast('Paste the link to the file (e.g. from Drive or SharePoint).'); return; }
+  (p.links = p.links || []).push({ label: label || url, url, by: nbUser(), at: new Date().toISOString() });
+  nbPersist(p); nbRenderAll();
+}
+function nbRemoveLink(i) { const p = nbById(nbEditingId); if (!p || !p.links) return; p.links.splice(i, 1); nbPersist(p); nbRenderAll(); }
+function nbLinkCustomer() {
+  const p = nbById(nbEditingId); if (!p) return;
+  const oid = (document.getElementById('nb_link_outlet').value || '').trim();
+  if (!oid || !outlets[oid]) { toast('No customer found with that outlet ID.'); return; }
+  p.outletId = oid; nbLog(p, 'stage', 'Linked to customer ' + outlets[oid].name + ' (' + oid + ')'); nbPersist(p); nbRenderAll();
+}
+function nbCreateCustomer() {
+  const p = nbById(nbEditingId); if (!p) return;
+  if (typeof callServer !== 'function' || typeof manualOutlets === 'undefined' || typeof mergeManualOutletIntoLive !== 'function') { toast('Creating the customer record is available on the live Hub.'); return; }
+  const id = 'new_' + Date.now() + '_' + Math.round(Math.random() * 10000); const c = p.contact || {};
+  const rec = { id, name: p.name, address: p.address || '', suburb: p.suburb || '', state: p.state || '', postcode: p.postcode || '', phone: c.phone || '', email: c.email || '', rsm: p.rsm || '',
+    custType: p.channel === 'on' ? 'On Premise' : 'Off Premise', ownerGroup: 'Unallocated', segVenueType: '', volumeStream: 'Sales Team', zone: p.zone || '',
+    createdBy: nbUser(), createdAt: new Date().toISOString(), updatedBy: nbUser(), updatedAt: new Date().toISOString(), fromProspect: p.id };
+  toast('Creating customer…');
+  callServer('saveManualOutlet', [rec], () => {
+    manualOutlets[id] = rec; mergeManualOutletIntoLive(id);
+    if (c.name || c.phone) callServer('saveDeliveryDetails', [id, '', c.name || '', c.phone || '', 'Any day', '', nbUser()]);
+    p.outletId = id; nbLog(p, 'stage', 'Customer record created (' + id + ') from this prospect'); p.updatedAt = new Date().toISOString(); p.updatedBy = nbUser();
+    nbPersist(p); nbRenderAll(); toast('Customer created. Find them in Customer Visit, pricing and Orders. Their real Ontap ID replaces this once their first sale arrives.');
+  }, null);
+}
+function nbOpts(list, cur) { return list.map(v => `<option value="${escapeHtml(v)}" ${v === cur ? 'selected' : ''}>${escapeHtml(v)}</option>`).join(''); }
+function nbProfileHtml() {
+  if (!nbEditingId) return '';
+  const isNew = nbEditingId === 'new'; const p = isNew ? { stage: 'hitlist', channel: 'on', bannerType: 'independent', priority: 'medium', rsm: nbFilter.rep, targetQuarter: nbFilter.quarter || nbCurrentQuarterKey(), estUnitType: 'kegs', contact: {}, activity: [], links: [] } : nbById(nbEditingId);
+  if (!p) return '';
+  const c = p.contact || {};
+  const reps = nbReps(); const qs = nbQuarterKeys();
+  const banners = [...new Set(Object.values(outlets).map(o => o.banner).filter(Boolean))].sort();
+  const stageOpts = NB_STAGES.map(s => `<option value="${s.id}" ${s.id === p.stage ? 'selected' : ''}>${escapeHtml(s.label)}</option>`).join('');
+  const act = (p.activity || []).slice().sort((a, b) => String(b.date + b.at).localeCompare(String(a.date + a.at)));
+  const typeLbl = { note: 'Note', call: 'Call', meeting: 'Meeting', proposal: 'Proposal', email: 'Email', stage: 'Stage' };
+  const actHtml = act.length ? act.map(a => `<div class="nb-act"><span class="badge ${a.type === 'stage' ? 'grey' : 'blue'}">${typeLbl[a.type] || a.type}</span> <strong>${fmtDate(a.date)}</strong> <span class="muted">${escapeHtml(a.by || '')}</span><div>${escapeHtml(a.text)}</div></div>`).join('') : '<div class="hint">No history yet.</div>';
+  const linksHtml = (p.links || []).map((l, i) => `<div><a href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.label)}</a> <a href="#" onclick="nbRemoveLink(${i}); return false;" class="muted">remove</a></div>`).join('') || '<div class="hint">No proposals or attachments linked yet.</div>';
+  const f = (id, label, html, wide) => `<div class="fld" style="margin:0;${wide ? 'grid-column:span 2;' : ''}"><label>${label}</label>${html}</div>`;
+  const inp = (id, val, extra) => `<input id="nbf_${id}" value="${escapeHtml(val == null ? '' : val)}" ${extra || ''}>`;
+  const sel = (id, opts) => `<select id="nbf_${id}">${opts}</select>`;
+  const wonBox = !isNew && p.stage === 'won' ? `<div class="panel" style="background:#f0fdf4;border:1px solid #bbf7d0;margin:10px 0;"><strong>Won${p.wonAt ? ' on ' + fmtDate(p.wonAt) : ''}.</strong> ${p.outletId ? `Linked customer: <strong>${escapeHtml((outlets[p.outletId] || {}).name || p.outletId)}</strong> (${escapeHtml(p.outletId)}).` : `Move them into the active customer base without re-typing: <button class="btn small" onclick="nbCreateCustomer()">Create customer record</button> or link an existing customer by outlet ID: <input id="nb_link_outlet" style="width:110px;"> <button class="btn small secondary" onclick="nbLinkCustomer()">Link</button>`}</div>` : '';
+  const lostBox = p.stage === 'lost' ? `<div class="panel" style="background:#fef2f2;border:1px solid #fecaca;margin:10px 0;"><strong>Lost${p.lostAt ? ' on ' + fmtDate(p.lostAt) : ''}:</strong> ${escapeHtml(p.lostReason || '')}${p.lostDetail ? ' — ' + escapeHtml(p.lostDetail) : ''}</div>` : '';
+  return `<div class="panel" id="nb_profile_panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><h3 style="margin:0;">${isNew ? 'New prospect' : escapeHtml(p.name)} ${isNew ? '' : `<span class="badge ${nbStageCls(p.stage)}">${escapeHtml(nbStageLabel(p.stage))}</span>`}</h3>
+      <div><button class="btn" onclick="nbSaveProfile()">Save</button> <button class="btn secondary" onclick="nbCloseProfile()">Close</button> ${isNew ? '' : `<button class="btn secondary" onclick="nbDeleteProspect('${p.id}')">Delete</button>`}</div></div>
+    ${wonBox}${lostBox}
+    <datalist id="nb_banner_list">${banners.map(b => `<option value="${escapeHtml(b)}">`).join('')}</datalist>
+    <div class="nb-grid" style="margin-top:10px;">
+      ${f('name', 'Business name', inp('name', p.name))}
+      ${f('address', 'Address', inp('address', p.address))}
+      ${f('suburb', 'Suburb', inp('suburb', p.suburb))}
+      ${f('state', 'State', inp('state', p.state || 'QLD'))}
+      ${f('postcode', 'Postcode', inp('postcode', p.postcode, 'onchange="nbPostcodeChange()"'))}
+      ${f('zone', 'Territory (zone)', inp('zone', p.zone))}
+      ${f('channel', 'Channel', sel('channel', `<option value="on" ${p.channel === 'on' ? 'selected' : ''}>On-premise</option><option value="off" ${p.channel === 'off' ? 'selected' : ''}>Off-premise</option>`))}
+      ${f('bannerType', 'Group / banner / independent', sel('bannerType', `<option value="independent" ${p.bannerType === 'independent' ? 'selected' : ''}>Independent</option><option value="banner" ${p.bannerType === 'banner' ? 'selected' : ''}>Banner</option><option value="group" ${p.bannerType === 'group' ? 'selected' : ''}>Group</option>`))}
+      ${f('banner', 'Banner / group name', inp('banner', p.banner, 'list="nb_banner_list"'))}
+      ${f('rsm', 'Allocated sales rep', sel('rsm', `<option value="">— none —</option>${nbOpts(reps, p.rsm)}`))}
+      ${f('quarter', 'Target quarter', sel('quarter', nbOpts(qs, p.targetQuarter)))}
+      ${f('priority', 'Priority', sel('priority', ['high', 'medium', 'low'].map(k => `<option value="${k}" ${p.priority === k ? 'selected' : ''}>${NB_PRIORITY[k].label}</option>`).join('')))}
+      ${f('stage', 'Funnel stage', sel('stage', stageOpts))}
+      ${f('estUnits', 'Estimated volume per year', inp('estUnits', p.estUnits || '', 'type="number" min="0" step="any"'))}
+      ${f('estUnitType', 'Kegs or cartons', sel('estUnitType', `<option value="kegs" ${p.estUnitType !== 'cartons' ? 'selected' : ''}>Kegs</option><option value="cartons" ${p.estUnitType === 'cartons' ? 'selected' : ''}>Cartons</option>`))}
+      ${f('estValue', 'Estimated annual value ($)', inp('estValue', p.estValue || '', 'type="number" min="0" step="any"'))}
+      ${f('contactName', 'Key decision-maker', inp('contactName', c.name))}
+      ${f('contactRole', 'Role', inp('contactRole', c.role))}
+      ${f('contactPhone', 'Phone', inp('contactPhone', c.phone))}
+      ${f('contactEmail', 'Email', inp('contactEmail', c.email))}
+      ${f('suppliers', 'Current suppliers and competitors', `<textarea id="nbf_suppliers" rows="2">${escapeHtml(p.suppliers || '')}</textarea>`, true)}
+      ${f('ranging', 'Potential product and ranging opportunities', `<textarea id="nbf_ranging" rows="2">${escapeHtml(p.ranging || '')}</textarea>`, true)}
+      ${f('nextAction', 'Next action', inp('nextAction', p.nextAction))}
+      ${f('nextActionDue', 'Due', inp('nextActionDue', p.nextActionDue, 'type="date"'))}
+    </div>
+    <div class="hint" style="margin-top:6px;">${p.lastContact ? 'Last contact: ' + fmtDate(p.lastContact) + '. ' : ''}${(p.carriedFrom || []).length ? 'Carried over from ' + p.carriedFrom.map(escapeHtml).join(', ') + '. ' : ''}${p.createdBy ? 'Added by ' + escapeHtml(p.createdBy) + '.' : ''}</div>
+    ${isNew ? '<div class="hint" style="margin-top:8px;">Save the prospect to start logging meeting notes and linking proposals.</div>' : `
+    <div class="nb-two">
+      <div><h4 style="margin:12px 0 4px;">Meeting notes and history</h4>
+        <div class="rowflex" style="gap:6px;flex-wrap:wrap;align-items:flex-end;"><select id="nb_act_type"><option value="meeting">Meeting</option><option value="call">Call</option><option value="email">Email</option><option value="proposal">Proposal</option><option value="note">Note</option></select><input id="nb_act_date" type="date" value="${todayStr()}"></div>
+        <textarea id="nb_act_text" rows="3" style="width:100%;margin-top:4px;" placeholder="What was discussed, outcomes, next steps"></textarea>
+        <button class="btn small" onclick="nbAddActivity()" style="margin-top:4px;">Add to history</button>
+        <div class="nb-acts">${actHtml}</div></div>
+      <div><h4 style="margin:12px 0 4px;">Proposals and attachments</h4>${linksHtml}
+        <div class="rowflex" style="gap:6px;flex-wrap:wrap;margin-top:6px;"><input id="nb_link_label" placeholder="Label (e.g. Proposal v1)" style="width:170px;"><input id="nb_link_url" placeholder="Link to the file (Drive / SharePoint)" style="min-width:240px;"><button class="btn small secondary" onclick="nbAddLink()">Add link</button></div></div>
+    </div>`}
+  </div>`;
+}
+
+// ---------- modal for lost reason ----------
+function nbRenderModal() {
+  const el = document.getElementById('nb_modal'); if (!el) return;
+  const p = nbLostFor ? nbById(nbLostFor) : null;
+  el.innerHTML = p ? `<div class="nb-modal-bg"><div class="nb-modal"><h3 style="margin-top:0;">Why was ${escapeHtml(p.name)} lost?</h3><div class="hint">A reason is required — it feeds the quarterly review.</div>
+    <div class="fld"><label>Reason</label><select id="nb_lost_reason"><option value="">Choose a reason…</option>${NB_LOST_REASONS.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('')}</select></div>
+    <div class="fld"><label>Detail (optional)</label><input id="nb_lost_detail" placeholder="e.g. signed a 12-month deal with the incumbent"></div>
+    <div style="margin-top:10px;"><button class="btn" onclick="nbConfirmLost()">Mark as lost</button> <button class="btn secondary" onclick="nbCancelLost()">Cancel</button></div></div></div>` : '';
+}
+
+// ---------- page ----------
+function nbRenderAll() {
+  const body = document.getElementById('nb_body'); if (!body) return;
+  const f = nbFilter;
+  const subtabs = [['pipeline', 'Pipeline'], ['hitlist', 'Hit List'], ['tasks', 'My Tasks']];
+  document.getElementById('nb_subtabs').innerHTML = subtabs.map(t => `<button class="btn small ${nbView === t[0] ? '' : 'secondary'}" onclick="nbSetView('${t[0]}')">${t[1]}</button>`).join(' ') + ' <button class="btn small" onclick="nbNew()">+ Add prospect</button>';
+  const repOpts = `<option value="">All reps</option>` + nbOpts(nbReps(), f.rep);
+  const qOpts = `<option value="">All quarters</option>` + nbOpts(nbQuarterKeys(), f.quarter);
+  const zOpts = `<option value="">All territories</option>` + nbOpts(nbZones(), f.zone);
+  document.getElementById('nb_filters').innerHTML = `<div class="rowflex" style="gap:12px;flex-wrap:wrap;align-items:flex-end;margin:8px 0;">
+    <div class="fld" style="margin:0;"><label>Rep</label><select onchange="nbSetFilter('rep', this.value)">${repOpts}</select></div>
+    <div class="fld" style="margin:0;"><label>Quarter</label><select onchange="nbSetFilter('quarter', this.value)">${qOpts}</select></div>
+    <div class="fld" style="margin:0;"><label>Channel</label><select onchange="nbSetFilter('channel', this.value)"><option value="">All</option><option value="on" ${f.channel === 'on' ? 'selected' : ''}>On-premise</option><option value="off" ${f.channel === 'off' ? 'selected' : ''}>Off-premise</option></select></div>
+    <div class="fld" style="margin:0;"><label>Territory</label><select onchange="nbSetFilter('zone', this.value)">${zOpts}</select></div>
+    <div class="fld" style="margin:0;"><label>Search</label><input value="${escapeHtml(f.search)}" placeholder="name, suburb, banner…" onchange="nbSetFilter('search', this.value)"></div></div>`;
+  const all = nbFiltered(); const open = all.filter(nbIsActive).length;
+  document.getElementById('nb_count').textContent = all.length ? all.length + ' prospects · ' + open + ' open' : '';
+  document.getElementById('nb_profile').innerHTML = nbProfileHtml();
+  body.innerHTML = nbView === 'hitlist' ? nbHitlistHtml() : nbView === 'tasks' ? nbTasksHtml() : nbPipelineHtml();
+  nbRenderModal();
+}
+function renderNewBusinessPage() { nbRenderAll(); }
+
+// ---------- Journey Planner integration ----------
+function nbPseudoOutlet(id) {
+  if (!nbIsProspectId(id)) return null;
+  const p = nbById(id); if (!p) return null;
+  return { id: p.id, name: p.name, suburb: p.suburb || '', state: p.state || '', postcode: p.postcode || '', zone: p.zone || '', rsm: p.rsm || '', custType: p.channel === 'on' ? 'On Premise' : 'Off Premise', isProspect: true };
+}
+// prospects that belong on this rep's board for this quarter: their own hit list for the quarter + anything in flight
+function nbJpOutlets(rsm, quarterKey) {
+  if (!rsm) return [];
+  const plan = (journeyPlans[rsm] || {})[quarterKey] || { wkAssign: {} };
+  return salesProspects.filter(p => p.rsm === rsm && nbIsActive(p) &&
+    (p.targetQuarter === quarterKey || p.stage === 'meeting1' || p.stage === 'proposal' || p.stage === 'meeting2' || (plan.wkAssign && plan.wkAssign[p.id])))
+    .map(p => nbPseudoOutlet(p.id));
+}
+function nbChipBadges(id) {
+  const p = nbById(id); if (!p) return '<span class="badge amber">Prospect</span>';
+  const pr = NB_PRIORITY[p.priority] || NB_PRIORITY.medium;
+  return `<span class="badge amber" title="New business prospect">🎯 ${escapeHtml(nbStageLabel(p.stage))}</span><span class="badge ${pr.cls}">${pr.label}</span>`;
+}
+function nbNameOf(id) { const o = outlets[id] || nbPseudoOutlet(id) || {}; return o.name || id; }
+// prospects (any rep) sitting in the suburbs of the customers being visited, that aren't themselves on the list
+function nbNearby(ids) {
+  const subs = {};
+  ids.forEach(id => { if (nbIsProspectId(id)) return; const o = outlets[id]; if (o && o.suburb) subs[String(o.suburb).trim().toUpperCase()] = o.suburb; });
+  const inPlan = new Set(ids);
+  const res = salesProspects.filter(p => nbIsActive(p) && !inPlan.has(p.id) && p.suburb && subs[String(p.suburb).trim().toUpperCase()]);
+  return res;
+}
+function nbNearbyBadge(ids) {
+  const res = nbNearby(ids); if (!res.length) return '';
+  return `<span class="badge amber" title="${escapeHtml('New business in these suburbs: ' + res.map(p => p.name + ' (' + p.suburb + ', ' + nbStageLabel(p.stage) + ')').join('; '))}">🎯 ${res.length} nearby</span>`;
+}
+function nbNearbyHtml(ids) {
+  const res = nbNearby(ids); if (!res.length) return '';
+  const bySub = {}; res.forEach(p => { (bySub[p.suburb] = bySub[p.suburb] || []).push(p); });
+  return `<div class="hint nb-nearby">🎯 <strong>New business in the suburbs you're visiting:</strong> ${Object.keys(bySub).sort().map(s => `<span class="nb-nearby-sub"><strong>${escapeHtml(s)}</strong>: ${bySub[s].map(p => `<a href="#" onclick="nbOpen('${p.id}'); return false;">${escapeHtml(p.name)}</a> <span class="badge ${nbStageCls(p.stage)}">${escapeHtml(nbStageLabel(p.stage))}</span>${p.rsm ? ` <span class="muted">${escapeHtml(p.rsm)}</span>` : ''}`).join(', ')}</span>`).join(' ')}</div>`;
+}
+
 // ===================== BANNER STORE LISTS (Round 139) =====================
 // Master banner store lists (LMG / Star Liquor Group / IBA) as supplied by the banner groups, each store
 // allocated to its Ontap OutletID where one could be found. The lists - not the Ontap banner fields - are the
@@ -16243,6 +17196,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'segments' && typeof renderSegmentsPage === 'function') renderSegmentsPage();
     if (btn.dataset.tab === 'bannerlists' && typeof renderBannerListsPage === 'function') renderBannerListsPage(); // Round 139
     if (btn.dataset.tab === 'banneractivation' && typeof renderBannerActivationPage === 'function') renderBannerActivationPage(); // Round 140
+    if (btn.dataset.tab === 'bannerclaims' && typeof renderBannerClaimsPage === 'function') renderBannerClaimsPage(); // Round 145
+    if (btn.dataset.tab === 'newbusiness' && typeof renderNewBusinessPage === 'function') renderNewBusinessPage(); // Round 146
     if (btn.dataset.tab === 'lostlistings' && typeof renderLostListingsPage === 'function') renderLostListingsPage(); // Round 142
     if (btn.dataset.tab === 'emailreports' && typeof renderEmailReportsPage === 'function') renderEmailReportsPage(); // Round 142
     if (btn.dataset.tab === 'dupcustomers' && typeof renderDupPage === 'function') renderDupPage(); // Round 124
@@ -17163,7 +18118,7 @@ function onInitialDataLoaded(data) {
   naDistributions = data.naDistributions || {};
   vipContacts = data.vipContacts || [];
   familyGroupsData = data.familyGroupsData || [];
-  familyGroupDeals = data.familyGroupDeals || {}; bannerActivationDeals = data.bannerActivationDeals || []; _badIdx = null; lostDismissals = data.lostListingDismissals || {}; emailSettings = data.emailSettings || null; _lrCache = null; // Round 140/142
+  familyGroupDeals = data.familyGroupDeals || {}; bannerActivationDeals = data.bannerActivationDeals || []; _badIdx = null; bannerClaims = data.bannerClaims || []; // Round 145 salesProspects = data.salesProspects || []; try { nbFilter.rep = localStorage.getItem(LS_NB_REP) || ''; } catch (e) { /* ignore */ } // Round 146 lostDismissals = data.lostListingDismissals || {}; emailSettings = data.emailSettings || null; _lrCache = null; // Round 140/142
   rsmZoneOverrides = data.rsmZoneOverrides || {};
   naTargets = data.naTargets || {};
   fyForecastInputs = data.fyForecastInputs || {};
@@ -17224,7 +18179,7 @@ function refreshPricingFromServer() {
       naDistributions = data.naDistributions || {};
   vipContacts = data.vipContacts || [];
       familyGroupsData = data.familyGroupsData || [];
-      familyGroupDeals = data.familyGroupDeals || {}; bannerActivationDeals = data.bannerActivationDeals || []; _badIdx = null; lostDismissals = data.lostListingDismissals || {}; emailSettings = data.emailSettings || null; _lrCache = null; // Round 140/142
+      familyGroupDeals = data.familyGroupDeals || {}; bannerActivationDeals = data.bannerActivationDeals || []; _badIdx = null; bannerClaims = data.bannerClaims || []; // Round 145 salesProspects = data.salesProspects || []; try { nbFilter.rep = localStorage.getItem(LS_NB_REP) || ''; } catch (e) { /* ignore */ } // Round 146 lostDismissals = data.lostListingDismissals || {}; emailSettings = data.emailSettings || null; _lrCache = null; // Round 140/142
       rsmZoneOverrides = data.rsmZoneOverrides || {};
       naTargets = data.naTargets || {};
       fyForecastInputs = data.fyForecastInputs || {};

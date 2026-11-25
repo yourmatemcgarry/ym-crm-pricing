@@ -95,7 +95,7 @@ export function buildContext(crm, blobs) {
   const c = {
     crm, callNotes: b.callNotes || [], journeyPlans: b.journeyPlans || {}, jpRsmSettings: b.jpRsmSettings || {},
     customerRsmOverrides: b.customerRsmOverrides || {}, rsmZoneOverrides: b.rsmZoneOverrides || {}, postcodeZoneOverrides: b.postcodeZoneOverrides || {},
-    lostDismissals: b.lostListingDismissals || {}, manualOutlets: b.manualOutlets || {}, settings: mergeEmailSettings(b.emailSettings),
+    lostDismissals: b.lostListingDismissals || {}, manualOutlets: b.manualOutlets || {}, prospects: Object.fromEntries((b.salesProspects || []).map(p => [p.id, p])), settings: mergeEmailSettings(b.emailSettings),
   };
   c.epoch = crm.meta.epochDate;
   c.asOfIso = crm.meta.salesDataTo;
@@ -116,8 +116,8 @@ export function buildContext(crm, blobs) {
 export function mateTierOf(litres) { return litres >= 5000 ? 'best' : litres >= 2500 ? 'good' : litres > 0 ? 'mate' : 'unrated'; }
 const eligible = (c) => (oid) => { const o = c.crm.outlets[oid]; return !!o && o.volumeStream === 'Sales Team' && !o.excluded && o.custType !== 'Event'; };
 const bucketOfGroup = (c) => (gid) => { const g = c.crm.groups[gid]; if (!g) return null; return g.bucket || (g.format === 'Pack' ? 'CARTONS' : 'KEGS'); };
-function custName(c, oid) { const o = c.crm.outlets[oid] || c.manualOutlets[oid]; return o ? o.name : ('Customer ' + oid); }
-function custSub(c, oid) { const o = c.crm.outlets[oid] || c.manualOutlets[oid]; return o ? [o.suburb, o.state].filter(Boolean).join(' ') : ''; }
+function custName(c, oid) { const o = c.crm.outlets[oid] || c.manualOutlets[oid] || (c.prospects || {})[oid]; return o ? o.name : ('Customer ' + oid); }
+function custSub(c, oid) { const o = c.crm.outlets[oid] || c.manualOutlets[oid] || (c.prospects || {})[oid]; return o ? [o.suburb, o.state].filter(Boolean).join(' ') : ''; }
 
 // ---------------- listings report ----------------
 export const LISTINGS_LOOKBACK_DAYS = 28; // email covers the last 4 weeks so a missed email doesn't hide a lost listing; rows from the latest 7 days are flagged NEW
@@ -162,6 +162,8 @@ export function callReview(c, todayIso) {
   });
   const visitedBy = {}; // oid -> earliest visit date in week
   notes.forEach(n => { if (!visitedBy[n.outletId] || n.visitDate < visitedBy[n.outletId]) visitedBy[n.outletId] = n.visitDate; });
+  // Round 146: a logged meeting / call / proposal on a new-business prospect counts as the visit
+  Object.values(c.prospects || {}).forEach(p => (p.activity || []).forEach(a => { if (['meeting', 'call', 'proposal'].includes(a.type) && inWeek({ visitDate: a.date }) && (!visitedBy[p.id] || a.date < visitedBy[p.id])) visitedBy[p.id] = a.date; }));
   const rsmSet = new Set(c.settings.callReviewRsms);
   notes.forEach(n => rsmSet.add(n.rsm || (c.rsmOf[n.outletId]) || 'Unknown'));
   Object.keys(planned).forEach(r => rsmSet.add(r));

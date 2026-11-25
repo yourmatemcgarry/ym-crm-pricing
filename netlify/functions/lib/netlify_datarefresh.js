@@ -436,7 +436,7 @@
   // totalValidPaidLines, totalValidPaidLinesAll }). Passing prevData=null/undefined reproduces the
   // exact pre-Round-84 single-batch behavior (used by verify_datarefresh.js Part 1 and any other
   // caller that doesn't have a previous dataset yet).
-  function buildSalesAggregates(salesRows, outlets, products, productToGroup, prevData) {
+  function buildSalesAggregates(salesRows, outlets, products, productToGroup, prevData, groups) {
     const rowsBuffer = [];
     let maxDate = null;
     let minDate = null;
@@ -488,6 +488,13 @@
     // earlier-than-this-batch) epochDate established above.
     const dailyVolume = {};
     const dailyVolumeOrder = [];
+    // Round 145 (Banner Claims): claimLines "oid|gid" -> { 'dayIdx|whIdx': saleable units } for THIS batch
+    // (kegs = kegs, cartons = units / pack qty), split by wholesaler code (row.Whouse). dailyVolume only carries
+    // litres, so a banner's invoice claim (units, by SKU, by wholesaler) can't be checked from it.
+    const claimMap = {};
+    const claimOrder = [];
+    const claimWh = [];
+    const claimWhIdx = {};
 
     let nValid = 0;
     let nValidSalesTeam = 0;
@@ -587,6 +594,18 @@
           let dv = dailyVolume[dvKey];
           if (!dv) { dv = {}; dailyVolume[dvKey] = dv; dailyVolumeOrder.push(dvKey); }
           dv[dayIdx] = (dv[dayIdx] || 0) + litres;
+
+          // Round 145: saleable units by wholesaler (see claimMap above)
+          const _g = groups && groups[gid];
+          const _isCarton = _g ? _g.bucket === 'CARTONS' : ((products[pid].packQty || 1) > 1);
+          const _saleUnits = _isCarton ? units / (products[pid].packQty || 1) : units;
+          const _wh = row['Whouse'] || '';
+          let _wi = claimWhIdx[_wh];
+          if (_wi === undefined) { _wi = claimWh.length; claimWhIdx[_wh] = _wi; claimWh.push(_wh); }
+          let _cm = claimMap[dvKey];
+          if (!_cm) { _cm = {}; claimMap[dvKey] = _cm; claimOrder.push(dvKey); }
+          const _ck = dayIdx + '|' + _wi;
+          _cm[_ck] = (_cm[_ck] || 0) + _saleUnits;
         }
       }
     }
@@ -608,6 +627,29 @@
             let dv = dailyVolume[key];
             if (!dv) { dv = {}; dailyVolume[key] = dv; dailyVolumeOrder.push(key); }
             dv[dayIdxAbs] = flat[i + 1];
+          }
+        }
+      }
+    }
+
+    // ---- Round 145: claimLines history (same rule as dailyVolume: keep previous days strictly before this batch's window) ----
+    if (prevData && prevData.claimLines) {
+      const offsetDaysC = prevEpochMs !== null ? Math.round((prevEpochMs - epochDate) / MS_PER_DAY) : 0;
+      const prevWh = prevData.claimWh || [];
+      for (const key in prevData.claimLines) {
+        const oid = splitKey(key)[0];
+        if (!hasOwn.call(outlets, oid)) continue;
+        const flat = prevData.claimLines[key];
+        for (let i = 0; i < flat.length; i += 3) {
+          const dayAbs = flat[i] + offsetDaysC;
+          if (newWindowStartDayIdx === null || dayAbs < newWindowStartDayIdx) {
+            const wh = prevWh[flat[i + 1]] || '';
+            let wi = claimWhIdx[wh];
+            if (wi === undefined) { wi = claimWh.length; claimWhIdx[wh] = wi; claimWh.push(wh); }
+            let cm = claimMap[key];
+            if (!cm) { cm = {}; claimMap[key] = cm; claimOrder.push(key); }
+            const ck = dayAbs + '|' + wi;
+            cm[ck] = (cm[ck] || 0) + flat[i + 2];
           }
         }
       }
@@ -785,10 +827,22 @@
       dailyVolumeOut[key] = flat;
     }
 
+    // Round 145: claimLines out: flat [day, whIdx, units, ...] sorted by day then wholesaler
+    const claimLinesOut = {};
+    for (const key of claimOrder) {
+      const cm = claimMap[key];
+      if (!cm) continue;
+      const ents = Object.keys(cm).map((k) => { const [d, w] = k.split('|'); return [Number(d), Number(w), cm[k]]; })
+        .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      const flat = [];
+      for (const e of ents) { flat.push(e[0]); flat.push(e[1]); flat.push(pyRound(e[2], 4)); }
+      claimLinesOut[key] = flat;
+    }
+
     const outletGroupCombosSalesTeam = Object.keys(groupSummary).filter((key) => outlets[splitKey(key)[0]].volumeStream === 'Sales Team').length;
 
     return {
-      groupSummary, outletSummary, dailyVolumeOut,
+      groupSummary, outletSummary, dailyVolumeOut, claimLinesOut, claimWh,
       nRows, nValid, nValidSalesTeam,
       maxDate, minDate, epochDate,
       outletGroupCombosSalesTeam,
@@ -817,6 +871,8 @@
     const m = previousCrmData.meta || {};
     return {
       dailyVolume: previousCrmData.dailyVolume || {},
+      claimLines: previousCrmData.claimLines || null, // Round 145
+      claimWh: previousCrmData.claimWh || [],
       groupSummary: previousCrmData.groupSummary || {},
       outletSummary: previousCrmData.outletSummary || {},
       epochDateMs: m.epochDate ? parseISOToMs(m.epochDate) : null,
@@ -853,7 +909,7 @@
     }
     const { products, groups, groupOrder, productToGroup } = buildProductsAndGroups(productRows);
     const prevData = buildPrevDataForMerge(previousCrmData);
-    const sales = buildSalesAggregates(salesRows, outlets, products, productToGroup, prevData);
+    const sales = buildSalesAggregates(salesRows, outlets, products, productToGroup, prevData, groups);
 
     const meta = {
       // Round 84: salesDataFrom is now the accumulated historical floor (sales.epochDate), not just
@@ -886,6 +942,8 @@
       groupSummary: sales.groupSummary,
       outletSummary: sales.outletSummary,
       dailyVolume: sales.dailyVolumeOut,
+      claimLines: sales.claimLinesOut, // Round 145
+      claimWh: sales.claimWh,
     };
   }
 
@@ -990,6 +1048,8 @@
       groupSummary: fresh.groupSummary,
       outletSummary,
       dailyVolume: fresh.dailyVolume,
+      claimLines: fresh.claimLines, // Round 145
+      claimWh: fresh.claimWh,
       familyGroups: prev.familyGroups,
       vipContactsSeed: prev.vipContactsSeed,
     };

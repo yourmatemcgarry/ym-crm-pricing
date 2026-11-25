@@ -126,6 +126,8 @@ async function readAll(s) {
   const familyGroupsData = familyGroupsDataRaw || FAMILY_GROUPS_SEED;
   const familyGroupDeals = (await s.get('familyGroupDeals', { type: 'json' })) || {};
   const bannerActivationDeals = (await s.get('bannerActivationDeals', { type: 'json' })) || []; // Round 140
+  const bannerClaims = (await s.get('bannerClaims', { type: 'json' })) || []; // Round 145
+  const salesProspects = (await s.get('salesProspects', { type: 'json' })) || []; // Round 146
   const lostListingDismissals = (await s.get('lostListingDismissals', { type: 'json' })) || {}; // Round 142
   const emailSettings = (await s.get('emailSettings', { type: 'json' })) || null; // Round 142
   // Round 141: one-time RSM allocation (flag-gated, like the seeds above): every zone -> Paradiso Rep; the top 60 active
@@ -292,6 +294,8 @@ async function readAll(s) {
     familyGroupsData: familyGroupsData || [],
     familyGroupDeals: familyGroupDeals || {},
     bannerActivationDeals: bannerActivationDeals || [],
+    bannerClaims: bannerClaims || [],
+    salesProspects: salesProspects || [],
     lostListingDismissals: lostListingDismissals || {},
     emailSettings: emailSettings || null,
     journeyPlans: journeyPlans || {},
@@ -1422,6 +1426,54 @@ export default async (req) => {
       if (idx >= 0) current[idx] = deal; else current.push(deal);
       await s.setJSON('bannerActivationDeals', current);
       return json({ ok: true, bannerActivationDeals: current });
+    }
+
+    if (action === 'saveProspect') {
+      // Round 146: upsert a new-business prospect by id (whole record: profile, stage, activity history, links).
+      const { prospect } = payload;
+      if (!prospect || !prospect.id || !String(prospect.id).startsWith('pr_') || !prospect.name || !prospect.stage) return json({ error: 'Invalid prospect' }, 400);
+      const current = (await s.get('salesProspects', { type: 'json' })) || [];
+      const idx = current.findIndex((d) => d.id === prospect.id);
+      if (idx >= 0) current[idx] = prospect; else current.push(prospect);
+      await s.setJSON('salesProspects', current);
+      return json({ ok: true, salesProspects: current });
+    }
+
+    if (action === 'deleteProspect') {
+      const { id } = payload;
+      const current = (await s.get('salesProspects', { type: 'json' })) || [];
+      const next = current.filter((d) => d.id !== id);
+      await s.setJSON('salesProspects', next);
+      // also drop the prospect from every journey plan so no orphan chip is left behind
+      const plans = (await s.get('journeyPlans', { type: 'json' })) || {};
+      let changed = false;
+      Object.keys(plans).forEach((rsm) => Object.keys(plans[rsm] || {}).forEach((qk) => {
+        const pl = plans[rsm][qk]; if (!pl) return;
+        if (pl.wkAssign && pl.wkAssign[id]) { delete pl.wkAssign[id]; changed = true; }
+        if (pl.wAssign && pl.wAssign[id]) { delete pl.wAssign[id]; changed = true; }
+        if (pl.tierSnapshot && pl.tierSnapshot[id]) { delete pl.tierSnapshot[id]; changed = true; }
+      }));
+      if (changed) await s.setJSON('journeyPlans', plans);
+      return json({ ok: true, salesProspects: next });
+    }
+
+    if (action === 'saveBannerClaim') {
+      // Round 145: upsert a banner claim check by id (banner, period, claimed vs our units per SKU, status).
+      const { claim } = payload;
+      if (!claim || !claim.id || !claim.banner || !claim.start || !claim.end || !claim.lines) return json({ error: 'Invalid banner claim' }, 400);
+      const current = (await s.get('bannerClaims', { type: 'json' })) || [];
+      const idx = current.findIndex((d) => d.id === claim.id);
+      if (idx >= 0) current[idx] = claim; else current.push(claim);
+      await s.setJSON('bannerClaims', current);
+      return json({ ok: true, bannerClaims: current });
+    }
+
+    if (action === 'deleteBannerClaim') {
+      const { id } = payload;
+      const current = (await s.get('bannerClaims', { type: 'json' })) || [];
+      const next = current.filter((d) => d.id !== id);
+      await s.setJSON('bannerClaims', next);
+      return json({ ok: true, bannerClaims: next });
     }
 
     if (action === 'deleteBannerActivationDeal') {
