@@ -561,7 +561,8 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
     <button class="tab-btn" data-tab="summary" data-group="rsm">Customer Visit</button>
     <button class="tab-btn" data-tab="callnotes" data-group="rsm">Call Notes Summary</button>
     <button class="tab-btn" data-tab="journeyplanner" data-group="rsm">Journey Planner</button>
-    <button class="tab-btn" data-tab="newbusiness" data-group="rsm">New Business</button>
+    <button class="tab-btn" data-tab="quarterhitlist" data-group="rsm">Quarter Hit List</button>
+    <button class="tab-btn" data-tab="newbusiness" data-group="rsm">Sales Funnel</button>
     <button class="tab-btn" data-tab="activations" data-group="rsm">Activations</button>
     <span class="tab-sub-label">Performance</span>
     <button class="tab-btn active" data-tab="performance" data-group="rsm">Team Dashboard</button>
@@ -588,6 +589,7 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
     <button class="tab-btn" data-tab="colesww" data-group="mgmt">Coles &amp; Woolworths</button>
     <button class="tab-btn" data-tab="bottleshopanalysis" data-group="mgmt">Banner Bottleshop Analysis</button>
     <span class="tab-sub-label">Contacts &amp; Email</span>
+    <button class="tab-btn" data-tab="accounts" data-group="mgmt">Accounts &amp; Contacts</button>
     <button class="tab-btn" data-tab="vipcontacts" data-group="mgmt">VIP Contacts</button>
     <button class="tab-btn" data-tab="familygroups" data-group="mgmt">Family Group Key Contacts</button>
     <button class="tab-btn" data-tab="exportemails" data-group="mgmt">Export Emails</button>
@@ -602,6 +604,7 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
     <button class="tab-btn" data-tab="postcodedb" data-group="mgmt">Postcode Database</button>
     <span class="tab-sub-label">Data Clean-up</span>
     <button class="tab-btn" data-tab="datarefresh" data-group="mgmt">Data Refresh</button>
+    <button class="tab-btn" data-tab="dataquality" data-group="mgmt">Data Quality</button>
     <button class="tab-btn" data-tab="rhinoimport" data-group="mgmt">Rhino Import</button>
     <button class="tab-btn" data-tab="dupcustomers" data-group="mgmt">Duplicate Customers</button>
     </div>
@@ -1561,6 +1564,22 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
     <div class="panel"><h3 style="margin-top:0;">Saved claim checks <button class="btn small secondary" style="float:right;" onclick="bcExportLog()">Export log (CSV)</button></h3><div id="bc_log"></div></div>
   </div>
 
+  <div class="tabpage" id="tab-accounts">
+    <div class="panel no-print">
+      <h2 style="margin:0;">Accounts &amp; Contacts</h2>
+      <div class="hint" style="margin-top:6px;">Organisations that are bigger than one venue — pub group owners, banner head offices, category managers, wholesalers and other customers. Each account has its people and the venues it owns or supplies. Pull it into the Quarter Hit List to target a group's venues.</div>
+      <div id="ac_root" style="margin-top:6px;"></div>
+    </div>
+  </div>
+
+  <div class="tabpage" id="tab-quarterhitlist">
+    <div class="panel no-print">
+      <h2 style="margin:0;">Quarter Hit List</h2>
+      <div class="hint" style="margin-top:6px;">Pick the venues each rep is targeting this quarter from the full customer list — existing customers, lapsed accounts, banner stores, or a brand-new customer. Everything you add goes straight into the Sales Funnel (as “Hit List”) and the Journey Planner.</div>
+      <div id="qh_root" style="margin-top:6px;"></div>
+    </div>
+  </div>
+
   <div class="tabpage" id="tab-newbusiness">
     <style>
       .nb-board { display:flex; gap:10px; overflow-x:auto; padding-bottom:10px; align-items:flex-start; }
@@ -1588,14 +1607,30 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
       .nb-nearby-sub { margin-right:14px; display:inline-block; }
     </style>
     <div class="panel">
-      <h2 style="margin:0;">New Business <span class="muted" id="nb_count" style="font-weight:400;"></span></h2>
-      <div class="hint" style="margin-top:6px;">Build each quarter's target hit list of new customers, move them through the funnel, and see them in the Journey Planner alongside your existing customer visits. Prospects on a rep's hit list show up as chips in that rep's Quarter Planner and Weekly View, and each week shows the prospects sitting in the suburbs you are already visiting.</div>
+      <h2 style="margin:0;">Sales Funnel <span class="muted" id="nb_count" style="font-weight:400;"></span></h2>
+      <div class="hint" style="margin-top:6px;">Everything on a rep's Quarter Hit List lands here. Move each venue through the funnel — meetings, proposal, won or lost — log notes and next actions, and see them in the Journey Planner alongside your existing customer visits. Add venues on the Quarter Hit List tab; new venues are created once, on the New Customers tab.</div>
       <div id="nb_subtabs" style="margin-top:10px;"></div>
       <div id="nb_filters"></div>
     </div>
     <div id="nb_profile"></div>
     <div class="panel"><div id="nb_body"></div></div>
     <div id="nb_modal"></div>
+  </div>
+
+  <div class="tabpage" id="tab-dataquality">
+    <style>
+      .dq-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; margin-top:12px; }
+      .dq-card { background:#fff; border:1px solid var(--border); border-radius:10px; padding:14px; cursor:pointer; border-left:5px solid #94a3b8; }
+      .dq-card.warn { border-left-color:#f59e0b; } .dq-card.ok { border-left-color:#16a34a; }
+      .dq-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.1); }
+      .dq-n { font-size:28px; font-weight:700; } .dq-l { font-size:13px; font-weight:600; margin-top:2px; } .dq-h { font-size:11.5px; color:#64748b; margin-top:4px; }
+    </style>
+    <div class="panel no-print">
+      <h2 style="margin:0;">Data Quality</h2>
+      <div class="hint" style="margin-top:6px;">One place to see what needs cleaning up: customers with no OutletID, possible duplicates, banner conflicts, missing RSMs and untyped customers. Click a card to open its work queue; every queue exports to CSV.</div>
+      <div id="dq_subtabs" style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;"></div>
+      <div id="dq_body" style="margin-top:6px;"></div>
+    </div>
   </div>
 
   <div class="tabpage" id="tab-segments">
@@ -3993,6 +4028,9 @@ function buildServerPayload(fnName, args) {
     case 'deleteBannerClaim': return { id: args[0] };
     case 'saveProspect': return { prospect: args[0] };
     case 'deleteProspect': return { id: args[0] };
+    case 'saveDataQuality': return { state: args[0] };
+    case 'saveBannerRule': return { state: args[0] };
+    case 'saveAccounts': return { state: args[0] };
     case 'saveLostDismissal': return { key: args[0], reason: args[1], updatedBy: args[2] };
     case 'deleteLostDismissal': return { key: args[0] };
     case 'saveEmailSettings': return { settings: args[0] };
@@ -8993,7 +9031,7 @@ function jpChipHtml(outletId, extra) {
     <span class="jp-chip-name">${escapeHtml(o.name || outletId)}</span>
     <span class="jp-chip-badges">
       ${isNb ? nbChipBadges(outletId) : `<span class="badge ${tierMeta.badge}">${escapeHtml(tierMeta.label)}</span>
-      <span class="badge ${st.cls}">${escapeHtml(st.label)}</span>`}
+      <span class="badge ${st.cls}">${escapeHtml(st.label)}</span>${typeof nbFunnelBadge === 'function' ? nbFunnelBadge(outletId) : ''}`}
       ${countBadge}
     </span>
     ${moveBtn}${removeBtn}
@@ -13446,6 +13484,7 @@ function saveNewCustomer() {
     renderManualCustomersPanel();
     document.getElementById('nc_saveMsg').textContent = `Saved at ${new Date().toLocaleTimeString()}`;
     toast('Customer added' + (dealsToSave.length ? ` with ${dealsToSave.length} deal${dealsToSave.length===1?'':'s'} set` : '') + ' — now available anywhere you pick a customer.');
+    if (typeof qhAfterNewCustomer === 'function') qhAfterNewCustomer(id); // Round 149
     resetNewCustomerForm();
   }, () => { document.getElementById('nc_saveMsg').textContent = ''; });
 }
@@ -13832,7 +13871,7 @@ function confirmMergeOutlet() {
   if (!ncMergeSourceId || !ncMergeTargetId) return;
   const sourceName = manualOutlets[ncMergeSourceId] ? manualOutlets[ncMergeSourceId].name : ncMergeSourceId;
   const targetName = outlets[ncMergeTargetId] ? outlets[ncMergeTargetId].name : ncMergeTargetId;
-  if (!confirm(`Merge "${sourceName}" into "${targetName}"? This can't be undone.`)) return;
+  if (!dqSkipConfirm && !confirm(`Merge "${sourceName}" into "${targetName}"? This can't be undone.`)) { dqQueue = []; return; } // Round 147
   const oldId = ncMergeSourceId, newId = ncMergeTargetId;
   const targetIsReal = realOutletIds.has(newId);
   toast('Merging…');
@@ -13861,13 +13900,14 @@ function confirmMergeOutlet() {
       if (oldIdx >= 0) outletList.splice(oldIdx, 1);
       if (manualOutlets[newId]) mergeManualOutletIntoLive(newId);
       applySegments(); // Round 114: apply the carried-over labels to the merged customer
+      if (typeof dqAfterMerge === 'function') dqAfterMerge(oldId, newId); // Round 147
     }
     closeMergePanel();
     renderManualCustomersPanel();
     if (typeof segMarkDoneQuiet === 'function') segMarkDoneQuiet(newId);
     if (typeof renderDupPage === 'function') renderDupPage();
     toast(`Merged into ${targetName}.`);
-  }, () => {});
+  }, () => { dqQueue = []; });
 }
 
 function renderManualCustomersPanel() {
@@ -16084,7 +16124,7 @@ function nbPipelineHtml() {
 function nbPlanWeeksOf(p) {
   const qk = p.targetQuarter; if (!qk || !p.rsm) return [];
   const plan = (journeyPlans[p.rsm] || {})[qk]; if (!plan || !plan.wkAssign) return [];
-  const w = plan.wkAssign[p.id]; return Array.isArray(w) ? w.map(i => i + 1) : [];
+  const w = plan.wkAssign[p.outletId || p.id]; return Array.isArray(w) ? w.map(i => i + 1) : [];
 }
 function nbHitlistHtml() {
   const list = nbFiltered().sort((a, b) => (NB_PRIORITY_ORDER[a.priority] - NB_PRIORITY_ORDER[b.priority]) || (a.suburb || '').localeCompare(b.suburb || '') || (a.name || '').localeCompare(b.name || ''));
@@ -16111,7 +16151,7 @@ function nbPlanVisit(id) {
     jpRsm = p.rsm;
     const m = /^FY(\d\d)-Q(\d)$/.exec(p.targetQuarter || '');
     jpQuarter = m ? { fy: 2000 + parseInt(m[1], 10), q: parseInt(m[2], 10) } : { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q };
-    jpActiveTab = 'quarter'; jpSelectedBench = p.id;
+    jpActiveTab = 'quarter'; jpSelectedBench = p.outletId || p.id;
     const sel = document.getElementById('jp_rsm'); if (sel) sel.value = p.rsm;
     const btn = document.querySelector('.tab-btn[data-tab="journeyplanner"]'); if (btn) btn.click();
     renderJourneyPlannerPage();
@@ -16168,7 +16208,7 @@ function nbOpen(id) {
   const el = document.getElementById('nb_profile'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth' });
 }
 function nbCloseProfile() { nbEditingId = null; nbRenderAll(); }
-function nbNew() { nbEditingId = 'new'; nbRenderAll(); const el = document.getElementById('nb_profile'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth' }); }
+function nbNew() { qhGo(); return; nbEditingId = 'new'; nbRenderAll(); const el = document.getElementById('nb_profile'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth' }); }
 function nbPostcodeChange() {
   const pc = document.getElementById('nbf_postcode').value.trim();
   if (typeof zoneForPostcode !== 'function') return;
@@ -16257,6 +16297,7 @@ function nbProfileHtml() {
   const typeLbl = { note: 'Note', call: 'Call', meeting: 'Meeting', proposal: 'Proposal', email: 'Email', stage: 'Stage' };
   const actHtml = act.length ? act.map(a => `<div class="nb-act"><span class="badge ${a.type === 'stage' ? 'grey' : 'blue'}">${typeLbl[a.type] || a.type}</span> <strong>${fmtDate(a.date)}</strong> <span class="muted">${escapeHtml(a.by || '')}</span><div>${escapeHtml(a.text)}</div></div>`).join('') : '<div class="hint">No history yet.</div>';
   const linksHtml = (p.links || []).map((l, i) => `<div><a href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.label)}</a> <a href="#" onclick="nbRemoveLink(${i}); return false;" class="muted">remove</a></div>`).join('') || '<div class="hint">No proposals or attachments linked yet.</div>';
+  const ro = (p.outletId && outlets[p.outletId]) ? 'readonly title="Edit this on the customer record (New Customers / Customer Summary)"' : '';
   const f = (id, label, html, wide) => `<div class="fld" style="margin:0;${wide ? 'grid-column:span 2;' : ''}"><label>${label}</label>${html}</div>`;
   const inp = (id, val, extra) => `<input id="nbf_${id}" value="${escapeHtml(val == null ? '' : val)}" ${extra || ''}>`;
   const sel = (id, opts) => `<select id="nbf_${id}">${opts}</select>`;
@@ -16268,11 +16309,11 @@ function nbProfileHtml() {
     ${wonBox}${lostBox}
     <datalist id="nb_banner_list">${banners.map(b => `<option value="${escapeHtml(b)}">`).join('')}</datalist>
     <div class="nb-grid" style="margin-top:10px;">
-      ${f('name', 'Business name', inp('name', p.name))}
-      ${f('address', 'Address', inp('address', p.address))}
-      ${f('suburb', 'Suburb', inp('suburb', p.suburb))}
-      ${f('state', 'State', inp('state', p.state || 'QLD'))}
-      ${f('postcode', 'Postcode', inp('postcode', p.postcode, 'onchange="nbPostcodeChange()"'))}
+      ${f('name', 'Business name', inp('name', p.name, ro))}
+      ${f('address', 'Address', inp('address', p.address, ro))}
+      ${f('suburb', 'Suburb', inp('suburb', p.suburb, ro))}
+      ${f('state', 'State', inp('state', p.state || 'QLD', ro))}
+      ${f('postcode', 'Postcode', inp('postcode', p.postcode, ro || 'onchange="nbPostcodeChange()"'))}
       ${f('zone', 'Territory (zone)', inp('zone', p.zone))}
       ${f('channel', 'Channel', sel('channel', `<option value="on" ${p.channel === 'on' ? 'selected' : ''}>On-premise</option><option value="off" ${p.channel === 'off' ? 'selected' : ''}>Off-premise</option>`))}
       ${f('bannerType', 'Group / banner / independent', sel('bannerType', `<option value="independent" ${p.bannerType === 'independent' ? 'selected' : ''}>Independent</option><option value="banner" ${p.bannerType === 'banner' ? 'selected' : ''}>Banner</option><option value="group" ${p.bannerType === 'group' ? 'selected' : ''}>Group</option>`))}
@@ -16293,6 +16334,7 @@ function nbProfileHtml() {
       ${f('nextAction', 'Next action', inp('nextAction', p.nextAction))}
       ${f('nextActionDue', 'Due', inp('nextActionDue', p.nextActionDue, 'type="date"'))}
     </div>
+    ${ro ? '<div class="hint" style="margin-top:6px;">Name, address and territory come from the customer record, so there is only ever one record for this venue.</div>' : ''}
     <div class="hint" style="margin-top:6px;">${p.lastContact ? 'Last contact: ' + fmtDate(p.lastContact) + '. ' : ''}${(p.carriedFrom || []).length ? 'Carried over from ' + p.carriedFrom.map(escapeHtml).join(', ') + '. ' : ''}${p.createdBy ? 'Added by ' + escapeHtml(p.createdBy) + '.' : ''}</div>
     ${isNew ? '<div class="hint" style="margin-top:8px;">Save the prospect to start logging meeting notes and linking proposals.</div>' : `
     <div class="nb-two">
@@ -16320,9 +16362,10 @@ function nbRenderModal() {
 // ---------- page ----------
 function nbRenderAll() {
   const body = document.getElementById('nb_body'); if (!body) return;
+  salesProspects.forEach(nbSyncFromOutlet); // Round 149: linked records read their details from the customer
   const f = nbFilter;
   const subtabs = [['pipeline', 'Pipeline'], ['hitlist', 'Hit List'], ['tasks', 'My Tasks']];
-  document.getElementById('nb_subtabs').innerHTML = subtabs.map(t => `<button class="btn small ${nbView === t[0] ? '' : 'secondary'}" onclick="nbSetView('${t[0]}')">${t[1]}</button>`).join(' ') + ' <button class="btn small" onclick="nbNew()">+ Add prospect</button>';
+  document.getElementById('nb_subtabs').innerHTML = subtabs.map(t => `<button class="btn small ${nbView === t[0] ? '' : 'secondary'}" onclick="nbSetView('${t[0]}')">${t[1]}</button>`).join(' ') + ' <button class="btn small" onclick="qhGo()">+ Add from customer list</button>';
   const repOpts = `<option value="">All reps</option>` + nbOpts(nbReps(), f.rep);
   const qOpts = `<option value="">All quarters</option>` + nbOpts(nbQuarterKeys(), f.quarter);
   const zOpts = `<option value="">All territories</option>` + nbOpts(nbZones(), f.zone);
@@ -16350,9 +16393,10 @@ function nbPseudoOutlet(id) {
 function nbJpOutlets(rsm, quarterKey) {
   if (!rsm) return [];
   const plan = (journeyPlans[rsm] || {})[quarterKey] || { wkAssign: {} };
+  salesProspects.forEach(nbSyncFromOutlet);
   return salesProspects.filter(p => p.rsm === rsm && nbIsActive(p) &&
-    (p.targetQuarter === quarterKey || p.stage === 'meeting1' || p.stage === 'proposal' || p.stage === 'meeting2' || (plan.wkAssign && plan.wkAssign[p.id])))
-    .map(p => nbPseudoOutlet(p.id));
+    (p.targetQuarter === quarterKey || p.stage === 'meeting1' || p.stage === 'proposal' || p.stage === 'meeting2' || (plan.wkAssign && plan.wkAssign[p.outletId || p.id])))
+    .map(p => (p.outletId && outlets[p.outletId]) ? outlets[p.outletId] : nbPseudoOutlet(p.id)).filter(Boolean);
 }
 function nbChipBadges(id) {
   const p = nbById(id); if (!p) return '<span class="badge amber">Prospect</span>';
@@ -16365,18 +16409,845 @@ function nbNearby(ids) {
   const subs = {};
   ids.forEach(id => { if (nbIsProspectId(id)) return; const o = outlets[id]; if (o && o.suburb) subs[String(o.suburb).trim().toUpperCase()] = o.suburb; });
   const inPlan = new Set(ids);
-  const res = salesProspects.filter(p => nbIsActive(p) && !inPlan.has(p.id) && p.suburb && subs[String(p.suburb).trim().toUpperCase()]);
+  salesProspects.forEach(nbSyncFromOutlet);
+  const res = salesProspects.filter(p => nbIsActive(p) && !inPlan.has(p.id) && !(p.outletId && inPlan.has(p.outletId)) && p.suburb && subs[String(p.suburb).trim().toUpperCase()]);
   return res;
 }
 function nbNearbyBadge(ids) {
   const res = nbNearby(ids); if (!res.length) return '';
-  return `<span class="badge amber" title="${escapeHtml('New business in these suburbs: ' + res.map(p => p.name + ' (' + p.suburb + ', ' + nbStageLabel(p.stage) + ')').join('; '))}">🎯 ${res.length} nearby</span>`;
+  return `<span class="badge amber" title="${escapeHtml('Sales Funnel prospects in these suburbs: ' + res.map(p => p.name + ' (' + p.suburb + ', ' + nbStageLabel(p.stage) + ')').join('; '))}">🎯 ${res.length} nearby</span>`;
 }
 function nbNearbyHtml(ids) {
   const res = nbNearby(ids); if (!res.length) return '';
   const bySub = {}; res.forEach(p => { (bySub[p.suburb] = bySub[p.suburb] || []).push(p); });
-  return `<div class="hint nb-nearby">🎯 <strong>New business in the suburbs you're visiting:</strong> ${Object.keys(bySub).sort().map(s => `<span class="nb-nearby-sub"><strong>${escapeHtml(s)}</strong>: ${bySub[s].map(p => `<a href="#" onclick="nbOpen('${p.id}'); return false;">${escapeHtml(p.name)}</a> <span class="badge ${nbStageCls(p.stage)}">${escapeHtml(nbStageLabel(p.stage))}</span>${p.rsm ? ` <span class="muted">${escapeHtml(p.rsm)}</span>` : ''}`).join(', ')}</span>`).join(' ')}</div>`;
+  return `<div class="hint nb-nearby">🎯 <strong>Sales Funnel prospects in the suburbs you're visiting:</strong> ${Object.keys(bySub).sort().map(s => `<span class="nb-nearby-sub"><strong>${escapeHtml(s)}</strong>: ${bySub[s].map(p => `<a href="#" onclick="nbOpen('${p.id}'); return false;">${escapeHtml(p.name)}</a> <span class="badge ${nbStageCls(p.stage)}">${escapeHtml(nbStageLabel(p.stage))}</span>${p.rsm ? ` <span class="muted">${escapeHtml(p.rsm)}</span>` : ''}`).join(', ')}</span>`).join(' ')}</div>`;
 }
+
+// ===================== DATA QUALITY (Round 147) =====================
+// Read-mostly clean-up console: scorecard + work queues for placeholder customers (no real OutletID),
+// banner conflicts, unallocated RSM and untyped customers. Placeholder records (new_/lmg:/slg: ids) are
+// baked into the data by earlier rounds, so the existing Outlet ID Review merge (which only works on
+// manualOutlets) could not touch them — dqRequestMerge() copies the record into manualOutlets first and
+// then runs the normal merge; dqAfterMerge() then retires the baked copy so it stays hidden after reload.
+var LS_DQ = 'ymtDataQualityV1';
+var dqState = { status: {}, retired: {} }; // status[id]='bannerstore' | 'awaiting'; retired[oldId]=newId
+var dqView = 'summary';
+var _dqCache = null;
+var dqQueue = [];
+var dqSkipConfirm = false;
+var DQ_GENERIC_GROUP = /^independent( group| customer)?$/i;
+
+function dqLoadLocal() {
+  try { const s = JSON.parse(localStorage.getItem(LS_DQ)); if (s) dqState = { status: s.status || {}, retired: s.retired || {} }; } catch (e) { /* ignore */ }
+  dqApplyRetired();
+}
+function dqFromServer(d) {
+  dqState = { status: (d && d.status) || {}, retired: (d && d.retired) || {} };
+  dqApplyRetired();
+}
+function dqApplyRetired() {
+  Object.keys(dqState.retired || {}).forEach(oid => {
+    if (!isPlaceholderOutletId(oid)) return;
+    if (allOutlets[oid]) delete allOutlets[oid];
+    if (outlets[oid]) {
+      delete outlets[oid];
+      const i = outletList.findIndex(o => o.id === oid); if (i >= 0) outletList.splice(i, 1);
+    }
+  });
+  _dqCache = null;
+}
+function dqPersist() {
+  _dqCache = null;
+  if (typeof callServer === 'function') callServer('saveDataQuality', [dqState], d => { if (d && d.dataQuality) { dqState = { status: d.dataQuality.status || {}, retired: d.dataQuality.retired || {} }; } dqRender(); }, null);
+  else { try { localStorage.setItem(LS_DQ, JSON.stringify(dqState)); } catch (e) { /* ignore */ } dqRender(); }
+}
+function dqAfterMerge(oldId, newId) {
+  if (isPlaceholderOutletId(oldId)) {
+    delete allOutlets[oldId];
+    dqState.retired[oldId] = newId; delete dqState.status[oldId];
+    dqPersist();
+  }
+  if (dqQueue.length) dqNext();
+  else if (dqSkipConfirm) { dqSkipConfirm = false; dqRender(); toast('Bulk merge finished.'); }
+}
+
+// ---------- data ----------
+function dqAllRecords() {
+  const seen = new Set(); const list = [];
+  Object.values(allOutlets).forEach(o => { if (o && o.id && !dqState.retired[o.id]) { seen.add(o.id); list.push(o); } });
+  Object.values(manualOutlets || {}).forEach(o => { if (o && o.id && !seen.has(o.id) && !dqState.retired[o.id]) list.push(o); });
+  return list;
+}
+function dqScorePair(a, b) {
+  const sim = rhNameSim(a.name, b.name);
+  const pcA = String(a.postcode || ''), pcB = String(b.postcode || '');
+  const samePc = !!pcA && pcA === pcB;
+  const ak = rhAddrKey(a.address, pcA);
+  const sameAddr = !!ak && ak === rhAddrKey(b.address, pcB);
+  const phA = rhDigits(a.phone), samePhone = phA.length >= 8 && phA === rhDigits(b.phone);
+  const emA = String(a.email || '').trim().toLowerCase(), sameEmail = !!emA && emA === String(b.email || '').trim().toLowerCase();
+  let score = 0; const why = [];
+  if (sim >= 0.99) { score += 60; why.push('same name'); } else if (sim >= 0.6) { score += 40; why.push('similar name'); } else if (sim >= 0.5) { score += 25; why.push('loosely similar name'); }
+  if (sameAddr) { score += 40; why.push('same street address'); }
+  if (samePhone) { score += 40; why.push('same phone'); }
+  if (sameEmail) { score += 40; why.push('same email'); }
+  if (samePc && sim >= 0.5) { score += 10; why.push('same postcode'); }
+  const namedOnly = sim >= 0.5 && !samePc && !sameAddr && !samePhone && !sameEmail;
+  if (namedOnly) score = 0;
+  const dbsRe = /\bdbs\d*\b|drive[ -]?(thru|through)/i;
+  const dbsOne = dbsRe.test(a.name || '') !== dbsRe.test(b.name || '');
+  if (dbsOne && score) why.push('one is a DBS / drive-thru (usually a separate customer)');
+  return { score, why, conf: score >= 90 && !dbsOne ? 'High' : score >= 60 ? 'Medium' : 'Low' };
+}
+function dqCompute() {
+  if (_dqCache) return _dqCache;
+  const recs = dqAllRecords();
+  const placeholders = recs.filter(o => isPlaceholderOutletId(o.id));
+  const real = recs.filter(o => !isPlaceholderOutletId(o.id));
+  const byPc = {};
+  real.forEach(o => { const pc = String(o.postcode || '').trim(); if (pc) (byPc[pc] = byPc[pc] || []).push(o); });
+  const rows = placeholders.map(p => {
+    const pc = String(p.postcode || '').trim();
+    let best = null;
+    (byPc[pc] || []).forEach(c => {
+      if (!outlets[c.id]) return; // a merge target must be a Sales Team customer
+      const r = dqScorePair(p, c);
+      if (r.score >= 60 && (!best || r.score > best.score)) best = { o: c, score: r.score, why: r.why, conf: r.conf };
+    });
+    const kn = bnPlaceholderMap()[p.id];
+    return { p, best, known: kn && kn.id !== p.id ? kn : null, status: dqState.status[p.id] || 'awaiting' };
+  });
+  const dupPairs = (typeof dupFindPairs === 'function' ? dupFindPairs() : []).filter(x => !dupDismissed[x.key] && !isPlaceholderOutletId(x.a.id) && !isPlaceholderOutletId(x.b.id));
+  const st = real.filter(o => o.volumeStream === 'Sales Team');
+  const bn = bnCompute();
+  const conflicts = bn.conflicts;
+  const noBanner = st.filter(o => !o.majorGroup && !o.banner);
+  const unalloc = st.filter(o => !o.rsm || o.rsm === 'Sales MGR');
+  const untyped = real.filter(o => !o.custType || o.custType === 'Other Customers');
+  _dqCache = { recs, placeholders, rows, dupPairs, conflicts, noBanner, unalloc, untyped,
+    awaiting: rows.filter(r => r.status === 'awaiting'), bannerStore: rows.filter(r => r.status === 'bannerstore'),
+    matchHigh: rows.filter(r => r.best && r.best.conf === 'High' && r.status === 'awaiting' && !r.known),
+    matchKnown: rows.filter(r => r.known && r.status === 'awaiting'), bn };
+  return _dqCache;
+}
+
+// ---------- actions ----------
+function dqSetStatus(id, v) { dqState.status[id] = v; dqPersist(); }
+function dqPrepManual(rec, oldId, done) {
+  if (manualOutlets[oldId]) return done();
+  const copy = { ...rec, id: oldId, createdAt: rec.createdAt || new Date().toISOString(), createdBy: rec.createdBy || 'Hub data' };
+  if (typeof callServer === 'function') callServer('saveManualOutlet', [copy], () => { manualOutlets[oldId] = copy; done(); }, () => toast('Could not prepare that record — try again.'));
+  else { manualOutlets[oldId] = copy; saveManualOutlets(); done(); }
+}
+function dqRequestMerge(oldId, newId) {
+  const rec = manualOutlets[oldId] || allOutlets[oldId];
+  if (!rec) { toast('That record no longer exists.'); if (dqQueue.length) dqNext(); return; }
+  if (!outlets[newId]) { toast(`${newId} isn't a customer in the Hub yet.`); if (dqQueue.length) dqNext(); return; }
+  dqPrepManual(rec, oldId, () => { ncMergeSourceId = oldId; ncMergeTargetId = newId; confirmMergeOutlet(); });
+}
+function dqNext() {
+  const job = dqQueue.shift();
+  if (!job) { dqSkipConfirm = false; dqRender(); toast('Bulk merge finished.'); return; }
+  const go = () => dqRequestMerge(job.old, job.new);
+  if (outlets[job.new] || allOutlets[job.new]) return go();
+  const rec = manualOutlets[job.old] || allOutlets[job.old];
+  if (!rec) return dqNext();
+  const target = { ...rec, id: job.new, createdAt: new Date().toISOString(), createdBy: 'Data Quality' };
+  const place = () => { manualOutlets[job.new] = target; mergeManualOutletIntoLive(job.new); go(); };
+  if (typeof callServer === 'function') callServer('saveManualOutlet', [target], place, () => dqNext());
+  else { manualOutlets[job.new] = target; saveManualOutlets(); mergeManualOutletIntoLive(job.new); go(); }
+}
+function dqMergeOne(oldId, newId) { dqSkipConfirm = false; dqQueue = [{ old: oldId, new: newId }]; dqNext(); }
+function dqSetIdPrompt(oldId) {
+  const v = window.prompt('Enter the confirmed OutletID for this customer:', '');
+  if (v === null || !String(v).trim()) return;
+  dqSkipConfirm = false; dqQueue = [{ old: oldId, new: String(v).trim() }]; dqNext();
+}
+function dqMergeAllHigh() {
+  const list = dqCompute().matchHigh;
+  if (!list.length) { toast('No high-confidence matches waiting.'); return; }
+  if (!confirm(`Merge ${list.length} placeholder customers into their suggested matches? Sales history, pricing, deals and call notes move across. This can't be undone.`)) return;
+  dqSkipConfirm = true; dqQueue = list.map(r => ({ old: r.p.id, new: r.best.o.id })); dqNext();
+}
+function dqApplyKnown() {
+  const list = dqCompute().matchKnown;
+  if (!list.length) { toast('No list-found OutletIDs waiting.'); return; }
+  if (!confirm(`Apply ${list.length} OutletIDs found by the banner list searches? Each placeholder is merged into the customer with that OutletID (created if it isn't in the Hub yet). This can't be undone.`)) return;
+  dqSkipConfirm = true; dqQueue = list.map(r => ({ old: r.p.id, new: r.known.id })); dqNext();
+}
+function dqImportCsv(inputEl) {
+  const f = inputEl.files && inputEl.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    const jobs = String(rd.result).split(/\r?\n/).map(l => l.split(',').map(c => c.replace(/^"|"$/g, '').trim())).filter(c => c.length >= 2 && isPlaceholderOutletId(c[0]) && c[1] && !isPlaceholderOutletId(c[1]) && (manualOutlets[c[0]] || allOutlets[c[0]]));
+    if (!jobs.length) { toast('No usable rows — expected columns: placeholder id, real OutletID.'); return; }
+    if (!confirm(`Apply ${jobs.length} OutletID mappings? Each placeholder is merged into the customer with that OutletID (created if it isn't in the Hub yet). This can't be undone.`)) return;
+    dqSkipConfirm = true; dqQueue = jobs.map(c => ({ old: c[0], new: c[1] })); dqNext();
+  };
+  rd.readAsText(f); inputEl.value = '';
+}
+
+// ---------- CSV ----------
+function dqCsv(name, header, rows) {
+  const csv = [header].concat(rows).map(r => r.map(c => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  downloadFile(name, csv, 'text/csv');
+}
+function dqExport(kind) {
+  if (/^bn/.test(kind)) return bnExport(kind);
+  const c = dqCompute();
+  if (kind === 'placeholders') dqCsv('placeholder_customers_for_ontap_lookup.csv', ['Placeholder id', 'OutletID (fill in)', 'Name', 'Address', 'Suburb', 'State', 'Postcode', 'Phone', 'Banner group', 'Banner', 'RSM', 'Status', 'Suggested match id', 'Suggested match name', 'Match confidence', 'OutletID found by list search', 'List'],
+    c.rows.map(r => [r.p.id, r.known ? r.known.id : '', r.p.name, r.p.address, r.p.suburb, r.p.state, r.p.postcode, r.p.phone, r.p.majorGroup, r.p.banner, r.p.rsm, r.status, r.best ? r.best.o.id : '', r.best ? r.best.o.name : '', r.best ? r.best.conf : '', r.known ? r.known.id : '', r.known ? r.known.list : '']));
+  else if (kind === 'banner') dqCsv('banner_conflicts.csv', ['OutletID', 'Name', 'Suburb', 'Postcode', 'Hub group', 'Hub banner', 'Ontap group', 'Ontap banner'], c.conflicts.map(o => [o.id, o.name, o.suburb, o.postcode, o.majorGroup, o.banner, o.ontapMajorGroup, o.ontapBanner]));
+  else if (kind === 'nobanner') dqCsv('customers_without_banner.csv', ['OutletID', 'Name', 'Suburb', 'Postcode', 'Type', 'Ontap group', 'Ontap banner', 'RSM'], c.noBanner.map(o => [o.id, o.name, o.suburb, o.postcode, o.custType, o.ontapMajorGroup, o.ontapBanner, o.rsm]));
+  else if (kind === 'unalloc') dqCsv('customers_without_rsm.csv', ['OutletID', 'Name', 'Suburb', 'Postcode', 'Zone', 'Type', 'RSM'], c.unalloc.map(o => [o.id, o.name, o.suburb, o.postcode, o.zone, o.custType, o.rsm]));
+  else if (kind === 'untyped') dqCsv('customers_untyped_or_other.csv', ['OutletID', 'Name', 'Suburb', 'Postcode', 'Type', 'Stream'], c.untyped.map(o => [o.id, o.name, o.suburb, o.postcode, o.custType, o.volumeStream]));
+  else if (kind === 'dups') dqCsv('possible_duplicates.csv', ['Confidence', 'Why', 'A id', 'A name', 'A suburb', 'B id', 'B name', 'B suburb'], c.dupPairs.map(p => [p.conf, p.why.join('; '), p.a.id, p.a.name, p.a.suburb, p.b.id, p.b.name, p.b.suburb]));
+}
+
+// ---------- render ----------
+function dqSetView(v) { dqView = v; dqRender(); }
+function dqCard(label, n, view, hint, tone) {
+  return `<div class="dq-card ${tone || ''}" onclick="dqSetView('${view}')"><div class="dq-n">${typeof n === 'number' ? n.toLocaleString() : escapeHtml(n)}</div><div class="dq-l">${escapeHtml(label)}</div><div class="dq-h">${escapeHtml(hint || '')}</div></div>`;
+}
+function dqSummaryHtml(c) {
+  return `<div class="dq-cards">
+    ${dqCard('Placeholders awaiting an OutletID', c.awaiting.length, 'placeholders', c.matchHigh.length + ' have a high-confidence match', c.awaiting.length ? 'warn' : 'ok')}
+    ${dqCard('Banner stores (not customers)', c.bannerStore.length, 'placeholders', 'tagged as not yet customers', '')}
+    ${dqCard('Possible duplicates', c.dupPairs.length, 'dups', 'real customers, not dismissed', c.dupPairs.length ? 'warn' : 'ok')}
+    ${dqCard('Banner lists out of date', c.bn.register.filter(r => r.state !== 'current').length + ' of ' + c.bn.register.length, 'bnlists', 'older than 60 days or unknown', c.bn.register.some(r => r.state !== 'current') ? 'warn' : 'ok')}
+    ${dqCard('Banners set by list rule', c.bn.changes.length, 'bnchanges', 'differ from the previous Hub value', '')}
+    ${dqCard('Banner conflicts (Hub vs Ontap)', c.conflicts.length, 'banner', 'not on a list; needs a decision', c.conflicts.length ? 'warn' : 'ok')}
+    ${dqCard('Tagged to a list group, not on its list', c.bn.register.reduce((a, r) => a + r.notOnList.length, 0), 'bnnotlist', 'list may be old, or store left', '')}
+    ${dqCard('Customers with no banner', c.noBanner.length, 'nobanner', 'Sales Team customers', '')}
+    ${dqCard('No RSM / “Sales MGR”', c.unalloc.length, 'unalloc', 'Sales Team customers', c.unalloc.length ? 'warn' : 'ok')}
+    ${dqCard('Blank type or “Other Customers”', c.untyped.length, 'untyped', 'candidates for Accounts & Contacts', '')}
+  </div>
+  <div class="hint" style="margin-top:12px;">The Ontap OutletID is the single key. Placeholders (new_ / lmg: / slg: ids) are stores we know about but have no OutletID for. Fix the matches first, then banners.</div>`;
+}
+function dqTable(head, bodyRows, exportKind, more) {
+  return `<div class="row" style="gap:8px;margin:8px 0;flex-wrap:wrap;"><button class="btn small secondary" onclick="dqExport('${exportKind}')">Export CSV</button>${more || ''}</div>
+    <div class="tablewrap"><table class="datatable"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${bodyRows || `<tr><td colspan="${head.length}"><div class="empty">Nothing here — all clear.</div></td></tr>`}</tbody></table></div>`;
+}
+function dqPlaceholdersHtml(c) {
+  const q = ((document.getElementById('dq_search') || {}).value || '').toLowerCase();
+  const only = (document.getElementById('dq_only') || {}).value || 'awaiting';
+  let rows = c.rows.filter(r => only === 'all' || (only === 'matched' ? (r.best && r.status === 'awaiting') : r.status === only));
+  if (q) rows = rows.filter(r => (r.p.name + ' ' + r.p.suburb + ' ' + r.p.id).toLowerCase().includes(q));
+  rows.sort((a, b) => ((b.known ? 1000 : 0) + (b.best ? b.best.score : 0)) - ((a.known ? 1000 : 0) + (a.best ? a.best.score : 0)) || (a.p.name || '').localeCompare(b.p.name || ''));
+  const body = rows.slice(0, 300).map(r => {
+    const p = r.p, b = r.best;
+    return `<tr><td><strong>${escapeHtml(p.name)}</strong><br><span class="muted mono">${escapeHtml(p.id)}</span></td>
+      <td>${escapeHtml(p.address || '')}<br>${escapeHtml(p.suburb || '')} ${escapeHtml(p.postcode || '')}</td>
+      <td>${escapeHtml(p.majorGroup || '')}${p.banner ? '<br><span class="muted">' + escapeHtml(p.banner) + '</span>' : ''}<br><span class="muted">${escapeHtml(p.rsm || '—')}</span></td>
+      <td><select onchange="dqSetStatus('${escapeHtml(p.id)}', this.value)"><option value="awaiting"${r.status === 'awaiting' ? ' selected' : ''}>Awaiting OutletID</option><option value="bannerstore"${r.status === 'bannerstore' ? ' selected' : ''}>Banner store, not a customer</option></select></td>
+      <td>${r.known ? `<span class="badge green">OutletID found</span> <strong class="mono">${escapeHtml(r.known.id)}</strong><br><span class="muted" style="font-size:11.5px;">${escapeHtml(BN_LIST_GROUP[r.known.list] || r.known.list)} list · ${escapeHtml(r.known.cf)} confidence${r.known.hw ? ' · ' + escapeHtml(r.known.hw) : ''}</span><br>` : ''}${b ? `<span class="badge ${b.conf === 'High' ? 'green' : 'amber'}">${b.conf}</span> <strong>${escapeHtml(b.o.name)}</strong><br><span class="muted mono">${escapeHtml(b.o.id)}</span> · ${escapeHtml(b.o.suburb || '')}<br><span class="muted" style="font-size:11px;">${escapeHtml(b.why.join(', '))}</span>` : '<span class="muted">no match found</span>'}</td>
+      <td>${r.known ? `<button class="btn small" onclick="dqMergeOne('${escapeHtml(p.id)}','${escapeHtml(r.known.id)}')">Apply OutletID</button> ` : ''}${b ? `<button class="btn small${r.known ? ' secondary' : ''}" onclick="dqMergeOne('${escapeHtml(p.id)}','${escapeHtml(b.o.id)}')">Merge into match</button> ` : ''}<button class="btn small secondary" onclick="dqSetIdPrompt('${escapeHtml(p.id)}')">Set OutletID</button></td></tr>`;
+  }).join('') + (rows.length > 300 ? '<tr><td colspan="6"><div class="hint">Showing the first 300 — filter or resolve some.</div></td></tr>' : '');
+  const more = `<select id="dq_only" onchange="dqRender()"><option value="awaiting"${only === 'awaiting' ? ' selected' : ''}>Awaiting OutletID</option><option value="matched"${only === 'matched' ? ' selected' : ''}>Awaiting, with a match</option><option value="bannerstore"${only === 'bannerstore' ? ' selected' : ''}>Banner stores</option><option value="all"${only === 'all' ? ' selected' : ''}>All</option></select>
+    <input id="dq_search" placeholder="search name / suburb / id" value="${escapeHtml(q)}" oninput="dqRender()" style="min-width:200px;">
+    <button class="btn small" onclick="dqApplyKnown()">Apply ${c.matchKnown.length} OutletIDs found by list searches</button>
+    <button class="btn small secondary" onclick="dqMergeAllHigh()">Merge ${c.matchHigh.length} high-confidence matches</button>
+    <label class="btn small secondary" style="cursor:pointer;">Import OutletID CSV<input type="file" accept=".csv" style="display:none" onchange="dqImportCsv(this)"></label>
+    <span class="muted" style="font-size:12px;">CSV columns: placeholder id, real OutletID (the export has both).</span>`;
+  return dqTable(['Placeholder', 'Address', 'Banner / RSM', 'Status', 'Best match in Hub', ''], body, 'placeholders', more);
+}
+function dqSimpleList(list, cols) {
+  return list.slice(0, 400).map(o => `<tr>${cols.map(f => `<td>${escapeHtml(typeof f === 'function' ? f(o) : (o[f] == null ? '' : o[f]))}</td>`).join('')}</tr>`).join('') + (list.length > 400 ? `<tr><td colspan="${cols.length}"><div class="hint">Showing 400 of ${list.length} — export the CSV for the full list.</div></td></tr>` : '');
+}
+function dqRender() {
+  const wrap = document.getElementById('dq_body'); if (!wrap) return;
+  const c = dqCompute();
+  const tabs = [['summary', 'Summary'], ['placeholders', 'Placeholders'], ['dups', 'Duplicates'], ['bnlists', 'Banner lists'], ['bnchanges', 'Set by list rule'], ['banner', 'Banner conflicts'], ['bnnotlist', 'Not on list'], ['nobanner', 'No banner'], ['unalloc', 'No RSM'], ['untyped', 'Other / untyped']];
+  document.getElementById('dq_subtabs').innerHTML = tabs.map(t => `<button class="btn small ${dqView === t[0] ? '' : 'secondary'}" onclick="dqSetView('${t[0]}')">${t[1]}</button>`).join(' ');
+  let h = '';
+  if (dqView === 'summary') h = dqSummaryHtml(c);
+  else if (dqView === 'placeholders') {
+    const keepFocus = document.activeElement && document.activeElement.id === 'dq_search';
+    wrap.innerHTML = dqPlaceholdersHtml(c);
+    if (keepFocus) { const s = document.getElementById('dq_search'); if (s && s.focus) { s.focus(); try { s.setSelectionRange(s.value.length, s.value.length); } catch (e) { /* ignore */ } } }
+    return;
+  }
+  else if (dqView === 'dups') h = dqTable(['Match', 'Customer A', 'Customer B'], c.dupPairs.slice(0, 300).map(p => `<tr><td><span class="badge ${p.conf === 'High' ? 'green' : 'amber'}">${p.conf}</span><br><span class="muted" style="font-size:11px;">${escapeHtml(p.why.join(', '))}</span></td><td>${escapeHtml(p.a.name)}<br><span class="muted mono">${escapeHtml(p.a.id)}</span> ${escapeHtml(p.a.suburb || '')}</td><td>${escapeHtml(p.b.name)}<br><span class="muted mono">${escapeHtml(p.b.id)}</span> ${escapeHtml(p.b.suburb || '')}</td></tr>`).join(''), 'dups', `<button class="btn small secondary" onclick="document.querySelector('.tab-btn[data-tab=dupcustomers]').click()">Open Duplicate Customers tool</button>`);
+  else if (dqView === 'bnlists') h = bnRegisterHtml(c.bn) + `<div class="row" style="margin-top:8px;"><button class="btn small secondary" onclick="dqExport('bnregister')">Export register CSV</button></div>`;
+  else if (dqView === 'bnchanges') h = bnChangesHtml(c.bn);
+  else if (dqView === 'bnnotlist') h = bnNotOnListHtml(c.bn);
+  else if (dqView === 'banner') h = bnConflictsHtml(c.bn);
+  else if (dqView === 'nobanner') h = dqTable(['Customer', 'Suburb', 'Type', 'Ontap group / banner', 'RSM'], dqSimpleList(c.noBanner, [o => o.name + ' (' + o.id + ')', 'suburb', 'custType', o => (o.ontapMajorGroup || '—') + ' / ' + (o.ontapBanner || '—'), 'rsm']), 'nobanner');
+  else if (dqView === 'unalloc') h = dqTable(['Customer', 'Suburb', 'Postcode', 'Zone', 'Type'], dqSimpleList(c.unalloc, [o => o.name + ' (' + o.id + ')', 'suburb', 'postcode', 'zone', 'custType']), 'unalloc');
+  else h = dqTable(['Customer', 'Suburb', 'Type', 'Stream'], dqSimpleList(c.untyped, [o => o.name + ' (' + o.id + ')', 'suburb', o => o.custType || '(blank)', 'volumeStream']), 'untyped');
+  wrap.innerHTML = h;
+}
+function renderDataQualityPage() { _dqCache = null; dqRender(); }
+
+// ===================== BANNER SOURCE-OF-TRUTH RULE (Round 148) =====================
+// Which banner / banner group does a customer belong to? Order of authority:
+//   1. a manual override someone set here                      (source 'override')
+//   2. the banner group's master store list, when the store is on a loaded list and its OutletID
+//      search result is high/medium confidence                  (source 'list')
+//   3. the Hub's own reviewed banner (what the data carried before this rule) (source 'hub')
+//   4. Ontap's banner, unless it is a generic "Independent" label (source 'ontap')
+// The rule is applied in place to every customer record at load (bnApplyRule), so every page that reads
+// o.majorGroup / o.banner sees the result. o.bnStored keeps the pre-rule value so it is always reversible.
+var LS_BN = 'ymtBannerRuleV1';
+var bnState = { ruleOn: true, overrides: {} }; // overrides[id] = {majorGroup, banner, reason, by, at}
+var _bnCache = null;
+var BN_GENERIC = /^independent( group| customer)?$/i;
+var BN_LIST_GROUP = { LMG: 'LMG', SLG: 'Star Liquor', IBA: 'IBA' };
+
+function bnLoadLocal() {
+  try { const s = JSON.parse(localStorage.getItem(LS_BN)); if (s) bnState = { ruleOn: s.ruleOn !== false, overrides: s.overrides || {} }; } catch (e) { /* ignore */ }
+  bnApplyRule();
+}
+function bnFromServer(d) {
+  bnState = { ruleOn: !d || d.ruleOn !== false, overrides: (d && d.overrides) || {} };
+  bnApplyRule();
+}
+function bnPersist() {
+  _bnCache = null; _dqCache = null;
+  bnApplyRule();
+  if (typeof callServer === 'function') callServer('saveBannerRule', [bnState], d => { if (d && d.bannerRule) { bnState = { ruleOn: d.bannerRule.ruleOn !== false, overrides: d.bannerRule.overrides || {} }; bnApplyRule(); } dqRender(); }, null);
+  else { try { localStorage.setItem(LS_BN, JSON.stringify(bnState)); } catch (e) { /* ignore */ } dqRender(); }
+}
+
+// ---------- names ----------
+function bnNorm(s) { return String(s || '').toLowerCase().replace(/&/g, 'and').replace(/^the\s+/, '').replace(/[^a-z0-9]/g, '').replace(/^the/, ''); }
+var _bnCanon = null;
+function bnCanonBanner(name) {
+  if (!name) return null;
+  if (!_bnCanon) {
+    _bnCanon = {};
+    Object.values(allOutlets).forEach(o => { [o.banner, o.ontapBanner].forEach(b => { if (b && !BN_GENERIC.test(b)) { const k = bnNorm(b); if (!_bnCanon[k]) _bnCanon[k] = b; } }); });
+  }
+  const k = bnNorm(name);
+  if (_bnCanon[k]) return _bnCanon[k];
+  return String(name).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+function bnListIndex() {
+  if (_bnCache && _bnCache.idx) return _bnCache.idx;
+  const idx = {}, hp = {};
+  if (typeof BANNER_LISTS_DATA !== 'undefined') {
+    Object.keys(BANNER_LISTS_DATA.lists).forEach(L => (BANNER_LISTS_DATA.lists[L] || []).forEach(r => {
+      if (r.id && r.st === 'allocated' && (r.cf === 'high' || r.cf === 'medium') && !idx[r.id]) idx[r.id] = { list: L, row: r };
+      if (r.hpid && r.id && r.st === 'allocated' && (r.cf === 'high' || r.cf === 'medium')) hp[r.hpid] = { id: r.id, list: L, cf: r.cf, hw: r.hw };
+    }));
+  }
+  _bnCache = _bnCache || {}; _bnCache.idx = idx; _bnCache.hp = hp;
+  return idx;
+}
+function bnPlaceholderMap() { bnListIndex(); return _bnCache.hp; }
+
+// ---------- the rule ----------
+function bnDecide(o) {
+  const st = o.bnStored || { majorGroup: o.majorGroup || null, banner: o.banner || null };
+  const ov = bnState.overrides[o.id];
+  if (ov) return { group: ov.majorGroup || null, banner: ov.banner || null, source: 'override' };
+  if (bnState.ruleOn) {
+    const hit = bnListIndex()[o.id];
+    if (hit) return { group: BN_LIST_GROUP[hit.list], banner: bnCanonBanner(hit.row.b), source: 'list', list: hit.list };
+  }
+  if (st.majorGroup || st.banner) return { group: st.majorGroup || null, banner: st.banner || null, source: 'hub' };
+  const og = o.ontapMajorGroup, ob = o.ontapBanner;
+  if ((og && !BN_GENERIC.test(og)) || (ob && !BN_GENERIC.test(ob))) return { group: og && !BN_GENERIC.test(og) ? og : null, banner: ob && !BN_GENERIC.test(ob) ? ob : null, source: 'ontap' };
+  return { group: null, banner: null, source: 'none' };
+}
+function bnApplyRule() {
+  _bnCache = null; _dqCache = null; _bnCanon = null;
+  const recs = Object.values(allOutlets).concat(Object.values(manualOutlets || {}).filter(m => m && !allOutlets[m.id]));
+  recs.forEach(o => { if (o && !o.bnStored) o.bnStored = { majorGroup: o.majorGroup || null, banner: o.banner || null }; });
+  let changed = 0;
+  recs.forEach(o => {
+    if (!o) return;
+    const d = bnDecide(o);
+    if ((o.majorGroup || null) !== d.group || (o.banner || null) !== d.banner) changed++;
+    o.majorGroup = d.group; o.banner = d.banner; o.bannerSource = d.source;
+    const live = outlets[o.id]; if (live && live !== o) { live.majorGroup = d.group; live.banner = d.banner; live.bannerSource = d.source; }
+  });
+  return changed;
+}
+
+// ---------- analysis ----------
+function bnParseDate(s) {
+  const m = String(s || '').match(/(?:(\d{1,2})\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{4})/i);
+  if (!m) return null;
+  const mon = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].indexOf(m[2].toLowerCase());
+  const approx = !m[1];
+  const day = m[1] ? parseInt(m[1], 10) : new Date(Date.UTC(+m[3], mon + 1, 0)).getUTCDate();
+  return { iso: new Date(Date.UTC(+m[3], mon, day)).toISOString().slice(0, 10), approx };
+}
+function bnDays(iso) { return Math.round((Date.parse(todayStr() + 'T00:00:00Z') - Date.parse(iso + 'T00:00:00Z')) / 86400000); }
+function bnRegister() {
+  const out = [];
+  if (typeof BANNER_LISTS_DATA === 'undefined') return out;
+  const idx = bnListIndex();
+  Object.keys(BANNER_LISTS_DATA.lists).forEach(L => {
+    const rows = BANNER_LISTS_DATA.lists[L] || [], meta = BANNER_LISTS_DATA.meta[L] || {};
+    const pd = bnParseDate(meta.fileDate); const age = pd ? bnDays(pd.iso) : null;
+    const hi = rows.filter(r => r.id && r.st === 'allocated' && r.cf === 'high').length;
+    const med = rows.filter(r => r.id && r.st === 'allocated' && r.cf === 'medium').length;
+    const sug = rows.filter(r => r.st === 'suggested').length;
+    const none = rows.length - hi - med - sug;
+    let last = null, undated = false;
+    rows.forEach(r => { const m = String(r.hw || '').match(/\((\d{1,2} \w{3} \d{4})\)/); if (m) { const d = bnParseDate(m[1]); if (d && (!last || d.iso > last)) last = d.iso; } else if (/Round \d+/.test(r.hw || '')) undated = true; });
+    const grp = BN_LIST_GROUP[L];
+    const tagged = Object.values(allOutlets).filter(o => o.majorGroup === grp && o.volumeStream === 'Sales Team' && !isPlaceholderOutletId(o.id));
+    const notOnList = tagged.filter(o => !idx[o.id] || idx[o.id].list !== L);
+    const rekey = rows.filter(r => r.hpid && r.id && allOutlets[r.hpid] && !allOutlets[r.id]).length;
+    out.push({ L, group: grp, title: meta.title || L, file: meta.file || '', fileDate: meta.fileDate || '', pd, age, rows: rows.length, hi, med, sug, none, lastSearch: last, undated, importedAt: BANNER_LISTS_DATA.generatedAt, tagged: tagged.length, notOnList, rekey,
+      state: age == null ? 'unknown' : age <= 60 ? 'current' : age <= 120 ? 'ageing' : 'stale' });
+  });
+  return out;
+}
+function bnUnlisted() {
+  const listed = new Set(Object.values(BN_LIST_GROUP));
+  const c = {};
+  Object.values(allOutlets).forEach(o => { if (o.volumeStream !== 'Sales Team' || isPlaceholderOutletId(o.id) || !o.majorGroup || listed.has(o.majorGroup) || BN_GENERIC.test(o.majorGroup)) return; c[o.majorGroup] = (c[o.majorGroup] || 0) + 1; });
+  return Object.keys(c).map(g => ({ group: g, n: c[g] })).sort((a, b) => b.n - a.n);
+}
+function bnCompute() {
+  if (_bnCache && _bnCache.res) return _bnCache.res;
+  const idx = bnListIndex();
+  const st = Object.values(allOutlets).filter(o => o.volumeStream === 'Sales Team' && !isPlaceholderOutletId(o.id));
+  const changes = [], conflicts = [];
+  st.forEach(o => {
+    const s0 = o.bnStored || { majorGroup: null, banner: null };
+    if (o.bannerSource === 'list') {
+      if ((s0.majorGroup || null) !== (o.majorGroup || null) || (s0.banner || null) !== (o.banner || null)) changes.push({ o, before: s0, list: idx[o.id].list });
+    } else if (o.bannerSource === 'hub') {
+      const gD = o.majorGroup && o.ontapMajorGroup && o.majorGroup !== o.ontapMajorGroup && !BN_GENERIC.test(o.ontapMajorGroup);
+      const bD = o.banner && o.ontapBanner && bnNorm(o.banner) !== bnNorm(o.ontapBanner) && !BN_GENERIC.test(o.ontapBanner);
+      if (gD || bD) conflicts.push(o);
+    }
+  });
+  const overrides = Object.keys(bnState.overrides).map(id => ({ id, o: allOutlets[id] || manualOutlets[id], ov: bnState.overrides[id] })).filter(x => x.o);
+  const noBanner = st.filter(o => !o.majorGroup && !o.banner);
+  const res = { changes, conflicts, overrides, noBanner, register: bnRegister() };
+  _bnCache.res = res; return res;
+}
+
+// ---------- actions ----------
+function bnSetOverride(id, group, banner, reason) {
+  bnState.overrides[id] = { majorGroup: group || null, banner: banner || null, reason: reason || '', by: (typeof currentUserEmail !== 'undefined' && currentUserEmail) || (localStorage.getItem(LS_NAME_KEY) || ''), at: new Date().toISOString() };
+  bnPersist();
+}
+function bnUseOntap(id) { const o = allOutlets[id]; if (!o) return; bnSetOverride(id, BN_GENERIC.test(o.ontapMajorGroup || '') ? o.majorGroup : o.ontapMajorGroup, BN_GENERIC.test(o.ontapBanner || '') ? o.banner : o.ontapBanner, 'Use Ontap'); }
+function bnKeepHub(id) { const o = allOutlets[id]; if (!o) return; bnSetOverride(id, o.majorGroup, o.banner, 'Keep Hub value'); }
+function bnCustom(id) {
+  const o = allOutlets[id] || manualOutlets[id]; if (!o) return;
+  const g = window.prompt('Banner group (e.g. IBA, LMG, Star Liquor, HTM):', o.majorGroup || ''); if (g === null) return;
+  const b = window.prompt('Banner (e.g. Bottle-O, Cellarbrations, Bottlemart):', o.banner || ''); if (b === null) return;
+  bnSetOverride(id, g.trim(), b.trim(), 'Set manually');
+}
+function bnKeepPrev(id) { const o = allOutlets[id]; if (!o || !o.bnStored) return; bnSetOverride(id, o.bnStored.majorGroup, o.bnStored.banner, 'Keep previous value'); }
+function bnClearOverride(id) { delete bnState.overrides[id]; bnPersist(); }
+function bnToggleRule() {
+  bnState.ruleOn = !bnState.ruleOn;
+  if (!bnState.ruleOn && !confirm('Turn the banner list rule OFF? Customers go back to their previous Hub banner.')) { bnState.ruleOn = true; return; }
+  bnPersist();
+}
+
+// ---------- views ----------
+function bnPill(state) { const m = { current: ['green', 'Current'], ageing: ['amber', 'Ageing'], stale: ['red', 'Stale'], unknown: ['', 'Unknown'] }[state]; return `<span class="badge ${m[0]}">${m[1]}</span>`; }
+function bnRegisterHtml(c) {
+  const rows = c.register.map(r => `<tr>
+    <td><strong>${escapeHtml(r.group)}</strong><br><span class="muted" style="font-size:11.5px;">${escapeHtml(r.title)}</span></td>
+    <td>${escapeHtml(r.file)}<br><span class="muted">dated ${escapeHtml(r.fileDate)}${r.pd && r.pd.approx ? ' (month only)' : ''}</span></td>
+    <td>${bnPill(r.state)}<br><span class="muted" style="font-size:11.5px;">${r.age == null ? '' : r.age + ' days old'}</span></td>
+    <td>${escapeHtml(r.importedAt || '')}</td>
+    <td>${r.rows}</td>
+    <td><strong>${r.hi + r.med}</strong> of ${r.rows} (${r.rows ? Math.round((r.hi + r.med) / r.rows * 100) : 0}%)<br><span class="muted" style="font-size:11.5px;">${r.hi} high · ${r.med} medium</span></td>
+    <td>${r.sug ? `<span class="badge amber">${r.sug} suggested</span> ` : ''}${r.none ? `<span class="badge red">${r.none} no OutletID</span>` : ''}${!r.sug && !r.none ? '<span class="badge green">all done</span>' : ''}</td>
+    <td>${r.lastSearch ? escapeHtml(fmtDate ? fmtDate(r.lastSearch) : r.lastSearch) : (r.undated ? 'earlier round (undated)' : 'never')}${r.rekey ? `<br><span class="muted" style="font-size:11.5px;">${r.rekey} found IDs not yet re-keyed in Hub</span>` : ''}</td>
+    <td>${r.tagged}<br><span class="muted" style="font-size:11.5px;">${r.notOnList.length} not on this list</span></td></tr>`).join('');
+  const un = bnUnlisted().slice(0, 12).map(u => `<tr><td><strong>${escapeHtml(u.group)}</strong></td><td>${u.n.toLocaleString()} customers in the Hub</td><td><span class="badge red">No master list loaded</span></td></tr>`).join('');
+  return `<div class="hint" style="margin-top:8px;">Master lists are the source of truth for which stores belong to a banner group. This shows how current each list is and how far its OutletID search has got. A list more than 60 days old is ageing, more than 120 stale. Only <strong>high / medium confidence</strong> OutletID matches are allowed to set a customer's banner.</div>
+  <div class="row" style="gap:10px;margin:8px 0;align-items:center;"><span class="badge ${bnState.ruleOn ? 'green' : 'red'}">Banner list rule: ${bnState.ruleOn ? 'ON' : 'OFF'}</span><button class="btn small secondary" onclick="bnToggleRule()">${bnState.ruleOn ? 'Turn off' : 'Turn on'}</button>
+  <span class="muted" style="font-size:12px;">Order of authority: manual override → master list → Hub-reviewed banner → Ontap (never a generic “Independent”).</span></div>
+  <div class="tablewrap"><table class="datatable"><thead><tr><th>Banner group</th><th>Source file</th><th>Freshness</th><th>Loaded into Hub</th><th>Stores</th><th>OutletID found</th><th>Outstanding</th><th>Last OutletID search</th><th>Hub customers in group</th></tr></thead><tbody>${rows}</tbody></table></div>
+  <h3 style="margin:18px 0 6px;">Banner groups with no master list</h3>
+  <div class="tablewrap"><table class="datatable"><thead><tr><th>Banner group</th><th>Hub customers</th><th>List status</th></tr></thead><tbody>${un || '<tr><td colspan="3"><div class="empty">None.</div></td></tr>'}</tbody></table></div>
+  <div class="hint" style="margin-top:8px;">Liquor Legends came in as a one-off outlet export in Round 79, so it has no maintained list or OutletID search either.</div>`;
+}
+function bnChangesHtml(c) {
+  const body = c.changes.slice(0, 400).map(x => `<tr><td>${escapeHtml(x.o.name)}<br><span class="muted mono">${escapeHtml(x.o.id)}</span> ${escapeHtml(x.o.suburb || '')}</td><td>${escapeHtml(x.before.majorGroup || '—')} / ${escapeHtml(x.before.banner || '—')}</td><td><strong>${escapeHtml(x.o.majorGroup || '—')} / ${escapeHtml(x.o.banner || '—')}</strong><br><span class="muted" style="font-size:11.5px;">from the ${escapeHtml(BN_LIST_GROUP[x.list])} list</span></td><td><button class="btn small secondary" onclick="bnKeepPrev('${escapeHtml(x.o.id)}')">Keep previous</button></td></tr>`).join('');
+  return `<div class="hint" style="margin-top:8px;">Customers whose banner the list rule has changed. Nothing is lost: “Keep previous” sets a manual override back to the previous value.</div>` + dqTable(['Customer', 'Before', 'Now (list rule)', ''], body, 'bnchanges');
+}
+function bnConflictsHtml(c) {
+  const body = c.conflicts.slice(0, 400).map(o => { const id = escapeHtml(o.id); return `<tr><td>${escapeHtml(o.name)}<br><span class="muted mono">${id}</span> ${escapeHtml(o.suburb || '')}</td><td>${escapeHtml(o.majorGroup || '—')} / ${escapeHtml(o.banner || '—')}<br><span class="muted" style="font-size:11.5px;">Hub-reviewed</span></td><td>${escapeHtml(o.ontapMajorGroup || '—')} / ${escapeHtml(o.ontapBanner || '—')}<br><span class="muted" style="font-size:11.5px;">Ontap</span></td><td><button class="btn small" onclick="bnUseOntap('${id}')">Use Ontap</button> <button class="btn small secondary" onclick="bnKeepHub('${id}')">Keep Hub</button> <button class="btn small secondary" onclick="bnCustom('${id}')">Set…</button></td></tr>`; }).join('');
+  return `<div class="hint" style="margin-top:8px;">Customers not on any master list where the Hub-reviewed banner and Ontap disagree. Pick one — the choice is saved as a manual override and the row leaves this queue.</div>` + dqTable(['Customer', 'Hub', 'Ontap', 'Decide'], body, 'banner');
+}
+function bnNotOnListHtml(c) {
+  const rows = [];
+  c.register.forEach(r => r.notOnList.forEach(o => rows.push({ r, o })));
+  const body = rows.slice(0, 400).map(x => `<tr><td>${escapeHtml(x.o.name)}<br><span class="muted mono">${escapeHtml(x.o.id)}</span> ${escapeHtml(x.o.suburb || '')} ${escapeHtml(x.o.state || '')}</td><td>${escapeHtml(x.r.group)} / ${escapeHtml(x.o.banner || '—')}</td><td>${escapeHtml(x.o.bannerSource || '')}</td><td>${escapeHtml(x.o.rsm || '')}</td></tr>`).join('');
+  return `<div class="hint" style="margin-top:8px;">Customers tagged to a banner group that has a master list, but who are not on it. Either the list is out of date, the store has left the banner, or the OutletID search missed them. Check against the newest list.</div>` + dqTable(['Customer', 'Group / banner', 'Banner source', 'RSM'], body, 'bnnotlist');
+}
+function bnExport(kind) {
+  const c = bnCompute();
+  if (kind === 'bnregister') dqCsv('banner_list_register.csv', ['Group', 'File', 'File date', 'Age (days)', 'Loaded into Hub', 'Stores', 'OutletID high', 'OutletID medium', 'Suggested', 'No OutletID', 'Last OutletID search', 'Hub customers in group', 'Not on list'], c.register.map(r => [r.group, r.file, r.fileDate, r.age, r.importedAt, r.rows, r.hi, r.med, r.sug, r.none, r.lastSearch || '', r.tagged, r.notOnList.length]));
+  else if (kind === 'bnchanges') dqCsv('banner_changes_by_list_rule.csv', ['OutletID', 'Name', 'Before group', 'Before banner', 'Now group', 'Now banner', 'List'], c.changes.map(x => [x.o.id, x.o.name, x.before.majorGroup, x.before.banner, x.o.majorGroup, x.o.banner, x.list]));
+  else if (kind === 'bnnotlist') { const rows = []; c.register.forEach(r => r.notOnList.forEach(o => rows.push([r.group, o.id, o.name, o.suburb, o.state, o.banner, o.bannerSource, o.rsm]))); dqCsv('tagged_but_not_on_list.csv', ['List group', 'OutletID', 'Name', 'Suburb', 'State', 'Banner', 'Banner source', 'RSM'], rows); }
+}
+
+// ===================== QUARTER HIT LIST (Round 149) =====================
+// One record per venue. A hit-list target is a CUSTOMER record (existing customer, banner store placeholder, or a
+// customer added through New Customers); the Sales Funnel entry just points at it (p.outletId) and carries the
+// funnel-only fields (stage, priority, notes, next action). Name / address / suburb / zone / channel are read
+// from the customer record every time (nbSyncFromOutlet), so nothing is typed twice and nothing drifts.
+var qhRsm = '';
+var qhQuarter = '';
+var qhFilter = { search: '', type: '', zone: '', scope: 'rep', status: '' };
+var qhPendingAdd = null; // {rsm, quarter} while the user is adding a brand-new customer from here
+
+function nbSyncFromOutlet(p) {
+  if (!p || !p.outletId) return p;
+  const o = outlets[p.outletId]; if (!o) return p;
+  p.name = o.name || p.name; p.address = o.address || ''; p.suburb = o.suburb || ''; p.state = o.state || p.state || '';
+  p.postcode = o.postcode || ''; p.zone = o.zone || p.zone || '';
+  p.channel = /on premise/i.test(o.custType || '') ? 'on' : 'off';
+  if (o.banner || o.majorGroup) p.banner = o.banner || o.majorGroup;
+  return p;
+}
+function qhEntryFor(outletId, rsm, quarterKey) {
+  return salesProspects.find(p => p.outletId === outletId && (!rsm || p.rsm === rsm) && (!quarterKey || p.targetQuarter === quarterKey)) || null;
+}
+function qhAnyEntry(outletId) { return salesProspects.find(p => p.outletId === outletId && nbIsActive(p)) || null; }
+function qhStatusOf(o) {
+  if (isPlaceholderOutletId(o.id)) return { code: 'new', label: 'New - no sales yet', cls: 'amber' };
+  const s = (CRM_DATA.outletSummary || {})[o.id];
+  if (!s || !s.lastDate) return { code: 'new', label: 'New - no sales yet', cls: 'amber' };
+  const days = Math.round((Date.parse(todayStr() + 'T00:00:00Z') - Date.parse(s.lastDate + 'T00:00:00Z')) / 86400000);
+  return days <= 120 ? { code: 'active', label: 'Active customer', cls: 'green' } : { code: 'lapsed', label: 'Lapsed (' + Math.round(days / 30) + ' mths)', cls: 'red' };
+}
+function qhInit() {
+  const reps = nbReps();
+  if (!qhRsm) qhRsm = (nbFilter && nbFilter.rep) || (reps.find(r => r !== 'Sales MGR') || reps[0] || '');
+  if (!qhQuarter) qhQuarter = nbCurrentQuarterKey();
+}
+function qhAdd(outletId) {
+  qhInit(); const o = outlets[outletId]; if (!o) { toast('Customer not found.'); return; }
+  const same = qhEntryFor(outletId, qhRsm, qhQuarter);
+  if (same) { toast(o.name + ' is already on this hit list.'); return; }
+  const other = qhAnyEntry(outletId);
+  if (other && other.rsm === qhRsm) { // already in the funnel for this rep: move it to this quarter
+    other.targetQuarter = qhQuarter; nbLog(other, 'stage', 'Moved to the ' + qhQuarter + ' hit list'); nbPersist(other); qhRender(); return;
+  }
+  const p = { id: nbNewId(), outletId, name: o.name, rsm: qhRsm, targetQuarter: qhQuarter, stage: 'hitlist', priority: 'medium', estUnitType: 'kegs', contact: {}, activity: [], links: [], createdBy: nbUser(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  nbSyncFromOutlet(p); nbLog(p, 'stage', 'Added to the ' + qhQuarter + ' hit list for ' + qhRsm);
+  salesProspects.push(p); nbPersist(p); qhRender();
+}
+function qhRemove(id) {
+  const p = nbById(id); if (!p) return;
+  if (p.stage !== 'hitlist') { toast('Already in the funnel at "' + nbStageLabel(p.stage) + '" — move it to Lost in the Sales Funnel if you are dropping it.'); return; }
+  if (!confirm('Remove ' + p.name + ' from the hit list?')) return;
+  salesProspects = salesProspects.filter(x => x.id !== id); nbPersist(null, id); qhRender();
+}
+function qhSetPriority(id, v) { const p = nbById(id); if (!p) return; p.priority = v; p.updatedAt = new Date().toISOString(); nbPersist(p); qhRender(); }
+function qhSetRsm(v) { qhRsm = v; qhRender(); }
+function qhSetQuarter(v) { qhQuarter = v; qhRender(); }
+function qhSetFilter(k, v) { qhFilter[k] = v; qhRender(true); }
+function qhGo() { const b = document.querySelector('.tab-btn[data-tab="quarterhitlist"]'); if (b) b.click(); }
+function qhAddNewCustomer() {
+  qhInit(); qhPendingAdd = { rsm: qhRsm, quarter: qhQuarter };
+  const b = document.querySelector('.tab-btn[data-tab="newcustomers"]'); if (b) b.click();
+  try { const r = document.getElementById('nc_rsm'); if (r && qhRsm) r.value = qhRsm; } catch (e) { /* ignore */ }
+  toast('Add the customer here — when you save, they are added to the ' + qhRsm + ' ' + qhQuarter + ' hit list automatically.');
+}
+// called by saveNewCustomer (both builds) once the record exists
+function qhAfterNewCustomer(id) {
+  if (!qhPendingAdd) return;
+  const pend = qhPendingAdd; qhPendingAdd = null;
+  qhRsm = pend.rsm; qhQuarter = pend.quarter;
+  if (outlets[id]) { qhAdd(id); qhGo(); }
+}
+
+function qhUniverse() {
+  return Object.values(outlets).filter(o => o && o.id && o.volumeStream === 'Sales Team');
+}
+function qhSearchRows() {
+  const f = qhFilter; const q = (f.search || '').trim().toLowerCase();
+  const on = new Set(salesProspects.filter(p => p.rsm === qhRsm && p.targetQuarter === qhQuarter && p.outletId).map(p => p.outletId));
+  let list = qhUniverse().filter(o => !on.has(o.id));
+  if (f.scope === 'rep') list = list.filter(o => o.rsm === qhRsm);
+  if (f.type) list = list.filter(o => (o.custType || '(none)') === f.type);
+  if (f.zone) list = list.filter(o => (o.zone || '(none)') === f.zone);
+  if (f.status) list = list.filter(o => qhStatusOf(o).code === f.status);
+  if (q) list = list.filter(o => [o.name, o.suburb, o.postcode, o.address, o.banner, o.majorGroup, o.id].filter(Boolean).join(' ').toLowerCase().includes(q));
+  return list.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+function qhRows() {
+  return salesProspects.filter(p => p.rsm === qhRsm && p.targetQuarter === qhQuarter).map(nbSyncFromOutlet)
+    .sort((a, b) => (NB_PRIORITY_ORDER[a.priority] - NB_PRIORITY_ORDER[b.priority]) || String(a.suburb).localeCompare(String(b.suburb)) || String(a.name).localeCompare(String(b.name)));
+}
+function qhExportCsv() {
+  qhInit(); const rows = [['Quarter', 'Rep', 'Customer', 'OutletID', 'Suburb', 'Postcode', 'Type', 'Status', 'Priority', 'Funnel stage']].concat(qhRows().map(p => { const o = outlets[p.outletId] || {}; return [qhQuarter, qhRsm, p.name, p.outletId || '', p.suburb, p.postcode, o.custType || '', o.id ? qhStatusOf(o).label : '', p.priority, nbStageLabel(p.stage)]; }));
+  downloadFile('hit_list_' + qhRsm.replace(/\s+/g, '_') + '_' + qhQuarter + '.csv', rows.map(r => r.map(nbCsvCell).join(',')).join('\r\n'), 'text/csv');
+}
+function qhRender(keepFocus) {
+  const root = document.getElementById('qh_root'); if (!root) return;
+  qhInit();
+  const reps = nbReps(), f = qhFilter;
+  const types = [...new Set(qhUniverse().map(o => o.custType || '(none)'))].sort();
+  const zones = [...new Set(qhUniverse().map(o => o.zone || '(none)'))].sort();
+  const mine = qhRows();
+  const res = qhSearchRows();
+  const sel = (id, cur, opts, extra) => `<select ${extra || ''} onchange="${id}(this.value)">${opts.map(v => `<option value="${escapeHtml(v[0])}" ${v[0] === cur ? 'selected' : ''}>${escapeHtml(v[1])}</option>`).join('')}</select>`;
+  const addRows = res.slice(0, 150).map(o => { const st = qhStatusOf(o); const fe = qhAnyEntry(o.id); return `<tr><td><strong>${escapeHtml(o.name)}</strong><div class="hint">${escapeHtml(o.address || '')}</div></td><td>${escapeHtml(o.suburb || '—')}<div class="hint">${escapeHtml(o.zone || '')}</div></td><td>${escapeHtml(o.custType || '—')}${o.banner ? `<div class="hint">${escapeHtml(o.banner)}</div>` : ''}</td><td><span class="badge ${st.cls}">${escapeHtml(st.label)}</span></td><td>${fe ? `<span class="badge ${nbStageCls(fe.stage)}" title="Already in the funnel for ${escapeHtml(fe.rsm || '')} ${escapeHtml(fe.targetQuarter || '')}">${escapeHtml(nbStageLabel(fe.stage))}</span>` : ''}</td><td><button class="btn small" onclick="qhAdd('${escapeHtml(o.id)}')">+ Add</button></td></tr>`; }).join('');
+  const myRows = mine.map(p => { const o = outlets[p.outletId]; const st = o ? qhStatusOf(o) : { label: 'Prospect', cls: 'amber' }; const pr = NB_PRIORITY[p.priority] || NB_PRIORITY.medium;
+    return `<tr><td><strong>${escapeHtml(p.name)}</strong><div class="hint">${escapeHtml(p.address || '')}</div></td><td>${escapeHtml(p.suburb || '—')}</td><td><span class="badge ${st.cls}">${escapeHtml(st.label)}</span></td>
+      <td><select onchange="qhSetPriority('${p.id}', this.value)">${['high', 'medium', 'low'].map(k => `<option value="${k}" ${p.priority === k ? 'selected' : ''}>${NB_PRIORITY[k].label}</option>`).join('')}</select></td>
+      <td><span class="badge ${nbStageCls(p.stage)}">${escapeHtml(nbStageLabel(p.stage))}</span></td>
+      <td style="white-space:nowrap;"><button class="btn small secondary" onclick="nbPlanVisit('${p.id}')">Plan visit</button> <button class="btn small secondary" onclick="qhRemove('${p.id}')">Remove</button></td></tr>`; }).join('');
+  const html = `<div class="rowflex" style="gap:12px;flex-wrap:wrap;align-items:flex-end;margin:8px 0;">
+      <div class="fld" style="margin:0;"><label>Rep</label>${sel('qhSetRsm', qhRsm, reps.map(r => [r, r]))}</div>
+      <div class="fld" style="margin:0;"><label>Quarter</label>${sel('qhSetQuarter', qhQuarter, nbQuarterKeys().map(k => [k, k]))}</div>
+      <div style="margin-left:auto;"><button class="btn small secondary" onclick="qhExportCsv()">Export CSV</button> <button class="btn small" onclick="document.querySelector('.tab-btn[data-tab=newbusiness]').click()">Open Sales Funnel →</button></div></div>
+    <div class="nb-two" style="align-items:flex-start;">
+      <div><h3 style="margin:6px 0;">Hit list — ${escapeHtml(qhRsm)}, ${escapeHtml(qhQuarter)} <span class="muted" style="font-weight:400;">(${mine.length})</span></h3>
+        ${mine.length ? `<div class="tablewrap"><table class="datatable"><thead><tr><th>Customer</th><th>Suburb</th><th>Status</th><th>Priority</th><th>Funnel</th><th></th></tr></thead><tbody>${myRows}</tbody></table></div>` : '<div class="empty">Nothing on this hit list yet. Search the customer list on the right and add the venues you are targeting this quarter.</div>'}
+        <div class="hint" style="margin-top:8px;">Everything on this list is in the Sales Funnel as “Hit List” and shows up in the Journey Planner for ${escapeHtml(qhRsm)}.</div></div>
+      <div><h3 style="margin:6px 0;">Add from the customer list</h3>
+        <div class="rowflex" style="gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:6px;">
+          <div class="fld" style="margin:0;"><label>Search</label><input id="qh_search" value="${escapeHtml(f.search)}" placeholder="name, suburb, postcode, banner…" oninput="qhSetFilter('search', this.value)" style="min-width:200px;"></div>
+          <div class="fld" style="margin:0;"><label>Show</label>${sel("qhFilterScope", f.scope, [['rep', qhRsm + "'s customers"], ['all', 'All customers']])}</div>
+          <div class="fld" style="margin:0;"><label>Type</label>${sel("qhFilterType", f.type, [['', 'All']].concat(types.map(t => [t, t])))}</div>
+          <div class="fld" style="margin:0;"><label>Zone</label>${sel("qhFilterZone", f.zone, [['', 'All']].concat(zones.map(t => [t, t])))}</div>
+          <div class="fld" style="margin:0;"><label>Status</label>${sel("qhFilterStatus", f.status, [['', 'All'], ['active', 'Active'], ['lapsed', 'Lapsed'], ['new', 'New / no sales']])}</div></div>
+        <div class="hint" style="margin-bottom:6px;">${res.length.toLocaleString()} customers${res.length > 150 ? ' (showing 150 — narrow the search)' : ''}. Can't find the venue? <button class="btn small" onclick="qhAddNewCustomer()">+ Add as a new customer</button></div>
+        <div class="tablewrap" style="max-height:520px;overflow:auto;"><table class="datatable"><thead><tr><th>Customer</th><th>Suburb</th><th>Type</th><th>Status</th><th>In funnel</th><th></th></tr></thead><tbody>${addRows || '<tr><td colspan="6"><div class="empty">No customers match.</div></td></tr>'}</tbody></table></div></div>
+    </div>`;
+  root.innerHTML = html;
+  if (keepFocus) { const s = document.getElementById('qh_search'); if (s && s.focus) { s.focus(); try { s.setSelectionRange(s.value.length, s.value.length); } catch (e) { /* ignore */ } } }
+}
+function qhFilterScope(v) { qhSetFilter('scope', v); }
+function qhFilterType(v) { qhSetFilter('type', v); }
+function qhFilterZone(v) { qhSetFilter('zone', v); }
+function qhFilterStatus(v) { qhSetFilter('status', v); }
+function renderQuarterHitListPage() { qhRender(); }
+
+// funnel stage badge on any Journey Planner chip whose customer is in the funnel
+function nbFunnelBadge(outletId) {
+  const p = salesProspects.find(x => x.outletId === outletId && nbIsActive(x)); if (!p) return '';
+  return `<span class="badge amber" title="In the Sales Funnel">🎯 ${escapeHtml(nbStageLabel(p.stage))}</span>`;
+}
+
+// ===================== ACCOUNTS & CONTACTS (Round 150) =====================
+// Organisations that are not (just) a single venue: pub group owners, banner head offices, category managers,
+// wholesalers/distributors, other customers. People sit under accounts; accounts link to many outlets.
+var LS_AC = 'ymtAccountsV1';
+var AC_TYPES = {
+  pub_group_owner: 'Pub group owner',
+  banner_ho: 'Banner head office',
+  category_manager: 'Category manager',
+  wholesaler: 'Wholesaler / distributor',
+  other_customer: 'Other customer',
+  other: 'Other'
+};
+var acState = { accounts: [] };
+var acSel = null, acFilterType = '', acSearch = '', acLinkQ = '', acEditingContact = null;
+
+function acNorm(s) { return String(s || '').toLowerCase().replace(/&/g, 'and').replace(/^the\s+/, '').replace(/[^a-z0-9]/g, ''); }
+function acId(p) { return (p || 'ac') + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function acClean(st) {
+  const out = { accounts: [] };
+  ((st && st.accounts) || []).forEach(a => {
+    if (!a || !a.id) return;
+    out.accounts.push({
+      id: String(a.id), name: String(a.name || '').slice(0, 120), type: AC_TYPES[a.type] ? a.type : 'other',
+      banner: String(a.banner || '').slice(0, 60), notes: String(a.notes || '').slice(0, 1000), source: String(a.source || '').slice(0, 80),
+      outletIds: (a.outletIds || []).map(x => String(x).slice(0, 80)).slice(0, 2000),
+      contacts: (a.contacts || []).slice(0, 100).map(c => ({ id: String(c.id || acId('ct')), name: String(c.name || '').slice(0, 120), role: String(c.role || '').slice(0, 80), email: String(c.email || '').slice(0, 160), phone: String(c.phone || '').slice(0, 60) })),
+      updatedAt: String(a.updatedAt || ''), by: String(a.by || '').slice(0, 80)
+    });
+  });
+  return out;
+}
+function acLoadLocal() { try { const s = JSON.parse(localStorage.getItem(LS_AC)); if (s) acState = acClean(s); } catch (e) { /* ignore */ } }
+function acFromServer(d) { acState = acClean(d || { accounts: [] }); }
+function acPersist() {
+  if (typeof callServer === 'function') callServer('saveAccounts', [acState], d => { if (d && d.accounts) acState = acClean(d.accounts); acRender(); }, null);
+  else { try { localStorage.setItem(LS_AC, JSON.stringify(acState)); } catch (e) { /* ignore */ } }
+}
+function acTouch(a) { a.updatedAt = new Date().toISOString(); try { a.by = localStorage.getItem(LS_NAME_KEY) || ''; } catch (e) { /* ignore */ } }
+function acGet(id) { return acState.accounts.find(a => a.id === id); }
+function acOutletPool() { return (typeof allOutlets === 'object' && allOutlets) ? allOutlets : outlets; }
+
+// ---------- import from existing Family Groups + VIP Contacts (idempotent) ----------
+function acImport() {
+  let added = 0, merged = 0, skipped = 0;
+  const bySource = new Map(acState.accounts.map(a => [a.source, a]));
+  const byName = new Map(acState.accounts.map(a => [acNorm(a.name), a]));
+  (familyGroupsData || []).forEach(g => {
+    const key = 'fg:' + g.id;
+    let a = bySource.get(key);
+    if (!a) {
+      a = { id: acId('ac'), name: g.name, type: 'pub_group_owner', banner: '', notes: '', source: key, outletIds: [], contacts: [], updatedAt: '', by: '' };
+      acState.accounts.push(a); bySource.set(key, a); byName.set(acNorm(a.name), a); added++;
+    } else merged++;
+    (g.memberOutletIds || []).forEach(id => { if (!a.outletIds.includes(String(id))) a.outletIds.push(String(id)); });
+    (g.contacts || []).forEach(c => { if (!a.contacts.some(x => acNorm(x.name) === acNorm(c.name))) a.contacts.push({ id: acId('ct'), name: c.name || '', role: c.position || '', email: c.email || '', phone: c.phone || '' }); });
+    acTouch(a);
+  });
+  const TYPE_BY_SRC = { 'Liquor Legends VIP': 'banner_ho', 'Independent Banner Contact': 'banner_ho', 'National Account Contact': 'banner_ho', 'Wholesaler Rep Contact': 'wholesaler' };
+  (vipContacts || []).forEach(v => {
+    const type = TYPE_BY_SRC[v.source];
+    if (!type) { skipped++; return; }          // venue key contacts / clubs stay in VIP Contacts
+    const nm = String(v.company || '').trim(); if (!nm) { skipped++; return; }
+    let a = byName.get(acNorm(nm));
+    if (!a) {
+      a = { id: acId('ac'), name: nm, type, banner: '', notes: '', source: 'vip:' + acNorm(nm), outletIds: [], contacts: [], updatedAt: '', by: '' };
+      acState.accounts.push(a); byName.set(acNorm(nm), a); added++;
+    }
+    if (!a.contacts.some(x => acNorm(x.name) === acNorm(v.name) && acNorm(x.email) === acNorm(v.email))) a.contacts.push({ id: acId('ct'), name: v.name || '', role: v.role || '', email: v.email || '', phone: v.phone || '' });
+    acTouch(a);
+  });
+  acPersist(); acRender();
+  toast('Imported: ' + added + ' new accounts, ' + merged + ' updated. ' + skipped + ' venue-level VIP contacts left in VIP Contacts.');
+}
+
+// ---------- customers that are really accounts ----------
+function acUntypedCustomers() {
+  const linked = new Set(); acState.accounts.forEach(a => a.outletIds.forEach(id => linked.add(String(id))));
+  return Object.values(outlets).filter(o => o && o.id && (o.custType === 'Other Customers' || !o.custType) && !linked.has(String(o.id)));
+}
+function acMakeFromOutlet(id) {
+  const o = outlets[id]; if (!o) return;
+  const a = { id: acId('ac'), name: o.name, type: 'other_customer', banner: o.banner || o.majorGroup || '', notes: '', source: 'outlet:' + id, outletIds: [String(id)], contacts: [], updatedAt: '', by: '' };
+  acTouch(a); acState.accounts.push(a); acSel = a.id; acPersist(); acRender();
+}
+
+// ---------- CRUD ----------
+function acNewAccount() {
+  const a = { id: acId('ac'), name: 'New account', type: 'pub_group_owner', banner: '', notes: '', source: 'manual', outletIds: [], contacts: [], updatedAt: '', by: '' };
+  acTouch(a); acState.accounts.push(a); acSel = a.id; acPersist(); acRender();
+}
+function acField(id, field, val) {
+  const a = acGet(id); if (!a) return;
+  if (field === 'type' && !AC_TYPES[val]) return;
+  a[field] = val; acTouch(a); acPersist(); acRender();
+}
+function acDelete(id) {
+  const a = acGet(id); if (!a) return;
+  if (typeof confirm === 'function' && !confirm('Delete account "' + a.name + '" and its contacts? Venues are not affected.')) return;
+  acState.accounts = acState.accounts.filter(x => x.id !== id); if (acSel === id) acSel = null; acPersist(); acRender();
+}
+function acLink(id, outletId) {
+  const a = acGet(id); if (!a || !outlets[outletId] && !acOutletPool()[outletId]) return;
+  if (!a.outletIds.includes(String(outletId))) a.outletIds.push(String(outletId));
+  acTouch(a); acPersist(); acRender();
+}
+function acUnlink(id, outletId) { const a = acGet(id); if (!a) return; a.outletIds = a.outletIds.filter(x => x !== String(outletId)); acTouch(a); acPersist(); acRender(); }
+function acSaveContact(id, contactId) {
+  const a = acGet(id); if (!a) return;
+  const g = k => { const el = document.getElementById('ac_ct_' + k); return el ? String(el.value || '').trim() : ''; };
+  const rec = { id: contactId || acId('ct'), name: g('name'), role: g('role'), email: g('email'), phone: g('phone') };
+  if (!rec.name) { toast('Enter a contact name.'); return; }
+  const i = a.contacts.findIndex(c => c.id === rec.id);
+  if (i >= 0) a.contacts[i] = rec; else a.contacts.push(rec);
+  acEditingContact = null; acTouch(a); acPersist(); acRender();
+}
+function acEditContact(contactId) { acEditingContact = contactId; acRender(); }
+function acDeleteContact(id, contactId) { const a = acGet(id); if (!a) return; a.contacts = a.contacts.filter(c => c.id !== contactId); acTouch(a); acPersist(); acRender(); }
+function acSelect(id) { acSel = id; acEditingContact = null; acLinkQ = ''; acRender(); }
+function acSetType(v) { acFilterType = v; acRender(); }
+function acSetSearch(v) { acSearch = v; acRenderList(); }
+function acSetLinkQ(v) { acLinkQ = v; acRenderLinkResults(); }
+
+// ---------- funnel bridge: pub group owner = multi-venue prospect ----------
+function acToHitList(id) {
+  const a = acGet(id); if (!a) return;
+  if (typeof qhFilter === 'object') { qhFilter.search = a.name; qhFilter.scope = 'all'; }
+  if (typeof qhGo === 'function') qhGo();
+  toast('Hit List search set to "' + a.name + '" — pick the venues to target.');
+}
+function acAddLinkedToHitList(id) {
+  const a = acGet(id); if (!a || typeof qhAdd !== 'function') return;
+  let n = 0;
+  a.outletIds.forEach(oid => { if (outlets[oid] && !(typeof qhAnyEntry === 'function' && qhAnyEntry(oid))) { qhAdd(oid); n++; } });
+  toast(n + ' linked venue' + (n === 1 ? '' : 's') + ' added to the Quarter Hit List.');
+  acRender();
+}
+
+// ---------- export ----------
+function acExportCsv() {
+  const rows = [['Account', 'Type', 'Banner', 'Linked venues', 'Contact', 'Role', 'Email', 'Phone', 'Notes']];
+  acState.accounts.forEach(a => {
+    const base = [a.name, AC_TYPES[a.type] || a.type, a.banner, a.outletIds.length];
+    if (!a.contacts.length) rows.push(base.concat(['', '', '', '', a.notes]));
+    a.contacts.forEach(c => rows.push(base.concat([c.name, c.role, c.email, c.phone, a.notes])));
+  });
+  const cell = typeof nbCsvCell === 'function' ? nbCsvCell : (v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"');
+  downloadFile('accounts_and_contacts_' + todayStr() + '.csv', rows.map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv');
+}
+
+// ---------- render ----------
+function acFiltered() {
+  const q = acNorm(acSearch);
+  return acState.accounts.filter(a => (!acFilterType || a.type === acFilterType) &&
+    (!q || acNorm(a.name + ' ' + a.banner + ' ' + a.contacts.map(c => c.name + c.email).join(' ')).includes(q)))
+    .sort((x, y) => x.name.localeCompare(y.name));
+}
+function acRenderList() {
+  const el = document.getElementById('ac_list'); if (!el) return;
+  const list = acFiltered();
+  el.innerHTML = list.length ? list.map(a => `<div class="hint" style="padding:6px 8px;cursor:pointer;border-bottom:1px solid #eee;${a.id === acSel ? 'background:#eef6ff;' : ''}" onclick="acSelect('${a.id}')"><strong>${escapeHtml(a.name)}</strong><br>${escapeHtml(AC_TYPES[a.type] || a.type)} · ${a.outletIds.length} venue${a.outletIds.length === 1 ? '' : 's'} · ${a.contacts.length} contact${a.contacts.length === 1 ? '' : 's'}</div>`).join('')
+    : '<div class="hint" style="padding:8px;">No accounts match. Use “Import from Family Groups & VIP Contacts” or “+ New account”.</div>';
+}
+function acRenderLinkResults() {
+  const el = document.getElementById('ac_linkres'); if (!el) return;
+  const a = acGet(acSel); if (!a) { el.innerHTML = ''; return; }
+  const q = acLinkQ.trim().toLowerCase();
+  if (q.length < 2) { el.innerHTML = '<div class="hint">Type 2+ letters of a venue name, suburb or OutletID.</div>'; return; }
+  const pool = Object.values(acOutletPool()).filter(o => o && o.id && !a.outletIds.includes(String(o.id)) && [o.name, o.suburb, o.id, o.banner].filter(Boolean).join(' ').toLowerCase().includes(q)).slice(0, 8);
+  el.innerHTML = pool.map(o => `<div class="hint" style="padding:3px 0;"><button class="btn small" onclick="acLink('${a.id}','${escapeHtml(String(o.id))}')">Link</button> ${escapeHtml(o.name)} <span style="color:#888">${escapeHtml(o.suburb || '')} · ${escapeHtml(String(o.id))}</span></div>`).join('') || '<div class="hint">No matches.</div>';
+}
+function acDetailHtml(a) {
+  const typeOpts = Object.keys(AC_TYPES).map(k => `<option value="${k}" ${a.type === k ? 'selected' : ''}>${AC_TYPES[k]}</option>`).join('');
+  const venues = a.outletIds.map(id => { const o = outlets[id] || acOutletPool()[id]; return `<tr><td>${escapeHtml(o ? o.name : '(not in Hub)')}</td><td>${escapeHtml(o ? (o.suburb || '') : '')}</td><td>${escapeHtml(String(id))}</td><td>${escapeHtml(o ? (o.custType || '') : '')}</td><td><button class="btn small" onclick="acUnlink('${a.id}','${escapeHtml(String(id))}')">Unlink</button></td></tr>`; }).join('');
+  const contacts = a.contacts.map(c => acEditingContact === c.id ? acContactForm(a, c) :
+    `<tr><td><strong>${escapeHtml(c.name)}</strong></td><td>${escapeHtml(c.role)}</td><td>${escapeHtml(c.email)}</td><td>${escapeHtml(c.phone)}</td><td><button class="btn small" onclick="acEditContact('${c.id}')">Edit</button> <button class="btn small" onclick="acDeleteContact('${a.id}','${c.id}')">Remove</button></td></tr>`).join('');
+  return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <input type="text" value="${escapeHtml(a.name)}" style="min-width:240px;" onchange="acField('${a.id}','name',this.value)">
+    <select onchange="acField('${a.id}','type',this.value)">${typeOpts}</select>
+    <input type="text" placeholder="Banner / group (optional)" value="${escapeHtml(a.banner)}" onchange="acField('${a.id}','banner',this.value)">
+    <button class="btn small" onclick="acToHitList('${a.id}')">Find venues on Hit List</button>
+    <button class="btn small" onclick="acAddLinkedToHitList('${a.id}')">Add linked venues to Hit List</button>
+    <button class="btn small" onclick="acDelete('${a.id}')">Delete</button></div>
+  <textarea rows="2" style="width:100%;margin-top:6px;" placeholder="Notes" onchange="acField('${a.id}','notes',this.value)">${escapeHtml(a.notes)}</textarea>
+  <h3 style="margin:10px 0 4px;">Contacts</h3>
+  <table class="data-table"><thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Phone</th><th></th></tr></thead><tbody>${contacts}${acEditingContact === 'new' ? acContactForm(a, null) : ''}</tbody></table>
+  ${acEditingContact === 'new' ? '' : `<button class="btn small" style="margin-top:4px;" onclick="acEditContact('new')">+ Add contact</button>`}
+  <h3 style="margin:10px 0 4px;">Linked venues (${a.outletIds.length})</h3>
+  <input type="text" id="ac_linkq" placeholder="Search venues to link…" value="${escapeHtml(acLinkQ)}" oninput="acSetLinkQ(this.value)" style="min-width:260px;">
+  <div id="ac_linkres"></div>
+  ${a.outletIds.length ? `<table class="data-table"><thead><tr><th>Venue</th><th>Suburb</th><th>OutletID</th><th>Type</th><th></th></tr></thead><tbody>${venues}</tbody></table>` : '<div class="hint">No venues linked yet.</div>'}
+  <div class="hint" style="margin-top:6px;">Last updated ${escapeHtml(a.updatedAt ? fmtDate(a.updatedAt.slice(0, 10)) : '—')}${a.by ? ' by ' + escapeHtml(a.by) : ''}${a.source ? ' · source: ' + escapeHtml(a.source) : ''}</div>`;
+}
+function acContactForm(a, c) {
+  const v = k => escapeHtml(c ? (c[k] || '') : '');
+  return `<tr><td><input type="text" id="ac_ct_name" value="${v('name')}" placeholder="Name"></td><td><input type="text" id="ac_ct_role" value="${v('role')}" placeholder="Role"></td><td><input type="text" id="ac_ct_email" value="${v('email')}" placeholder="Email"></td><td><input type="text" id="ac_ct_phone" value="${v('phone')}" placeholder="Phone"></td><td><button class="btn small" onclick="acSaveContact('${a.id}', ${c ? "'" + c.id + "'" : 'null'})">Save</button> <button class="btn small" onclick="acEditContact(null)">Cancel</button></td></tr>`;
+}
+function acRender() {
+  const root = document.getElementById('ac_root'); if (!root) return;
+  const typeOpts = [['', 'All types']].concat(Object.keys(AC_TYPES).map(k => [k, AC_TYPES[k]])).map(o => `<option value="${o[0]}" ${o[0] === acFilterType ? 'selected' : ''}>${o[1]}</option>`).join('');
+  const counts = {}; acState.accounts.forEach(a => { counts[a.type] = (counts[a.type] || 0) + 1; });
+  const summary = Object.keys(AC_TYPES).filter(k => counts[k]).map(k => `${AC_TYPES[k]}: <strong>${counts[k]}</strong>`).join(' · ') || 'No accounts yet';
+  const untyped = acUntypedCustomers();
+  const a = acGet(acSel);
+  root.innerHTML = `<div class="hint">${summary} · People: <strong>${acState.accounts.reduce((n, x) => n + x.contacts.length, 0)}</strong></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;align-items:center;">
+    <select onchange="acSetType(this.value)">${typeOpts}</select>
+    <input type="text" id="ac_search" placeholder="Search accounts / people…" value="${escapeHtml(acSearch)}" oninput="acSetSearch(this.value)">
+    <button class="btn small" onclick="acNewAccount()">+ New account</button>
+    <button class="btn small" onclick="acImport()">Import from Family Groups &amp; VIP Contacts</button>
+    <button class="btn small" onclick="acExportCsv()">Export CSV</button></div>
+  <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;">
+    <div id="ac_list" style="flex:0 0 300px;max-height:520px;overflow:auto;border:1px solid #ddd;border-radius:6px;"></div>
+    <div style="flex:1;min-width:420px;">${a ? acDetailHtml(a) : '<div class="hint">Select an account, or create one.</div>'}</div></div>
+  <details style="margin-top:12px;"${untyped.length ? ' open' : ''}><summary><strong>Customers that look like accounts, not venues (${untyped.length})</strong> — “Other Customers” or no customer type, not linked to any account</summary>
+    <table class="data-table"><thead><tr><th>Customer</th><th>Suburb</th><th>OutletID</th><th>Type</th><th></th></tr></thead><tbody>${untyped.slice(0, 100).map(o => `<tr><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.suburb || '')}</td><td>${escapeHtml(String(o.id))}</td><td>${escapeHtml(o.custType || '(none)')}</td><td><button class="btn small" onclick="acMakeFromOutlet('${escapeHtml(String(o.id))}')">Make account</button></td></tr>`).join('')}</tbody></table></details>`;
+  acRenderList(); acRenderLinkResults();
+}
+function renderAccountsPage() { acRender(); }
 
 // ===================== BANNER STORE LISTS (Round 139) =====================
 // Master banner store lists (LMG / Star Liquor Group / IBA) as supplied by the banner groups, each store
@@ -17198,6 +18069,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'banneractivation' && typeof renderBannerActivationPage === 'function') renderBannerActivationPage(); // Round 140
     if (btn.dataset.tab === 'bannerclaims' && typeof renderBannerClaimsPage === 'function') renderBannerClaimsPage(); // Round 145
     if (btn.dataset.tab === 'newbusiness' && typeof renderNewBusinessPage === 'function') renderNewBusinessPage(); // Round 146
+    if (btn.dataset.tab === 'quarterhitlist' && typeof renderQuarterHitListPage === 'function') renderQuarterHitListPage(); // Round 149
+    if (btn.dataset.tab === 'accounts' && typeof renderAccountsPage === 'function') renderAccountsPage(); // Round 150
+    if (btn.dataset.tab === 'dataquality' && typeof renderDataQualityPage === 'function') renderDataQualityPage(); // Round 147
     if (btn.dataset.tab === 'lostlistings' && typeof renderLostListingsPage === 'function') renderLostListingsPage(); // Round 142
     if (btn.dataset.tab === 'emailreports' && typeof renderEmailReportsPage === 'function') renderEmailReportsPage(); // Round 142
     if (btn.dataset.tab === 'dupcustomers' && typeof renderDupPage === 'function') renderDupPage(); // Round 124
@@ -18120,6 +18994,9 @@ function onInitialDataLoaded(data) {
   familyGroupsData = data.familyGroupsData || [];
   familyGroupDeals = data.familyGroupDeals || {}; bannerActivationDeals = data.bannerActivationDeals || []; _badIdx = null; bannerClaims = data.bannerClaims || []; // Round 145
   salesProspects = data.salesProspects || []; try { nbFilter.rep = localStorage.getItem(LS_NB_REP) || ''; } catch (e) { /* ignore */ } // Round 146
+  if (typeof dqFromServer === 'function') dqFromServer(data.dataQuality); // Round 147
+  if (typeof bnFromServer === 'function') bnFromServer(data.bannerRule); // Round 148
+  if (typeof acFromServer === 'function') acFromServer(data.accounts); // Round 150
   lostDismissals = data.lostListingDismissals || {}; emailSettings = data.emailSettings || null; _lrCache = null; // Round 140/142
   rsmZoneOverrides = data.rsmZoneOverrides || {};
   naTargets = data.naTargets || {};
@@ -18183,6 +19060,9 @@ function refreshPricingFromServer() {
       familyGroupsData = data.familyGroupsData || [];
       familyGroupDeals = data.familyGroupDeals || {}; bannerActivationDeals = data.bannerActivationDeals || []; _badIdx = null; bannerClaims = data.bannerClaims || []; // Round 145
   salesProspects = data.salesProspects || []; try { nbFilter.rep = localStorage.getItem(LS_NB_REP) || ''; } catch (e) { /* ignore */ } // Round 146
+  if (typeof dqFromServer === 'function') dqFromServer(data.dataQuality); // Round 147
+  if (typeof bnFromServer === 'function') bnFromServer(data.bannerRule); // Round 148
+  if (typeof acFromServer === 'function') acFromServer(data.accounts); // Round 150
   lostDismissals = data.lostListingDismissals || {}; emailSettings = data.emailSettings || null; _lrCache = null; // Round 140/142
       rsmZoneOverrides = data.rsmZoneOverrides || {};
       naTargets = data.naTargets || {};

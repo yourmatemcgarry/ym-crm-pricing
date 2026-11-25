@@ -128,6 +128,9 @@ async function readAll(s) {
   const bannerActivationDeals = (await s.get('bannerActivationDeals', { type: 'json' })) || []; // Round 140
   const bannerClaims = (await s.get('bannerClaims', { type: 'json' })) || []; // Round 145
   const salesProspects = (await s.get('salesProspects', { type: 'json' })) || []; // Round 146
+  const dataQuality = (await s.get('dataQuality', { type: 'json' })) || { status: {}, retired: {} }; // Round 147
+  const bannerRule = (await s.get('bannerRule', { type: 'json' })) || { ruleOn: true, overrides: {} }; // Round 148
+  const accounts = (await s.get('accounts', { type: 'json' })) || { accounts: [] }; // Round 150
   const lostListingDismissals = (await s.get('lostListingDismissals', { type: 'json' })) || {}; // Round 142
   const emailSettings = (await s.get('emailSettings', { type: 'json' })) || null; // Round 142
   // Round 141: one-time RSM allocation (flag-gated, like the seeds above): every zone -> Paradiso Rep; the top 60 active
@@ -296,6 +299,9 @@ async function readAll(s) {
     bannerActivationDeals: bannerActivationDeals || [],
     bannerClaims: bannerClaims || [],
     salesProspects: salesProspects || [],
+    dataQuality,
+    bannerRule,
+    accounts,
     lostListingDismissals: lostListingDismissals || {},
     emailSettings: emailSettings || null,
     journeyPlans: journeyPlans || {},
@@ -1437,6 +1443,46 @@ export default async (req) => {
       if (idx >= 0) current[idx] = prospect; else current.push(prospect);
       await s.setJSON('salesProspects', current);
       return json({ ok: true, salesProspects: current });
+    }
+
+    if (action === 'saveAccounts') {
+      // Round 150: Accounts & Contacts (pub group owners, banner HO, category managers, wholesalers...)
+      const st = payload && payload.state;
+      if (!st || !Array.isArray(st.accounts)) return json({ error: 'Invalid state' }, 400);
+      const TYPES = ['pub_group_owner', 'banner_ho', 'category_manager', 'wholesaler', 'other_customer', 'other'];
+      const str = (v, n) => String(v == null ? '' : v).slice(0, n);
+      const clean = { accounts: st.accounts.slice(0, 3000).filter((a) => a && a.id).map((a) => ({
+        id: str(a.id, 60), name: str(a.name, 120), type: TYPES.includes(a.type) ? a.type : 'other', banner: str(a.banner, 60), notes: str(a.notes, 1000), source: str(a.source, 80),
+        outletIds: (Array.isArray(a.outletIds) ? a.outletIds : []).slice(0, 2000).map((x) => str(x, 80)),
+        contacts: (Array.isArray(a.contacts) ? a.contacts : []).slice(0, 100).map((c) => ({ id: str(c && c.id, 60), name: str(c && c.name, 120), role: str(c && c.role, 80), email: str(c && c.email, 160), phone: str(c && c.phone, 60) })),
+        updatedAt: str(a.updatedAt, 40), by: str(a.by, 80) })) };
+      await s.setJSON('accounts', clean);
+      return json({ ok: true, accounts: clean });
+    }
+
+    if (action === 'saveBannerRule') {
+      // Round 148: banner source-of-truth rule — on/off switch + manual per-customer overrides.
+      const st = payload && payload.state;
+      if (!st || typeof st !== 'object') return json({ error: 'Invalid state' }, 400);
+      const str = (v, n) => (v == null ? null : String(v).slice(0, n));
+      const clean = { ruleOn: st.ruleOn !== false, overrides: {} };
+      Object.keys(st.overrides || {}).forEach((id) => {
+        const o = st.overrides[id] || {};
+        clean.overrides[String(id).slice(0, 80)] = { majorGroup: str(o.majorGroup, 60), banner: str(o.banner, 60), reason: str(o.reason, 120) || '', by: str(o.by, 120) || '', at: str(o.at, 40) || '' };
+      });
+      await s.setJSON('bannerRule', clean);
+      return json({ ok: true, bannerRule: clean });
+    }
+
+    if (action === 'saveDataQuality') {
+      // Round 147: Data Quality state — placeholder status tags + the ids of placeholder records already merged away.
+      const st = payload && payload.state;
+      if (!st || typeof st !== 'object') return json({ error: 'Invalid state' }, 400);
+      const clean = { status: {}, retired: {} };
+      Object.keys(st.status || {}).forEach((k) => { if (['awaiting', 'bannerstore'].includes(st.status[k])) clean.status[String(k)] = st.status[k]; });
+      Object.keys(st.retired || {}).forEach((k) => { if (/^(lmg:|slg:|new_)/.test(k)) clean.retired[String(k)] = String(st.retired[k]); });
+      await s.setJSON('dataQuality', clean);
+      return json({ ok: true, dataQuality: clean });
     }
 
     if (action === 'deleteProspect') {
