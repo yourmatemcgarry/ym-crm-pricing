@@ -18118,7 +18118,9 @@ function onInitialDataLoaded(data) {
   naDistributions = data.naDistributions || {};
   vipContacts = data.vipContacts || [];
   familyGroupsData = data.familyGroupsData || [];
-  familyGroupDeals = data.familyGroupDeals || {}; bannerActivationDeals = data.bannerActivationDeals || []; _badIdx = null; bannerClaims = data.bannerClaims || []; // Round 145 salesProspects = data.salesProspects || []; try { nbFilter.rep = localStorage.getItem(LS_NB_REP) || ''; } catch (e) { /* ignore */ } // Round 146 lostDismissals = data.lostListingDismissals || {}; emailSettings = data.emailSettings || null; _lrCache = null; // Round 140/142
+  familyGroupDeals = data.familyGroupDeals || {}; bannerActivationDeals = data.bannerActivationDeals || []; _badIdx = null; bannerClaims = data.bannerClaims || []; // Round 145
+  salesProspects = data.salesProspects || []; try { nbFilter.rep = localStorage.getItem(LS_NB_REP) || ''; } catch (e) { /* ignore */ } // Round 146
+  lostDismissals = data.lostListingDismissals || {}; emailSettings = data.emailSettings || null; _lrCache = null; // Round 140/142
   rsmZoneOverrides = data.rsmZoneOverrides || {};
   naTargets = data.naTargets || {};
   fyForecastInputs = data.fyForecastInputs || {};
@@ -18179,7 +18181,9 @@ function refreshPricingFromServer() {
       naDistributions = data.naDistributions || {};
   vipContacts = data.vipContacts || [];
       familyGroupsData = data.familyGroupsData || [];
-      familyGroupDeals = data.familyGroupDeals || {}; bannerActivationDeals = data.bannerActivationDeals || []; _badIdx = null; bannerClaims = data.bannerClaims || []; // Round 145 salesProspects = data.salesProspects || []; try { nbFilter.rep = localStorage.getItem(LS_NB_REP) || ''; } catch (e) { /* ignore */ } // Round 146 lostDismissals = data.lostListingDismissals || {}; emailSettings = data.emailSettings || null; _lrCache = null; // Round 140/142
+      familyGroupDeals = data.familyGroupDeals || {}; bannerActivationDeals = data.bannerActivationDeals || []; _badIdx = null; bannerClaims = data.bannerClaims || []; // Round 145
+  salesProspects = data.salesProspects || []; try { nbFilter.rep = localStorage.getItem(LS_NB_REP) || ''; } catch (e) { /* ignore */ } // Round 146
+  lostDismissals = data.lostListingDismissals || {}; emailSettings = data.emailSettings || null; _lrCache = null; // Round 140/142
       rsmZoneOverrides = data.rsmZoneOverrides || {};
       naTargets = data.naTargets || {};
       fyForecastInputs = data.fyForecastInputs || {};
