@@ -1445,6 +1445,26 @@ export default async (req) => {
       return json({ ok: true, salesProspects: current });
     }
 
+    if (action === 'bulkKaylaImport') {
+      // Round 153: one write per collection. 185 parallel single-record saves each read-modify-wrote the same
+      // blob and overwrote each other (only ~31 prospects survived), so the import now sends everything at once.
+      const prospects = Array.isArray(payload.prospects) ? payload.prospects : [];
+      const outlets = Array.isArray(payload.outlets) ? payload.outlets : [];
+      const pins = payload.pins && typeof payload.pins === 'object' ? payload.pins : {};
+      const cur = (await s.get('salesProspects', { type: 'json' })) || [];
+      const byId = new Map(cur.map((d) => [d.id, d]));
+      prospects.filter((p) => p && p.id && String(p.id).startsWith('pr_') && p.name && p.stage).forEach((p) => byId.set(p.id, p));
+      const next = [...byId.values()];
+      await s.setJSON('salesProspects', next);
+      const mo = (await s.get('manualOutlets', { type: 'json' })) || {};
+      outlets.filter((o) => o && o.id && o.name).forEach((o) => { mo[o.id] = { ...o, updatedAt: now }; });
+      await s.setJSON('manualOutlets', mo);
+      const ro = (await s.get('customerRsmOverrides', { type: 'json' })) || {};
+      Object.keys(pins).forEach((k) => { const v = String(pins[k] || '').trim(); if (v) ro[k] = v; });
+      await s.setJSON('customerRsmOverrides', ro);
+      return json({ ok: true, salesProspects: next, customerRsmOverrides: ro, manualOutlets: mo });
+    }
+
     if (action === 'saveAccounts') {
       // Round 150: Accounts & Contacts (pub group owners, banner HO, category managers, wholesalers...)
       const st = payload && payload.state;
