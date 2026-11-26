@@ -17337,12 +17337,11 @@ function khExportCsv() {
     rows.push([it.kayla, it.status === 'existing' ? 'Already a customer' : (it.status === 'otd' ? 'New customer (OutletID found)' : 'New customer (no OutletID yet)'), (o && o.name) || r.name || '', it.outletId || '', (o && o.address) || r.address || '', (o && o.suburb) || r.suburb || '', (o && o.postcode) || r.postcode || '', (o && o.phone) || r.phone || '', r.license || '', it.outletId ? '' : 'YES']); });
   downloadFile('kayla_fy27_hitlist.csv', rows.map(r => r.map(nbCsvCell).join(',')).join('\r\n'), 'text/csv');
 }
+var khAutoRan = false;
 function khDecorate() {
-  const root = document.getElementById('qh_root'); if (!root || !KAYLA_SEED.length) return;
-  const s = khSummary();
-  root.innerHTML = '<div class="panel" style="background:#f0f9ff;border:1px solid #bae6fd;margin-bottom:10px;"><strong>Kayla\'s FY27 hit list</strong> — ' + s.total + ' venues compiled from her Annual Sales Operating Plan (' + s.have + ' already on her ' + escapeHtml(s.q) + ' list, ' + s.todo + ' to add). New venues are created as customers (OutletID where Ontap has it), then added to her hit list and pinned to her.' +
-    ' <button class="btn small" onclick="khImport()">Import Kayla\'s list</button> <button class="btn small" onclick="khExportCsv()">Download list (CSV)</button>' +
-    '<div class="hint">Rule: any customer on a rep\'s hit list is automatically allocated to that rep.</div></div>' + root.innerHTML;
+  // R154: info box removed. Silently completes the (idempotent) import once per page load if venues are missing.
+  if (khAutoRan || !KAYLA_SEED.length) return;
+  try { if (khSummary().todo > 0) { khAutoRan = true; setTimeout(function () { khImport(); }, 0); } } catch (e) {}
 }
 var _qhRender_r149 = qhRender;
 qhRender = function (k) { _qhRender_r149(k); khDecorate(); };
