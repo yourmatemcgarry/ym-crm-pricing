@@ -538,6 +538,11 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
   .ee-chip button.ee-chip-x { padding:5px 8px; color:#b04a4a; border-left:1px solid var(--border); }
   .ee-chip-on { border-color:#6b8fd6; background:#e8effc; }
   tr.ee-sub td { border-top:1px dashed #e3e7ee; }
+  /* Round 157 */
+  .jp-chip-act { border-left:5px solid #2f6fd6; } .jp-chip-hl { border-left:5px solid #e0a020; background:#fffaf0; }
+  tr.jp-row-act td:first-child { border-left:4px solid #2f6fd6; } tr.jp-row-hl td:first-child { border-left:4px solid #e0a020; } tr.jp-row-hl { background:#fffaf0; }
+  .jp-key { font-size:12px; display:inline-flex; align-items:center; gap:5px; } .jp-dot { width:12px; height:12px; border-radius:3px; display:inline-block; } .jp-dot-act { background:#2f6fd6; } .jp-dot-hl { background:#e0a020; }
+  tr.rs-hl td:first-child { border-left:4px solid #e0a020; }
 </style>
 </head>
 <body>
@@ -580,6 +585,7 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
     <button class="tab-btn" data-tab="journeyplanner" data-group="rsm">Journey Planner</button>
     <button class="tab-btn" data-tab="quarterhitlist" data-group="rsm">Quarter Hit List</button>
     <button class="tab-btn" data-tab="quarterreport" data-group="rsm">Quarter Customer Report</button>
+    <button class="tab-btn" data-tab="repsummary" data-group="rsm">Rep Active &amp; Hitlist</button>
     <button class="tab-btn" data-tab="newbusiness" data-group="rsm">Sales Funnel</button>
     <button class="tab-btn" data-tab="activations" data-group="rsm">Activations</button>
     <span class="tab-sub-label">Performance</span>
@@ -952,6 +958,7 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
           <tbody id="nc_dealsBody"><tr><td colspan="3"><div class="empty">No deals added yet.</div></td></tr></tbody>
         </table>
       </div>
+      <div class="rowflex" style="margin-top:12px;"><label style="font-size:13px;"><input type="checkbox" id="nc_autoHitlist" checked> <strong>Automatically add to Hitlist</strong> <span class="muted">(this quarter, for the RSM chosen above)</span></label></div>
       <div class="rowflex" style="margin-top:12px;">
         <button class="btn" onclick="saveNewCustomer()">Add customer</button>
         <button class="btn secondary" onclick="resetNewCustomerForm()">Clear form</button>
@@ -1587,6 +1594,13 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
       <h2 style="margin:0;">Accounts &amp; Contacts</h2>
       <div class="hint" style="margin-top:6px;">Organisations that are bigger than one venue — pub group owners, banner head offices, category managers, wholesalers and other customers. Each account has its people and the venues it owns or supplies. Pull it into the Quarter Hit List to target a group's venues.</div>
       <div id="ac_root" style="margin-top:6px;"></div>
+    </div>
+  </div>
+
+  <div class="tabpage" id="tab-repsummary">
+    <div class="panel">
+      <h2 style="margin:0;">Rep Active &amp; Hitlist <span class="muted" style="font-weight:400;font-size:13px;">— a quick summary of one rep's customers and hit list</span></h2>
+      <div id="rs_root" style="margin-top:6px;"></div>
     </div>
   </div>
 
@@ -4064,6 +4078,8 @@ function buildServerPayload(fnName, args) {
     case 'saveBannerRule': return { state: args[0] };
     case 'saveAccounts': return { state: args[0] };
     case 'saveEmailLists': return { state: args[0] };
+    case 'notifyNewCustomer': return { customer: args[0] };
+    case 'removeKaylaHitlist': return { names: args[0].names, ids: args[0].ids };
     case 'bulkKaylaImport': return { prospects: args[0], outlets: args[1], pins: args[2], updatedBy: args[3] };
     case 'saveLostDismissal': return { key: args[0], reason: args[1], updatedBy: args[2] };
     case 'deleteLostDismissal': return { key: args[0] };
@@ -8874,7 +8890,7 @@ function onJpRsmChange() {
   jpRsm = document.getElementById('jp_rsm').value;
   localStorage.setItem(LS_JP_RSM, jpRsm);
   jpSelectedBench = null;
-  jpTierFilter = []; jpSegmentFilter = []; jpSearchText = ''; jpTypeFilter = []; jpZoneFilter = [];
+  jpTierFilter = []; jpSegmentFilter = []; jpSearchText = ''; jpTypeFilter = []; jpZoneFilter = []; jpStatusFilter = [];
   renderJourneyPlannerPage();
 }
 function setJpActiveTab(tabId) { jpActiveTab = tabId; jpSelectedBench = null; renderJourneyPlannerPage(); }
@@ -8986,7 +9002,7 @@ function jpToggleSegmentFilter(key) {
   if (i >= 0) jpSegmentFilter.splice(i, 1); else jpSegmentFilter.push(key);
   renderJourneyPlannerPage();
 }
-function jpClearFilters() { jpTierFilter = []; jpSegmentFilter = []; jpSearchText = ''; jpTypeFilter = []; jpZoneFilter = []; renderJourneyPlannerPage(); }
+function jpClearFilters() { jpTierFilter = []; jpSegmentFilter = []; jpSearchText = ''; jpTypeFilter = []; jpZoneFilter = []; jpStatusFilter = []; renderJourneyPlannerPage(); }
 function jpSetSearch(v) {
   jpSearchText = v || '';
   renderJourneyPlannerPage();
@@ -9020,6 +9036,7 @@ function jpApplyBenchFilters(rows) {
     if (jpSegmentFilter.length && !jpSegmentFilter.includes(r.segmentKey)) return false;
     if (nbArr(jpTypeFilter).length && !nbArr(jpTypeFilter).includes(r.o.custType || '(No type)')) return false;
     if (nbArr(jpZoneFilter).length && !nbArr(jpZoneFilter).includes(r.o.zone || '(No zone)')) return false;
+    if (nbArr(jpStatusFilter).length && !nbArr(jpStatusFilter).includes(r.st.key)) return false;
     const q = (jpSearchText || '').trim().toLowerCase();
     if (q) {
       const hay = [r.o.name, r.o.suburb, r.o.postcode, r.o.address, r.o.group, r.o.banner, r.o.custType, r.o.zone, r.o.id].filter(Boolean).join(' ').toLowerCase();
@@ -9031,15 +9048,15 @@ function jpApplyBenchFilters(rows) {
 function jpFiltersHtml() {
   const tierBtns = JP_MATE_TIERS.map(t => `<button class="btn small ${jpTierFilter.includes(t.key)?'':'secondary'}" onclick="jpToggleTierFilter('${t.key}')">${escapeHtml(t.label)}</button>`).join(' ');
   const segBtns = JP_SEGMENTS.map(s => `<button class="btn small ${jpSegmentFilter.includes(s.key)?'':'secondary'}" onclick="jpToggleSegmentFilter('${s.key}')">${escapeHtml(s.label)}</button>`).join(' ');
-  const anyF = jpTierFilter.length || jpSegmentFilter.length || jpSearchText || nbArr(jpTypeFilter).length || nbArr(jpZoneFilter).length;
+  const anyF = jpTierFilter.length || jpSegmentFilter.length || jpSearchText || nbArr(jpTypeFilter).length || nbArr(jpZoneFilter).length || nbArr(jpStatusFilter).length;
   const clearBtn = anyF ? `<button class="btn small secondary" onclick="jpClearFilters()">Clear filters</button>` : '';
   let jpRowsAll = [];
   try { jpRowsAll = (jpRsm && jpQuarter) ? jpAllRowsForRsm(jpRsm, quarterKeyOf(jpQuarter.fy, jpQuarter.q)) : []; } catch(e) {}
   const typeSet = {}, zoneSet = {};
   jpRowsAll.forEach(r => { typeSet[r.o.custType || '(No type)'] = 1; zoneSet[r.o.zone || '(No zone)'] = 1; });
   const optsOf = (set, cur) => ['<option value="">All</option>'].concat(Object.keys(set).sort().map(k => `<option value="${escapeHtml(k)}" ${k===cur?'selected':''}>${escapeHtml(k)}</option>`)).join('');
-  const searchRow = `<div class="rowflex" style="gap:8px; flex-wrap:wrap; margin-bottom:6px; align-items:center;"><input id="jp_search" type="text" placeholder="Search name, suburb, postcode…" value="${escapeHtml(jpSearchText)}" oninput="jpSetSearch(this.value)" style="min-width:220px; padding:4px 8px; border:1px solid var(--border); border-radius:6px;"><span class="muted" style="font-size:11px;">Type:</span>${msdHtml('jp_type', Object.keys(typeSet).sort().map(k => [k, k]), jpTypeFilter, 'jpSetTypeFilter')}<span class="muted" style="font-size:11px;">Zone:</span>${msdHtml('jp_zone', Object.keys(zoneSet).sort().map(k => [k, k]), jpZoneFilter, 'jpSetZoneFilter')}</div>`;
-  return searchRow + `<div class="rowflex" style="gap:6px; flex-wrap:wrap; margin-bottom:6px;"><span class="muted" style="font-size:11px; align-self:center;">Tier:</span>${tierBtns}</div>
+  const searchRow = `<div class="rowflex" style="gap:8px; flex-wrap:wrap; margin-bottom:6px; align-items:center;"><input id="jp_search" type="text" placeholder="Search name, suburb, postcode…" value="${escapeHtml(jpSearchText)}" oninput="jpSetSearch(this.value)" style="min-width:220px; padding:4px 8px; border:1px solid var(--border); border-radius:6px;"><span class="muted" style="font-size:11px;">Type:</span>${msdHtml('jp_type', Object.keys(typeSet).sort().map(k => [k, k]), jpTypeFilter, 'jpSetTypeFilter')}<span class="muted" style="font-size:11px;">Zone:</span>${msdHtml('jp_zone', Object.keys(zoneSet).sort().map(k => [k, k]), jpZoneFilter, 'jpSetZoneFilter')}<span class="muted" style="font-size:11px;">Status:</span>${msdHtml('jp_status', [['overdue', 'Overdue'], ['dueSoon', 'Due soon'], ['onTrack', 'On track'], ['asNeeded', 'As needed']], jpStatusFilter, 'jpSetStatusFilter')}</div>`;
+  return jpOverdueBarHtml() + searchRow + `<div class="rowflex" style="gap:6px; flex-wrap:wrap; margin-bottom:6px;"><span class="muted" style="font-size:11px; align-self:center;">Tier:</span>${tierBtns}</div>
     <div class="rowflex" style="gap:6px; flex-wrap:wrap; margin-bottom:10px;"><span class="muted" style="font-size:11px; align-self:center;">Segment:</span>${segBtns} ${clearBtn}</div>`;
 }
 function jpSettingsPanelHtml() {
@@ -9062,7 +9079,7 @@ function jpChipHtml(outletId, extra) {
   const countBadge = extra.countLabel ? `<span class="badge grey" title="Already scheduled this quarter">${escapeHtml(extra.countLabel)}</span>` : '';
   const moveBtn = extra.onMove ? `<button class="jp-chip-move" onclick="event.stopPropagation(); ${extra.onMove}" title="Move to a different week">⇄</button>` : '';
   const removeBtn = extra.onRemove ? `<button class="jp-chip-x" onclick="event.stopPropagation(); ${extra.onRemove}" title="Remove">×</button>` : '';
-  return `<div class="jp-chip ${selected?'jp-chip-selected':''} ${extra.moving?'jp-chip-moving':''}" draggable="true" ondragstart="jpDragStart(event,'${outletId}','${extra.src || 'bench'}',${extra.weekIdx == null ? 'null' : extra.weekIdx})" ondragend="jpDragEnd()" onclick="jpSelectBench('${outletId}')">
+  return `<div class="jp-chip ${jpChipKindCls(outletId)} ${selected?'jp-chip-selected':''} ${extra.moving?'jp-chip-moving':''}" draggable="true" ondragstart="jpDragStart(event,'${outletId}','${extra.src || 'bench'}',${extra.weekIdx == null ? 'null' : extra.weekIdx})" ondragend="jpDragEnd()" onclick="jpSelectBench('${outletId}')">
     <span class="jp-chip-name">${escapeHtml(o.name || outletId)}</span>
     <span class="jp-chip-badges">
       ${isNb ? nbChipBadges(outletId) : `<span class="badge ${tierMeta.badge}">${escapeHtml(tierMeta.label)}</span>
@@ -9082,7 +9099,7 @@ function jpVisitListHtml() {
   const cadenceHtml = jpCadenceKeyHtml();
   if (!allRows.length) return `${cadenceHtml}${filtersHtml}<div class="empty">No customers found for ${escapeHtml(jpRsm)}.</div>`;
   if (!rows.length) return `${cadenceHtml}${filtersHtml}<div class="empty">No one matches the current filters.</div>`;
-  const body = rows.map(({o, isHitlist, tierMeta, segmentKey, st}) => `<tr>
+  const body = rows.map(({o, isHitlist, tierMeta, segmentKey, st}) => `<tr class="${isHitlist?'jp-row-hl':'jp-row-act'}">
     <td>${escapeHtml(o.name)}</td>
     <td><span class="badge ${isHitlist?'amber':'blue'}">${isHitlist?'Hitlist':'Active'}</span></td>
     <td><span class="badge ${tierMeta.badge}">${escapeHtml(tierMeta.label)}</span></td>
@@ -13520,7 +13537,7 @@ function saveNewCustomer() {
     renderManualCustomersPanel();
     document.getElementById('nc_saveMsg').textContent = `Saved at ${new Date().toLocaleTimeString()}`;
     toast('Customer added' + (dealsToSave.length ? ` with ${dealsToSave.length} deal${dealsToSave.length===1?'':'s'} set` : '') + ' — now available anywhere you pick a customer.');
-    if (typeof qhAfterNewCustomer === 'function') qhAfterNewCustomer(id); // Round 149
+    if (typeof ncAfterSave === 'function') ncAfterSave(id); else if (typeof qhAfterNewCustomer === 'function') qhAfterNewCustomer(id); // Round 149 / 157
     resetNewCustomerForm();
   }, () => { document.getElementById('nc_saveMsg').textContent = ''; });
 }
@@ -16016,7 +16033,7 @@ var nbLostFor = null;             // prospect id awaiting a lost reason
 var NB_STAGES = [
   { id: 'hitlist',  label: 'Quarterly Hit List', cls: 'grey' },
   { id: 'meeting1', label: '1st Meeting',        cls: 'blue' },
-  { id: 'proposal', label: 'Proposal Sent',      cls: 'amber' },
+  { id: 'proposal', label: 'Proposal',           cls: 'amber' },
   { id: 'meeting2', label: '2nd Meeting',        cls: 'blue' },
   { id: 'won',      label: 'Won',                cls: 'green' },
   { id: 'lost',     label: 'Lost',               cls: 'red' },
@@ -16132,7 +16149,7 @@ function nbNextActionHtml(p) {
   const od = nbIsActive(p) && p.nextActionDue && p.nextActionDue < todayStr();
   return `<div class="nb-next ${od ? 'nb-overdue' : ''}">${od ? '⚠ ' : '➜ '}${escapeHtml(p.nextAction || 'Next action')}${p.nextActionDue ? ' · ' + fmtDate(p.nextActionDue) : ''}</div>`;
 }
-function nbVol(p) { return p.estUnits ? (Math.round(p.estUnits * 10) / 10) + ' ' + (p.estUnitType === 'cartons' ? 'cartons' : 'kegs') + '/yr' : ''; }
+function nbVol(p) { return p.mateTier ? nbTierLabel(p.mateTier) : p.estUnits ? (Math.round(p.estUnits * 10) / 10) + ' ' + (p.estUnitType === 'cartons' ? 'cartons' : 'kegs') + '/yr' : ''; }
 function nbCardHtml(p) {
   const pr = NB_PRIORITY[p.priority] || NB_PRIORITY.medium;
   const opts = NB_STAGES.map(s => `<option value="${s.id}" ${s.id === p.stage ? 'selected' : ''}>${escapeHtml(s.label)}</option>`).join('');
@@ -16178,7 +16195,7 @@ function nbHitlistHtml() {
       <td style="white-space:nowrap;">${nbIsActive(p) ? `<button class="btn small secondary" onclick="nbPlanVisit('${p.id}')">Plan visit</button> ` : ''}<button class="btn small secondary" onclick="nbOpen('${p.id}')">Open</button></td></tr>`;
   }).join('');
   return `<div style="margin-bottom:8px;"><button class="btn small secondary" onclick="nbExportCsv()">Export hit list (CSV)</button> <button class="btn small secondary" onclick="nbRollQuarter()">Roll open opportunities into next quarter…</button></div>
-    ${list.length ? `<div class="tablewrap"><table class="datatable"><thead><tr><th>Business</th><th>Suburb / territory</th><th>Channel</th><th>Priority</th><th>Rep</th><th>Quarter</th><th>Est. volume / value</th><th>Decision maker</th><th>Stage</th><th>Journey plan</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No prospects match these filters. Use “+ Add prospect” to build the hit list.</div>'}`;
+    ${list.length ? `<div class="tablewrap"><table class="datatable"><thead><tr><th>Business</th><th>Suburb / territory</th><th>Channel</th><th>Priority</th><th>Rep</th><th>Quarter</th><th>Expected Mate tier</th><th>Decision maker</th><th>Stage</th><th>Journey plan</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No prospects match these filters. Use “+ Add prospect” to build the hit list.</div>'}`;
 }
 function nbPlanVisit(id) {
   const p = nbById(id); if (!p) return;
@@ -16204,8 +16221,8 @@ function nbRollQuarter() {
 }
 function nbCsvCell(v) { const s = (v === null || v === undefined) ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function nbExportCsv() {
-  const L = [['Business', 'Address', 'Suburb', 'State', 'Postcode', 'Territory', 'Channel', 'Group/Banner/Independent', 'Banner', 'Rep', 'Quarter', 'Priority', 'Stage', 'Est volume', 'Unit', 'Est annual value', 'Decision maker', 'Role', 'Phone', 'Email', 'Current suppliers', 'Ranging', 'Last contact', 'Next action', 'Next action due', 'Lost reason'].join(',')];
-  nbFiltered().forEach(p => { const c = p.contact || {}; L.push([p.name, p.address, p.suburb, p.state, p.postcode, p.zone, p.channel === 'on' ? 'On-premise' : 'Off-premise', p.bannerType, p.banner, p.rsm, p.targetQuarter, p.priority, nbStageLabel(p.stage), p.estUnits, p.estUnitType, p.estValue, c.name, c.role, c.phone, c.email, p.suppliers, p.ranging, p.lastContact, p.nextAction, p.nextActionDue, p.lostReason].map(nbCsvCell).join(',')); });
+  const L = [['Business', 'Address', 'Suburb', 'State', 'Postcode', 'Territory', 'Channel', 'Group/Banner/Independent', 'Banner', 'Rep', 'Quarter', 'Priority', 'Stage', 'Expected Mate tier', 'Decision maker', 'Role', 'Phone', 'Email', 'Current suppliers', 'Ranging', 'Last contact', 'Next action', 'Next action due', 'Lost reason'].join(',')];
+  nbFiltered().forEach(p => { const c = p.contact || {}; L.push([p.name, p.address, p.suburb, p.state, p.postcode, p.zone, p.channel === 'on' ? 'On-premise' : 'Off-premise', p.bannerType, p.banner, p.rsm, p.targetQuarter, p.priority, nbStageLabel(p.stage), nbVol(p), c.name, c.role, c.phone, c.email, p.suppliers, p.ranging, p.lastContact, p.nextAction, p.nextActionDue, p.lostReason].map(nbCsvCell).join(',')); });
   downloadFile('YMT_New_Business_Hit_List.csv', L.join('\n'), 'text/csv');
 }
 
@@ -16265,7 +16282,7 @@ function nbSaveProfile() {
     name, address: nbField('address').trim(), suburb: nbField('suburb').trim(), state: nbField('state').trim(), postcode: nbField('postcode').trim(), zone: nbField('zone').trim(),
     channel: nbField('channel') || 'on', bannerType: nbField('bannerType') || 'independent', banner: nbField('banner').trim(),
     rsm: nbField('rsm'), targetQuarter: nbField('quarter') || nbCurrentQuarterKey(), priority: nbField('priority') || 'medium',
-    ranging: nbField('ranging').trim(), estUnits: parseFloat(nbField('estUnits')) || 0, estUnitType: nbField('estUnitType') || 'kegs', estValue: parseFloat(nbField('estValue')) || 0,
+    ranging: nbField('ranging').trim(), mateTier: nbField('mateTier') || '',
     contact: { name: nbField('contactName').trim(), role: nbField('contactRole').trim(), phone: nbField('contactPhone').trim(), email: nbField('contactEmail').trim() },
     suppliers: nbField('suppliers').trim(), nextAction: nbField('nextAction').trim(), nextActionDue: nbField('nextActionDue'),
     updatedAt: new Date().toISOString(), updatedBy: nbUser()
@@ -16358,9 +16375,7 @@ function nbProfileHtml() {
       ${f('quarter', 'Target quarter', sel('quarter', nbOpts(qs, p.targetQuarter)))}
       ${f('priority', 'Priority', sel('priority', ['high', 'medium', 'low'].map(k => `<option value="${k}" ${p.priority === k ? 'selected' : ''}>${NB_PRIORITY[k].label}</option>`).join('')))}
       ${f('stage', 'Funnel stage', sel('stage', stageOpts))}
-      ${f('estUnits', 'Estimated volume per year', inp('estUnits', p.estUnits || '', 'type="number" min="0" step="any"'))}
-      ${f('estUnitType', 'Kegs or cartons', sel('estUnitType', `<option value="kegs" ${p.estUnitType !== 'cartons' ? 'selected' : ''}>Kegs</option><option value="cartons" ${p.estUnitType === 'cartons' ? 'selected' : ''}>Cartons</option>`))}
-      ${f('estValue', 'Estimated annual value ($)', inp('estValue', p.estValue || '', 'type="number" min="0" step="any"'))}
+      ${f('mateTier', 'Expected Mate tier', sel('mateTier', nbTierOptionsHtml(p.mateTier)))}
       ${f('contactName', 'Key decision-maker', inp('contactName', c.name))}
       ${f('contactRole', 'Role', inp('contactRole', c.role))}
       ${f('contactPhone', 'Phone', inp('contactPhone', c.phone))}
@@ -18384,6 +18399,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'newbusiness' && typeof renderNewBusinessPage === 'function') renderNewBusinessPage(); // Round 146
     if (btn.dataset.tab === 'quarterhitlist' && typeof renderQuarterHitListPage === 'function') renderQuarterHitListPage(); // Round 149
     if (btn.dataset.tab === 'quarterreport' && typeof renderQuarterReportPage === 'function') renderQuarterReportPage(); // Round 155
+    if (btn.dataset.tab === 'repsummary' && typeof renderRepSummaryPage === 'function') renderRepSummaryPage(); // Round 157
     if (btn.dataset.tab === 'accounts' && typeof renderAccountsPage === 'function') renderAccountsPage(); // Round 150
     if (btn.dataset.tab === 'dataquality' && typeof renderDataQualityPage === 'function') renderDataQualityPage(); // Round 147
     if (btn.dataset.tab === 'lostlistings' && typeof renderLostListingsPage === 'function') renderLostListingsPage(); // Round 142
@@ -19312,6 +19328,7 @@ function onInitialDataLoaded(data) {
   if (typeof bnFromServer === 'function') bnFromServer(data.bannerRule); // Round 148
   if (typeof acFromServer === 'function') acFromServer(data.accounts); // Round 150
   if (typeof eeListsFromServer === 'function') eeListsFromServer(data.emailLists); // Round 156
+  if (typeof khRunRemovals === 'function') khRunRemovals(data.kaylaRemovalsDone); // Round 157
   lostDismissals = data.lostListingDismissals || {}; emailSettings = data.emailSettings || null; _lrCache = null; // Round 140/142
   rsmZoneOverrides = data.rsmZoneOverrides || {};
   naTargets = data.naTargets || {};
@@ -19379,6 +19396,7 @@ function refreshPricingFromServer() {
   if (typeof bnFromServer === 'function') bnFromServer(data.bannerRule); // Round 148
   if (typeof acFromServer === 'function') acFromServer(data.accounts); // Round 150
   if (typeof eeListsFromServer === 'function') eeListsFromServer(data.emailLists); // Round 156
+  if (typeof khRunRemovals === 'function') khRunRemovals(data.kaylaRemovalsDone); // Round 157
   lostDismissals = data.lostListingDismissals || {}; emailSettings = data.emailSettings || null; _lrCache = null; // Round 140/142
       rsmZoneOverrides = data.rsmZoneOverrides || {};
       naTargets = data.naTargets || {};
@@ -19823,11 +19841,11 @@ function eeCopyAll() {
 function exportEmailListCSV() {
   const emailRows = eeCollectEmails(eeSelectedOutlets());
   if (!emailRows.length) { toast('No emails match the current filters/selection.'); return; }
-  const header = ['Customer', 'Customer Type', 'Suburb', 'State', 'RSM', 'Email'];
+  const header = ['Store', 'Customer Type', 'State', 'RSM', 'Email'];
   const lines = [header.join(',')];
   emailRows.forEach(r => {
     const o = allOutlets[r.outletId] || {};
-    const row = [o.name || '', o.custType || '', o.suburb || '', o.state || '', o.rsm || '', r.email];
+    const row = [o.name || '', o.custType || '', o.state || '', o.rsm || '', r.email];
     lines.push(row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','));
   });
   downloadFile(`YMT_Customer_Emails_${emailRows.length}.csv`, lines.join('\n'), 'text/csv');
@@ -19991,7 +20009,7 @@ function eeCustomerListHtml(outletList) {
     var cs = eeCollectEmails([o]);
     var n = Math.max(cs.length, 1), checked = !eeDeselectedIds.has(o.id);
     var first = '<td class="no-print" rowspan="' + n + '"><input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="eeToggleOutletSelection(\'' + o.id + '\',this.checked)"></td>' +
-      '<td rowspan="' + n + '">' + escapeHtml(o.name) + '<div class="muted" style="font-size:10.5px;">' + escapeHtml(o.suburb || '') + (o.state ? ' ' + escapeHtml(o.state) : '') + '</div></td>';
+      '<td rowspan="' + n + '">' + escapeHtml(o.name) + '</td>';
     var tail = '<td rowspan="' + n + '">' + escapeHtml(o.custType || '—') + '</td><td rowspan="' + n + '">' + escapeHtml(o.rsm || '—') + '</td>';
     if (!cs.length) return '<tr>' + first + '<td colspan="2"><span class="muted">No email on file</span></td>' + tail + '</tr>';
     return cs.map(function (r, i) {
@@ -19999,35 +20017,185 @@ function eeCustomerListHtml(outletList) {
       return '<tr' + (i ? ' class="ee-sub"' : '') + '>' + (i ? '' : first) + '<td>' + (nm ? escapeHtml(nm) : '<span class="muted">—</span>') + '</td><td>' + escapeHtml(r.email) + '</td>' + (i ? '' : tail) + '</tr>';
     }).join('');
   }).join('');
-  return '<div class="tablewrap"><table class="datatable"><thead><tr><th class="no-print"></th><th>Customer</th><th>Contact name</th><th>Email</th><th>Customer type</th><th>RSM</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  return '<div class="tablewrap"><table class="datatable"><thead><tr><th class="no-print"></th><th>Store</th><th>Contact name</th><th>Email</th><th>Customer type</th><th>RSM</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 // Two columns only (Name, Email) — what email tools like YAM want. Name falls back to the venue name
 // when no contact name is on file.
 function eeNameEmailRows() {
   return eeCollectEmails(eeSelectedOutlets()).map(function (r) {
     var nm = r.name || eeContactNameFor(r.outletId, r.email) || r.outletName || '';
-    return { name: nm, email: r.email, hasContact: !!(r.name || eeContactNameFor(r.outletId, r.email)) };
+    return { name: nm, email: r.email, hasContact: !!(r.name || eeContactNameFor(r.outletId, r.email)), store: r.outletName || '' };
   });
 }
 function exportEmailsNameEmail() {
   var rows = eeNameEmailRows();
   if (!rows.length) { toast('No emails in the current selection.'); return; }
   var q = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
-  var lines = ['Name,Email'].concat(rows.map(function (r) { return q(r.name) + ',' + q(r.email); }));
+  var lines = ['Name,Email,Store'].concat(rows.map(function (r) { return q(r.name) + ',' + q(r.email) + ',' + q(r.store); }));
   var active = eeSavedLists.find(function (l) { return l.id === eeActiveListId; });
   var base = active ? active.name.replace(/[^A-Za-z0-9]+/g, '_') : 'customers';
   downloadFile('YMT_' + base + '_name_email_' + rows.length + '.csv', lines.join('\r\n'), 'text/csv');
 }
 function eeCopyNameEmail() {
   var rows = eeNameEmailRows(); if (!rows.length) { toast('No emails in the current selection.'); return; }
-  eeCopyTextToClipboard(rows.map(function (r) { return r.name + '\t' + r.email; }).join('\n'), 'Copied ' + rows.length.toLocaleString() + ' rows (name, email) — paste straight into a spreadsheet.');
+  eeCopyTextToClipboard(rows.map(function (r) { return r.name + '\t' + r.email + '\t' + r.store; }).join('\n'), 'Copied ' + rows.length.toLocaleString() + ' rows (name, email) — paste straight into a spreadsheet.');
 }
 function eeRenderYam() {
   var root = document.getElementById('ee_yam_root'); if (!root) return;
   var rows = eeNameEmailRows(); var noName = rows.filter(function (r) { return !r.hasContact; }).length;
   root.innerHTML = '<div class="rowflex" style="gap:10px;align-items:center;flex-wrap:wrap;"><button class="btn" onclick="exportEmailsNameEmail()">Download for YAM — Name + Email (' + rows.length.toLocaleString() + ')</button><button class="btn small secondary" onclick="eeCopyNameEmail()">Copy Name + Email</button>' +
     '<label style="font-size:12px;"><input type="checkbox" ' + (eeIncludeRhino ? 'checked' : '') + ' onchange="eeSetIncludeRhino(this.checked)"> Also include other contacts saved from Rhino</label></div>' +
-    '<div class="hint" style="margin-top:6px;">One file, two columns: Name, Email. ' + (noName ? noName.toLocaleString() + ' of these have no contact name on file, so the venue name is used instead.' : 'Every row has a contact name.') + '</div>';
+    '<div class="hint" style="margin-top:6px;">One file with three columns: Name, Email, Store. ' + (noName ? noName.toLocaleString() + ' of these have no contact name on file, so the venue name is used instead.' : 'Every row has a contact name.') + '</div>';
+}
+
+// ===================== ROUND 157: JOURNEY PLANNER COLOURS/OVERDUE, MATE TIER, NEW CUSTOMER, KAYLA TOOLS =====================
+// ---- Journey Planner: active vs hitlist colour + status filter + "add overdue" ----
+var jpStatusFilter = [];
+function jpSetStatusFilter(v) { jpStatusFilter = msdToggleArr(jpStatusFilter, v); renderJourneyPlannerPage(); }
+function jpIsHitlistId(oid) {
+  if (typeof nbIsProspectId === 'function' && nbIsProspectId(oid)) return true;
+  var o = outlets[oid]; return !(o && jpRsm && o.rsm === jpRsm && realOutletIds.has(oid));
+}
+function jpChipKindCls(oid) { return jpIsHitlistId(oid) ? 'jp-chip-hl' : 'jp-chip-act'; }
+function jpCurrentWeekIdx() {
+  if (!jpQuarter) return 0;
+  var start = mondayOf(quarterBoundsOf(jpQuarter.fy, jpQuarter.q)[0]);
+  var d = Math.floor((PERF_TODAY.getTime() - start.getTime()) / 86400000 / 7);
+  return Math.max(0, Math.min(12, d));
+}
+var jpOverdueWeek = null;
+function jpSetOverdueWeek(v) { jpOverdueWeek = Number(v); renderJourneyPlannerPage(); }
+function jpOverdueRows() {
+  if (!jpRsm || !jpQuarter) return [];
+  var qk = quarterKeyOf(jpQuarter.fy, jpQuarter.q), plan = jpEnsurePlan(jpRsm, qk);
+  return jpApplyBenchFilters(jpAllRowsForRsm(jpRsm, qk)).filter(function (r) { return r.st.key === 'overdue' && !(plan.wkAssign[r.o.id] || []).length; });
+}
+function jpAddOverdue() {
+  var rows = jpOverdueRows(); if (!rows.length) { toast('No unscheduled overdue customers to add.'); return; }
+  var wk = jpOverdueWeek == null ? jpCurrentWeekIdx() : jpOverdueWeek;
+  var qk = quarterKeyOf(jpQuarter.fy, jpQuarter.q), plan = jpEnsurePlan(jpRsm, qk);
+  rows.forEach(function (r) { var arr = plan.wkAssign[r.o.id] || (plan.wkAssign[r.o.id] = []); if (arr.indexOf(wk) < 0) arr.push(wk); });
+  if (typeof saveJourneyPlanToServer === 'function') saveJourneyPlanToServer(jpRsm, qk); else saveJourneyPlans(); renderJourneyPlannerPage();
+  toast(rows.length + ' overdue customer' + (rows.length === 1 ? '' : 's') + ' added to Wk ' + (wk + 1) + '.');
+}
+function jpOverdueBarHtml() {
+  if (!jpRsm || !jpQuarter) return '';
+  var n = jpOverdueRows().length, wk = jpOverdueWeek == null ? jpCurrentWeekIdx() : jpOverdueWeek;
+  var weeks = jpWeeksForQuarter(jpQuarter.fy, jpQuarter.q);
+  return '<div class="rowflex" style="gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">' +
+    '<span class="jp-key"><span class="jp-dot jp-dot-act"></span>Active customer</span><span class="jp-key"><span class="jp-dot jp-dot-hl"></span>Hitlist</span>' +
+    '<span class="muted" style="font-size:11px;margin-left:8px;">Overdue:</span>' +
+    '<select onchange="jpSetOverdueWeek(this.value)">' + weeks.map(function (w) { return '<option value="' + w.idx + '"' + (w.idx === wk ? ' selected' : '') + '>' + w.label + ' (' + escapeHtml(w.sub) + ')</option>'; }).join('') + '</select>' +
+    '<button class="btn small' + (n ? '' : ' secondary') + '" onclick="jpAddOverdue()">Add ' + n + ' overdue to visit plan</button></div>';
+}
+// ---- Pipeline: Mate tier replaces volume/value estimate ----
+var NB_TIER_OPTS = [['mate', 'Mate — less than 1 keg per week'], ['good', 'Good Mate — 1 keg per week'], ['best', 'Best Mate — 2+ kegs per week']];
+function nbTierLabel(k) { var t = NB_TIER_OPTS.find(function (x) { return x[0] === k; }); return t ? t[1].split(' — ')[0] : ''; }
+function nbTierOptionsHtml(cur) { return '<option value="">— not set —</option>' + NB_TIER_OPTS.map(function (t) { return '<option value="' + t[0] + '"' + (cur === t[0] ? ' selected' : '') + '>' + escapeHtml(t[1]) + '</option>'; }).join(''); }
+// ---- New customer: auto hit list + notify orders@ ----
+function ncAfterSave(id) {
+  var wasPending = !!qhPendingAdd;
+  if (typeof qhAfterNewCustomer === 'function') qhAfterNewCustomer(id);
+  var cb = document.getElementById('nc_autoHitlist'), o = outlets[id] || {};
+  var onHl = wasPending;
+  if (!wasPending && cb && cb.checked) {
+    if (o.rsm) { qhInit(); qhRsm = o.rsm; qhQuarter = nbCurrentQuarterKey(); qhAdd(id); onHl = true; toast(o.name + ' added to ' + o.rsm + "'s hit list."); }
+    else toast('Customer saved, but pick an RSM to add them to a hit list.');
+  }
+  if (typeof callServer === 'function') {
+    callServer('notifyNewCustomer', [{ id: id, name: o.name || '', address: o.address || '', suburb: o.suburb || '', state: o.state || '', postcode: o.postcode || '', phone: o.phone || '', email: o.email || '', rsm: o.rsm || '', custType: o.custType || '', hitlist: onHl, addedBy: (typeof currentUserEmail !== 'undefined' && currentUserEmail) || '' }],
+      function (d) { toast(d && d.emailed ? 'Email sent to orders@yourmatesbrewing.com to add the OutletID.' : 'Customer saved. The reminder email to orders@ was not sent' + (d && d.reason ? ' (' + d.reason + ')' : '') + '.'); }, function () { /* ignore */ });
+  }
+}
+// ---- Kayla hit list clean-up (R157) ----
+var KH_REMOVE = {"names": ["1770agnes", "agneswaterstavern", "agneswatertavern", "alicebarfrogshollowalliance", "alliancehotel", "archive", "archivebeerboutique", "aussieworldcelebrations", "bardonbowlsclub", "bargaralakestavern", "bargaratavern", "beachesrosslynbay", "belmontbowlsclub", "belmontservicesbowlsclub", "beyondthepale", "big4caloundra", "bluewatergrill", "bonniedoon", "boulevardatbrookwatergolfcourse", "boundaryhotel", "breakfastcreekhotel", "breakfastcreekhoteldbsbws", "bribieislandrslcitizensmemorialclub", "brisbaneconventioncentre", "brookwatergolfcourse", "camphillbowlsclub", "cannonhillbrewing", "caxtonhotel", "caxtonstreethotel", "cedarandpinebar", "celebrationsbirtinya", "celebrationsbokarina", "celebrationsparklands", "cellarbrationsatbirtinya", "cellarbrationsatbokarina", "clemjonescentresportsclub", "cocobrew", "collingwoodblackespressobartheblack", "commonvice", "coorparoofootballclub", "corindabowlsclub", "coventgarden", "craftfoxhawthornliquorlegends", "craftyfoxalehouse", "craftyfoxdbsgreenslopescellars", "craftyfoxgreenslopesliquorlegends", "criterionhotel", "dalgety20", "dayborocrownhotel", "deathandtaxes", "dockherveybay", "drgimlet", "eastendhotel", "eatonshillhotel", "eatonshillhotelharrybrownliqbarn", "electricavenue", "elevenbridges", "emporiumsouthbank", "enzo", "falveysretailstores", "flyingcolours", "fritzenburger", "frogshollowsaloon", "gerardsbistro", "glasshouseaviationpierrestaurantandbar", "glenhotel", "goma", "grangebowlsclub", "greshambar", "hawthorneaflclub", "herveybayrsl", "hogsbreathcafe", "holidayinnexpress", "hotelmaroochydore", "hotelmaroochydorestar", "hudsoncorner", "indooroopilllygolfclub", "irishmurphys", "isleslane", "isleslanebarandkitchen", "jindaleebowlsclub", "jindaleegolfclub", "jollyroger", "jollyrogerbar", "madamfumodernasian", "merthyrbowlsclub", "merthyrbowlsclubinc", "misskays", "missmarymobilebar", "moorookabowlsclub", "mrbadgers", "muskanbarandkitchen", "narangbavalleytavern", "narangbavalleytaverndbsyoungrd", "netherworldbarandarcade", "newfarmbowlsclub", "newfarmbowlsclubinc", "northernsuburbsbowlsclub", "oche", "otto", "queenslandperformingartscentre", "rainbowbeachsportsclub", "rainbowbeachsurfclub", "ravenhotelalh", "redcliffebowlsclub", "reefseafoodandsushi", "remyspaddington", "riverbar", "riverland", "riverquayfish", "roddandgunn", "saccharomyces", "saccharomycesbeercafe", "sasquachchermside", "sasquatchbar", "savillerow", "sneakybaron", "sokorooftoplounge", "southbankbeergarden", "starcasino", "stradbrokeislandbeachhotel", "strattonbarandkitchen", "suziewongs", "tapworkschermside", "theboundary", "thebrookalh", "theburrow", "theembassyhotel", "theend", "thegresham", "thekegrepublic", "theofficeonmiddle", "therocksyepoon", "thetriffid", "tipplerstap", "tivoliandprincesstheatre", "toowongbowlsclub", "torquayhotel", "torquayhotelqld", "urbanclimbwestend", "walterssteakhouse", "wellershillbowlsclub", "whichcraftbeer", "wilstonvillagebar", "yamantotavern", "yamantotavernalh", "yarddoggs"], "ids": ["10233", "10746", "11882", "11949", "12138", "12186", "12195", "125979", "126394", "127650", "129279", "12998", "130296", "130641", "131371", "133365", "133622", "133955", "134207", "13997", "14330", "14491", "14641", "14719", "16759", "16786", "17019", "17902", "17989", "18057", "18204", "18377", "18701", "18907", "18920", "19083", "19435", "19549", "19815", "19960", "19964", "20335", "21769", "21960", "22031", "23125", "23908", "24323", "25145", "25664", "25830", "27334", "27388", "29327", "29962", "30012", "30064", "30192", "31189", "32064", "34258", "37056", "38380", "40912", "42374", "44950", "4695", "4846", "4857", "4942", "687", "75341", "75432", "75711", "75725", "75882", "76016", "76220", "76355", "76468", "76989", "77078", "77081", "77289", "77965", "78338", "78626", "78627", "79610", "80033", "80050", "80537", "80721", "80722", "81322", "81992", "82150", "82541", "82562", "82576", "82596", "82627", "82795", "9199", "9309", "new_iba_cellarbrations_at_birtinya", "new_iba_cellarbrations_at_bokarina"]};
+function khNorm(x) { return String(x || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, ''); }
+function khIsRemoved(p) {
+  if (!p) return false;
+  if (p.outletId && KH_REMOVE.ids.indexOf(String(p.outletId)) >= 0) return true;
+  return KH_REMOVE.names.indexOf(khNorm(String(p.name || '').split(' / ')[0])) >= 0;
+}
+try { KAYLA_SEED = KAYLA_SEED.filter(function (it) { return !(it.outletId && KH_REMOVE.ids.indexOf(String(it.outletId)) >= 0) && KH_REMOVE.names.indexOf(khNorm(it.kayla)) < 0 && KH_REMOVE.names.indexOf(khNorm(String(it.name || '').split(' / ')[0])) < 0; }); } catch (e) { /* ignore */ }
+function khRunRemovals(done) {
+  if (done) return;
+  if (typeof callServer === 'function') {
+    callServer('removeKaylaHitlist', [KH_REMOVE], function (d) { if (d && d.salesProspects) { salesProspects = d.salesProspects; try { qhRender(); nbRenderAll(); } catch (e) { /* ignore */ } } }, function () { /* ignore */ });
+  } else {
+    try {
+      if (localStorage.getItem('ymtKhRemovedR157')) return;
+      var rem = salesProspects.filter(function (p) { return p.rsm === 'Kayla Miller' && p.stage === 'hitlist' && khIsRemoved(p); });
+      salesProspects = salesProspects.filter(function (p) { return rem.indexOf(p) < 0; });
+      rem.forEach(function (p) { if (typeof nbPersist === 'function') nbPersist(null, p.id); });
+      localStorage.setItem('ymtKhRemovedR157', '1');
+    } catch (e) { /* ignore */ }
+  }
+}
+// ---- Rep Active & Hitlist summary tab ----
+var rsState = { rep: 'Kayla Miller', seg: [], type: [], zone: [], search: '' };
+function rsToggle(k, v) { rsState[k] = msdToggleArr(rsState[k], v); renderRepSummaryPage(); }
+function rsSegF(v) { rsToggle('seg', v); } function rsTypeF(v) { rsToggle('type', v); } function rsZoneF(v) { rsToggle('zone', v); }
+function rsSetRep(v) { rsState.rep = v; renderRepSummaryPage(); }
+function rsSetSearch(v) { rsState.search = v; renderRepSummaryPage(true); }
+function rsRows() {
+  var rep = rsState.rep, q = nbCurrentQuarterKey();
+  var nowIdx = dayIndexOf(PERF_TODAY), cutoff = localDateStr(new Date(PERF_TODAY.getTime() - 91 * 86400000));
+  var mine = {};
+  Object.values(outlets).forEach(function (o) { if (o && o.id && o.volumeStream === 'Sales Team' && rsmForOutlet(o) === rep && outletSummary[o.id]) mine[o.id] = o; });
+  var hl = salesProspects.filter(function (p) { return p.rsm === rep && p.targetQuarter === q; });
+  var hlByOutlet = {}; hl.forEach(function (p) { if (p.outletId) hlByOutlet[p.outletId] = p; });
+  var ids = {}; Object.keys(mine).forEach(function (k) { ids[k] = 1; }); Object.keys(hlByOutlet).forEach(function (k) { ids[k] = 1; });
+  var inSet = function (oid) { return !!ids[oid]; };
+  var kegs = perfRangeStats('KEGS', nowIdx - 90, nowIdx, inSet), cartons = perfRangeStats('CARTONS', nowIdx - 90, nowIdx, inSet);
+  var rows = Object.keys(ids).map(function (id) {
+    var o = outlets[id] || {}, os = outletSummary[id] || {}, p = hlByOutlet[id];
+    var active = !!(os.lastDate && os.lastDate >= cutoff), hasHist = !!outletSummary[id];
+    return { id: id, name: o.name || id, suburb: o.suburb || '', zone: o.zone || '', custType: o.custType || '', lastDate: os.lastDate || '', active: active, lapsed: hasHist && !active, hitlist: !!p,
+      stage: p ? nbStageLabel(p.stage) : '', priority: p ? ((NB_PRIORITY[p.priority] || {}).label || '') : '', kegL: kegs.perOutletLitres[id] || 0, cartonL: cartons.perOutletLitres[id] || 0, kegN: kegs.perOutletListings[id] || 0, cartonN: cartons.perOutletListings[id] || 0 };
+  });
+  hl.forEach(function (p) { if (!p.outletId) rows.push({ id: p.id, name: p.name, suburb: p.suburb || '', zone: p.zone || '', custType: 'Prospect', lastDate: '', active: false, lapsed: false, hitlist: true, stage: nbStageLabel(p.stage), priority: (NB_PRIORITY[p.priority] || {}).label || '', kegL: 0, cartonL: 0, kegN: 0, cartonN: 0 }); });
+  return rows;
+}
+function rsApply(rows) {
+  var s = rsState, q = (s.search || '').trim().toLowerCase();
+  return rows.filter(function (r) {
+    if (s.seg.length && !((s.seg.indexOf('active') >= 0 && r.active) || (s.seg.indexOf('lapsed') >= 0 && r.lapsed) || (s.seg.indexOf('hitlist') >= 0 && r.hitlist))) return false;
+    if (s.type.length && s.type.indexOf(r.custType || '(none)') < 0) return false;
+    if (s.zone.length && s.zone.indexOf(r.zone || '(none)') < 0) return false;
+    if (q && (r.name + ' ' + r.suburb).toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  }).sort(function (a, b) { return (b.kegL + b.cartonL) - (a.kegL + a.cartonL) || a.name.localeCompare(b.name); });
+}
+function rsExportCsv() {
+  var all = rsApply(rsRows()), q = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  var L = [['Customer', 'Suburb', 'Zone', 'Type', 'Status', 'On hit list', 'Hit list stage', 'Priority', 'Keg L (13 wks)', 'Carton L (13 wks)', 'Keg listings', 'Carton listings', 'Last order'].join(',')];
+  all.forEach(function (r) { L.push([r.name, r.suburb, r.zone, r.custType, r.active ? 'Active' : r.lapsed ? 'Lapsed' : 'Prospect', r.hitlist ? 'Yes' : '', r.stage, r.priority, Math.round(r.kegL), Math.round(r.cartonL), r.kegN, r.cartonN, r.lastDate].map(q).join(',')); });
+  downloadFile('YMT_' + rsState.rep.replace(/\s+/g, '_') + '_active_and_hitlist.csv', L.join('\r\n'), 'text/csv');
+}
+function renderRepSummaryPage(keepFocus) {
+  var root = document.getElementById('rs_root'); if (!root) return;
+  var all = rsRows(), rows = rsApply(all), reps = (typeof nbReps === 'function') ? nbReps() : [rsState.rep];
+  var c = { active: 0, lapsed: 0, hl: 0, hlCust: 0, kegA: 0, cartA: 0 };
+  all.forEach(function (r) { if (r.active) c.active++; if (r.lapsed) c.lapsed++; if (r.hitlist) { c.hl++; if (r.custType !== 'Prospect') c.hlCust++; } if (r.kegN) c.kegA++; if (r.cartonN) c.cartA++; });
+  var types = Array.from(new Set(all.map(function (r) { return r.custType || '(none)'; }))).sort(), zones = Array.from(new Set(all.map(function (r) { return r.zone || '(none)'; }))).sort();
+  var card = function (l, n, s) { return '<div class="kpi-card"><div class="kpi-lbl">' + l + '</div><div class="kpi-num">' + fmtNum(n) + '</div>' + (s ? '<div class="hint">' + s + '</div>' : '') + '</div>'; };
+  var body = rows.map(function (r) {
+    return '<tr class="' + (r.hitlist ? 'rs-hl' : '') + '"><td><strong>' + escapeHtml(r.name) + '</strong></td><td>' + escapeHtml(r.suburb) + '</td><td>' + escapeHtml(r.custType || '—') + '</td>' +
+      '<td>' + (r.active ? '<span class="badge green">Active</span>' : r.lapsed ? '<span class="badge grey">Lapsed</span>' : '<span class="badge blue">Prospect</span>') + (r.hitlist ? ' <span class="badge amber">Hit list</span>' : '') + '</td>' +
+      '<td>' + escapeHtml(r.stage) + (r.priority ? ' <span class="muted">' + escapeHtml(r.priority) + '</span>' : '') + '</td>' +
+      '<td class="num-cell mono">' + (r.kegL ? fmtNum(r.kegL) : '—') + '</td><td class="num-cell mono">' + (r.cartonL ? fmtNum(r.cartonL) : '—') + '</td><td class="mono">' + (r.lastDate ? fmtDate(r.lastDate) : '—') + '</td></tr>';
+  }).join('');
+  var focusSearch = keepFocus && document.activeElement && document.activeElement.id === 'rs_search';
+  root.innerHTML =
+    '<div class="rowflex no-print" style="gap:12px;flex-wrap:wrap;align-items:flex-end;"><div class="fld" style="margin:0;"><label>Rep</label><select onchange="rsSetRep(this.value)">' + reps.map(function (r) { return '<option value="' + escapeHtml(r) + '"' + (r === rsState.rep ? ' selected' : '') + '>' + escapeHtml(r) + '</option>'; }).join('') + '</select></div>' +
+    '<div class="fld" style="margin:0;"><label>Show</label>' + msdHtml('rs_seg', [['active', 'Active customers'], ['lapsed', 'Lapsed customers'], ['hitlist', 'On the hit list']], rsState.seg, 'rsSegF', 'Everyone') + '</div>' +
+    '<div class="fld" style="margin:0;"><label>Type</label>' + msdHtml('rs_type', types.map(function (t) { return [t, t]; }), rsState.type, 'rsTypeF') + '</div>' +
+    '<div class="fld" style="margin:0;"><label>Zone</label>' + msdHtml('rs_zone', zones.map(function (t) { return [t, t]; }), rsState.zone, 'rsZoneF') + '</div>' +
+    '<div class="fld" style="margin:0;"><label>Search</label><input id="rs_search" value="' + escapeHtml(rsState.search) + '" oninput="rsSetSearch(this.value)" placeholder="name or suburb"></div>' +
+    '<button class="btn small secondary" onclick="rsExportCsv()">Export CSV</button><button class="btn small secondary" onclick="window.print()">Print / PDF</button></div>' +
+    '<div class="kpi-row" style="margin:12px 0;display:flex;gap:10px;flex-wrap:wrap;">' + card('Active customers', c.active, 'bought in the last 13 weeks') + card('Active on kegs', c.kegA) + card('Active on cartons', c.cartA) + card('Lapsed customers', c.lapsed) + card('On the ' + nbCurrentQuarterKey() + ' hit list', c.hl, c.hlCust + ' existing customers, ' + (c.hl - c.hlCust) + ' new prospects') + '</div>' +
+    '<div class="hint">' + escapeHtml(rsState.rep) + ' — ' + rows.length.toLocaleString() + ' of ' + all.length.toLocaleString() + ' shown. Litres are the last 13 weeks to ' + fmtDate(meta.salesDataTo) + '. Biggest buyers first.</div>' +
+    (rows.length ? '<div class="tablewrap" style="margin-top:6px;"><table class="datatable"><thead><tr><th>Customer</th><th>Suburb</th><th>Type</th><th>Status</th><th>Hit list stage</th><th>Keg L</th><th>Carton L</th><th>Last order</th></tr></thead><tbody>' + body + '</tbody></table></div>' : '<div class="empty">Nobody matches.</div>');
+  if (focusSearch) { var el = document.getElementById('rs_search'); if (el) { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) { /* ignore */ } } }
 }
 
 function init() {

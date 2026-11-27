@@ -132,6 +132,7 @@ async function readAll(s) {
   const bannerRule = (await s.get('bannerRule', { type: 'json' })) || { ruleOn: true, overrides: {} }; // Round 148
   const accounts = (await s.get('accounts', { type: 'json' })) || { accounts: [] }; // Round 150
   const emailLists = (await s.get('emailLists', { type: 'json' })) || { lists: [] }; // Round 156
+  const kaylaRemovalsDone = !!(await s.get('kaylaRemovalsR157', { type: 'json' })); // Round 157
   const lostListingDismissals = (await s.get('lostListingDismissals', { type: 'json' })) || {}; // Round 142
   const emailSettings = (await s.get('emailSettings', { type: 'json' })) || null; // Round 142
   // Round 141: one-time RSM allocation (flag-gated, like the seeds above): every zone -> Paradiso Rep; the top 60 active
@@ -304,6 +305,7 @@ async function readAll(s) {
     bannerRule,
     accounts,
     emailLists,
+    kaylaRemovalsDone,
     lostListingDismissals: lostListingDismissals || {},
     emailSettings: emailSettings || null,
     journeyPlans: journeyPlans || {},
@@ -1465,6 +1467,35 @@ export default async (req) => {
       Object.keys(pins).forEach((k) => { const v = String(pins[k] || '').trim(); if (v) ro[k] = v; });
       await s.setJSON('customerRsmOverrides', ro);
       return json({ ok: true, salesProspects: next, customerRsmOverrides: ro, manualOutlets: mo });
+    }
+
+    if (action === 'notifyNewCustomer') {
+      // Round 157: after a new customer is added, ask orders@ to add the OutletID + any other details.
+      const c = payload && payload.customer;
+      if (!c || !c.name) return json({ error: 'Invalid customer' }, 400);
+      const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+      const rows = [['Customer', c.name], ['Address', [c.address, c.suburb, c.state, c.postcode].filter(Boolean).join(', ')], ['Phone', c.phone], ['Email', c.email], ['Customer type', c.custType], ['Sales rep', c.rsm], ['On a hit list', c.hitlist ? 'Yes' : 'No'], ['Added by', c.addedBy], ['Temporary ID in the Hub', c.id]];
+      const html = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;"><p>A new customer has been added in the Sales Hub.</p><p><strong>Please add the OutletID and any other details to the customer record</strong> (Customer Summary &rarr; the customer &rarr; details, or Data Quality &rarr; Outlet ID Review).</p><table cellpadding="6" style="border-collapse:collapse;">' + rows.filter((r) => r[1]).map((r) => '<tr><td style="border:1px solid #ddd;background:#f6f7fa;"><strong>' + esc(r[0]) + '</strong></td><td style="border:1px solid #ddd;">' + esc(r[1]) + '</td></tr>').join('') + '</table></div>';
+      try {
+        const { sendViaResend } = await import('./lib/report-core.mjs');
+        await sendViaResend({ to: ['orders@yourmatesbrewing.com'], subject: 'New customer added: ' + c.name + ' - please add the OutletID', html }, process.env);
+        return json({ ok: true, emailed: true });
+      } catch (e) {
+        return json({ ok: true, emailed: false, reason: String((e && e.message) || e).slice(0, 160) });
+      }
+    }
+
+    if (action === 'removeKaylaHitlist') {
+      // Round 157: one-off removal of venues from Kayla's hit list (guarded by a marker so it only ever runs once).
+      const done = await s.get('kaylaRemovalsR157', { type: 'json' });
+      const cur = (await s.get('salesProspects', { type: 'json' })) || [];
+      if (done) return json({ ok: true, skipped: true, salesProspects: cur });
+      const names = new Set((payload.names || []).map(String)); const ids = new Set((payload.ids || []).map(String));
+      const norm = (x) => String(x || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
+      const next = cur.filter((p) => !(p.rsm === 'Kayla Miller' && p.stage === 'hitlist' && ((p.outletId && ids.has(String(p.outletId))) || names.has(norm(String(p.name || '').split(' / ')[0])))));
+      await s.setJSON('salesProspects', next);
+      await s.setJSON('kaylaRemovalsR157', { at: now, removed: cur.length - next.length });
+      return json({ ok: true, removed: cur.length - next.length, salesProspects: next });
     }
 
     if (action === 'saveEmailLists') {
