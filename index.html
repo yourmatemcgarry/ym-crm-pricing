@@ -19845,7 +19845,7 @@ function exportEmailListCSV() {
   const lines = [header.join(',')];
   emailRows.forEach(r => {
     const o = allOutlets[r.outletId] || {};
-    const row = [o.name || '', o.custType || '', o.state || '', o.rsm || '', r.email];
+    const row = [eeStoreName(o.name), o.custType || '', o.state || '', o.rsm || '', r.email];
     lines.push(row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','));
   });
   downloadFile(`YMT_Customer_Emails_${emailRows.length}.csv`, lines.join('\n'), 'text/csv');
@@ -20009,7 +20009,7 @@ function eeCustomerListHtml(outletList) {
     var cs = eeCollectEmails([o]);
     var n = Math.max(cs.length, 1), checked = !eeDeselectedIds.has(o.id);
     var first = '<td class="no-print" rowspan="' + n + '"><input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="eeToggleOutletSelection(\'' + o.id + '\',this.checked)"></td>' +
-      '<td rowspan="' + n + '">' + escapeHtml(o.name) + '</td>';
+      '<td rowspan="' + n + '">' + escapeHtml(eeStoreName(o.name)) + '</td>';
     var tail = '<td rowspan="' + n + '">' + escapeHtml(o.custType || '—') + '</td><td rowspan="' + n + '">' + escapeHtml(o.rsm || '—') + '</td>';
     if (!cs.length) return '<tr>' + first + '<td colspan="2"><span class="muted">No email on file</span></td>' + tail + '</tr>';
     return cs.map(function (r, i) {
@@ -20021,10 +20021,12 @@ function eeCustomerListHtml(outletList) {
 }
 // Two columns only (Name, Email) — what email tools like YAM want. Name falls back to the venue name
 // when no contact name is on file.
+// OnTap names look like "Currumbin Hotel / CURRUMBIN" - show just the venue name
+function eeStoreName(n) { return String(n == null ? '' : n).split(' / ')[0].trim(); }
 function eeNameEmailRows() {
   return eeCollectEmails(eeSelectedOutlets()).map(function (r) {
-    var nm = r.name || eeContactNameFor(r.outletId, r.email) || r.outletName || '';
-    return { name: nm, email: r.email, hasContact: !!(r.name || eeContactNameFor(r.outletId, r.email)), store: r.outletName || '' };
+    var nm = r.name || eeContactNameFor(r.outletId, r.email) || eeStoreName(r.outletName);
+    return { name: nm, email: r.email, hasContact: !!(r.name || eeContactNameFor(r.outletId, r.email)), store: eeStoreName(r.outletName) };
   });
 }
 function exportEmailsNameEmail() {
