@@ -131,6 +131,7 @@ async function readAll(s) {
   const dataQuality = (await s.get('dataQuality', { type: 'json' })) || { status: {}, retired: {} }; // Round 147
   const bannerRule = (await s.get('bannerRule', { type: 'json' })) || { ruleOn: true, overrides: {} }; // Round 148
   const accounts = (await s.get('accounts', { type: 'json' })) || { accounts: [] }; // Round 150
+  const emailLists = (await s.get('emailLists', { type: 'json' })) || { lists: [] }; // Round 156
   const lostListingDismissals = (await s.get('lostListingDismissals', { type: 'json' })) || {}; // Round 142
   const emailSettings = (await s.get('emailSettings', { type: 'json' })) || null; // Round 142
   // Round 141: one-time RSM allocation (flag-gated, like the seeds above): every zone -> Paradiso Rep; the top 60 active
@@ -302,6 +303,7 @@ async function readAll(s) {
     dataQuality,
     bannerRule,
     accounts,
+    emailLists,
     lostListingDismissals: lostListingDismissals || {},
     emailSettings: emailSettings || null,
     journeyPlans: journeyPlans || {},
@@ -1463,6 +1465,20 @@ export default async (req) => {
       Object.keys(pins).forEach((k) => { const v = String(pins[k] || '').trim(); if (v) ro[k] = v; });
       await s.setJSON('customerRsmOverrides', ro);
       return json({ ok: true, salesProspects: next, customerRsmOverrides: ro, manualOutlets: mo });
+    }
+
+    if (action === 'saveEmailLists') {
+      // Round 156: saved Export Emails lists (live = filters re-run each time, fixed = exact customer ids)
+      const st = payload && payload.state;
+      if (!st || !Array.isArray(st.lists)) return json({ error: 'Invalid state' }, 400);
+      const str = (v, n) => String(v == null ? '' : v).slice(0, n);
+      const strs = (a, n) => (Array.isArray(a) ? a : []).slice(0, n).map((x) => str(x, 80));
+      const clean = { lists: st.lists.slice(0, 300).filter((l) => l && l.id && l.name).map((l) => ({
+        id: str(l.id, 60), name: str(l.name, 120), mode: l.mode === 'fixed' ? 'fixed' : 'live',
+        filters: l.filters && typeof l.filters === 'object' ? JSON.parse(JSON.stringify(l.filters).slice(0, 20000)) : {},
+        deselected: strs(l.deselected, 5000), ids: strs(l.ids, 5000), count: Number(l.count) || 0, by: str(l.by, 80), updatedAt: str(l.updatedAt, 40) })) };
+      await s.setJSON('emailLists', clean);
+      return json({ ok: true, emailLists: clean });
     }
 
     if (action === 'saveAccounts') {

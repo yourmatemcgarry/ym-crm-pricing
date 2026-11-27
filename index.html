@@ -522,6 +522,22 @@
 .pill{display:inline-block;background:#F2E83A;color:#2b2b2b;border-radius:99px;padding:0 7px;font-size:10px;font-weight:700;vertical-align:middle;}
 select.seg-sel{max-width:150px;}
 select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
+  /* Round 156: dropdown filters + saved email lists */
+  .msd { position:relative; display:inline-block; }
+  .msd > summary { list-style:none; cursor:pointer; padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:#fff; font-size:13px; min-width:110px; white-space:nowrap; }
+  .msd > summary::-webkit-details-marker { display:none; }
+  .msd > summary::after { content:' ▾'; color:#8a93a3; }
+  .msd[open] > summary { border-color:#6b8fd6; }
+  .msd-menu { position:absolute; z-index:40; left:0; top:34px; background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.14); padding:8px; min-width:200px; max-height:280px; overflow:auto; }
+  .msd-item { display:block; padding:3px 4px; font-size:13px; white-space:nowrap; cursor:pointer; }
+  .msd-item:hover { background:#f2f5fb; }
+  .msd-clear { display:block; font-size:12px; padding:2px 4px 6px; }
+  .ee-chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .ee-chip { display:inline-flex; border:1px solid var(--border); border-radius:16px; background:#fff; overflow:hidden; }
+  .ee-chip button { border:0; background:transparent; padding:5px 10px; font-size:13px; cursor:pointer; }
+  .ee-chip button.ee-chip-x { padding:5px 8px; color:#b04a4a; border-left:1px solid var(--border); }
+  .ee-chip-on { border-color:#6b8fd6; background:#e8effc; }
+  tr.ee-sub td { border-top:1px dashed #e3e7ee; }
 </style>
 </head>
 <body>
@@ -563,6 +579,7 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
     <button class="tab-btn" data-tab="callnotes" data-group="rsm">Call Notes Summary</button>
     <button class="tab-btn" data-tab="journeyplanner" data-group="rsm">Journey Planner</button>
     <button class="tab-btn" data-tab="quarterhitlist" data-group="rsm">Quarter Hit List</button>
+    <button class="tab-btn" data-tab="quarterreport" data-group="rsm">Quarter Customer Report</button>
     <button class="tab-btn" data-tab="newbusiness" data-group="rsm">Sales Funnel</button>
     <button class="tab-btn" data-tab="activations" data-group="rsm">Activations</button>
     <span class="tab-sub-label">Performance</span>
@@ -1573,6 +1590,13 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
     </div>
   </div>
 
+  <div class="tabpage" id="tab-quarterreport">
+    <div class="panel">
+      <h2 style="margin:0;">Quarter Customer Report</h2>
+      <div id="qr_root" style="margin-top:6px;"></div>
+    </div>
+  </div>
+
   <div class="tabpage" id="tab-quarterhitlist">
     <div class="panel no-print">
       <h2 style="margin:0;">Quarter Hit List</h2>
@@ -2116,6 +2140,12 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
 
   <!-- ================= EXPORT EMAILS ================= -->
   <div class="tabpage" id="tab-exportemails">
+  <div class="panel no-print">
+    <h2 style="margin:0;">Saved lists</h2>
+    <div class="hint" style="margin-top:6px;">Click a list to open it again — no need to redo the filters. Open one, tick or untick customers, then download the Name + Email file at the bottom of the page.</div>
+    <div id="ee_saved_root" style="margin-top:8px;"></div>
+  </div>
+
     <div class="panel no-print">
       <h2>Filter customers</h2>
       <div class="filters">
@@ -2191,6 +2221,7 @@ select.seg-sel.seg-ov{border:2px solid #2b7bd6;}
     <div class="panel">
       <h2 style="margin:0;">Export emails <span class="muted" id="ee_summary" style="font-weight:400;"></span></h2>
       <div class="hint" style="margin-top:6px;">Pulls the primary and secondary email on file for every matching customer, de-duplicated. Copy a batch straight into Gmail's To/Bcc field, or export everything to a CSV.</div>
+      <div id="ee_yam_root" class="no-print" style="margin-top:12px;"></div>
       <div class="rowflex no-print" style="margin-top:12px; gap:14px; align-items:flex-end; flex-wrap:wrap;">
         <div class="fld" style="margin:0;"><label>Batch size</label>
           <select id="ee_batchSize">
@@ -4032,6 +4063,7 @@ function buildServerPayload(fnName, args) {
     case 'saveDataQuality': return { state: args[0] };
     case 'saveBannerRule': return { state: args[0] };
     case 'saveAccounts': return { state: args[0] };
+    case 'saveEmailLists': return { state: args[0] };
     case 'bulkKaylaImport': return { prospects: args[0], outlets: args[1], pins: args[2], updatedBy: args[3] };
     case 'saveLostDismissal': return { key: args[0], reason: args[1], updatedBy: args[2] };
     case 'deleteLostDismissal': return { key: args[0] };
@@ -4198,6 +4230,7 @@ function initMultiSelect(prefix, values, label, onChange, defaultSelected) {
 
   return {
     getValues: () => [...selected],
+    setValues: (vals) => { selected = new Set(vals || []); renderMenu(); updateBtnLabel(); },
     clear: () => { selected.clear(); renderMenu(); updateBtnLabel(); }
   };
 }
@@ -8576,7 +8609,7 @@ let jpMovingFrom = null; // Round 100: {outletId, weekIdx} of a chip currently b
 let jpWeekIdx = 0; // Round 98: which of the 13 weeks (0-12) of jpQuarter the Weekly View sub-tab is currently drilled into
 let jpTierFilter = [];
 let jpSegmentFilter = [];
-let jpSearchText = '', jpTypeFilter = '', jpZoneFilter = ''; // Round 123: word / customer type / zone filters
+let jpSearchText = '', jpTypeFilter = [], jpZoneFilter = []; // Round 123: word / customer type / zone filters
 
 // True per-outlet trailing-12-month litres, summed straight from dailyVolume (every SKU group —
 // kegs, cartons, cans — together, over the same rolling-365-day-ending-PERF_TODAY window the rest
@@ -8841,7 +8874,7 @@ function onJpRsmChange() {
   jpRsm = document.getElementById('jp_rsm').value;
   localStorage.setItem(LS_JP_RSM, jpRsm);
   jpSelectedBench = null;
-  jpTierFilter = []; jpSegmentFilter = []; jpSearchText = ''; jpTypeFilter = ''; jpZoneFilter = '';
+  jpTierFilter = []; jpSegmentFilter = []; jpSearchText = ''; jpTypeFilter = []; jpZoneFilter = [];
   renderJourneyPlannerPage();
 }
 function setJpActiveTab(tabId) { jpActiveTab = tabId; jpSelectedBench = null; renderJourneyPlannerPage(); }
@@ -8953,15 +8986,15 @@ function jpToggleSegmentFilter(key) {
   if (i >= 0) jpSegmentFilter.splice(i, 1); else jpSegmentFilter.push(key);
   renderJourneyPlannerPage();
 }
-function jpClearFilters() { jpTierFilter = []; jpSegmentFilter = []; jpSearchText = ''; jpTypeFilter = ''; jpZoneFilter = ''; renderJourneyPlannerPage(); }
+function jpClearFilters() { jpTierFilter = []; jpSegmentFilter = []; jpSearchText = ''; jpTypeFilter = []; jpZoneFilter = []; renderJourneyPlannerPage(); }
 function jpSetSearch(v) {
   jpSearchText = v || '';
   renderJourneyPlannerPage();
   const el = document.getElementById('jp_search');
   if (el) { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch(e){} }
 }
-function jpSetTypeFilter(v) { jpTypeFilter = v || ''; renderJourneyPlannerPage(); }
-function jpSetZoneFilter(v) { jpZoneFilter = v || ''; renderJourneyPlannerPage(); }
+function jpSetTypeFilter(v) { jpTypeFilter = msdToggleArr(jpTypeFilter, v); renderJourneyPlannerPage(); }
+function jpSetZoneFilter(v) { jpZoneFilter = msdToggleArr(jpZoneFilter, v); renderJourneyPlannerPage(); }
 // Round 99 — adds/removes one prospect from this quarter's working plan (see plan.selectedHitlist,
 // jpHitlistPickerHtml). Server-backed like every other board mutation: optimistic local update, then
 // saveJourneyPlanToServer(). Un-adding also clears any week/day placement the prospect already had,
@@ -8985,8 +9018,8 @@ function jpApplyBenchFilters(rows) {
   return rows.filter(r => {
     if (jpTierFilter.length && !jpTierFilter.includes(r.tierKey)) return false;
     if (jpSegmentFilter.length && !jpSegmentFilter.includes(r.segmentKey)) return false;
-    if (jpTypeFilter && (r.o.custType || '(No type)') !== jpTypeFilter) return false;
-    if (jpZoneFilter && (r.o.zone || '(No zone)') !== jpZoneFilter) return false;
+    if (nbArr(jpTypeFilter).length && !nbArr(jpTypeFilter).includes(r.o.custType || '(No type)')) return false;
+    if (nbArr(jpZoneFilter).length && !nbArr(jpZoneFilter).includes(r.o.zone || '(No zone)')) return false;
     const q = (jpSearchText || '').trim().toLowerCase();
     if (q) {
       const hay = [r.o.name, r.o.suburb, r.o.postcode, r.o.address, r.o.group, r.o.banner, r.o.custType, r.o.zone, r.o.id].filter(Boolean).join(' ').toLowerCase();
@@ -8998,14 +9031,14 @@ function jpApplyBenchFilters(rows) {
 function jpFiltersHtml() {
   const tierBtns = JP_MATE_TIERS.map(t => `<button class="btn small ${jpTierFilter.includes(t.key)?'':'secondary'}" onclick="jpToggleTierFilter('${t.key}')">${escapeHtml(t.label)}</button>`).join(' ');
   const segBtns = JP_SEGMENTS.map(s => `<button class="btn small ${jpSegmentFilter.includes(s.key)?'':'secondary'}" onclick="jpToggleSegmentFilter('${s.key}')">${escapeHtml(s.label)}</button>`).join(' ');
-  const anyF = jpTierFilter.length || jpSegmentFilter.length || jpSearchText || jpTypeFilter || jpZoneFilter;
+  const anyF = jpTierFilter.length || jpSegmentFilter.length || jpSearchText || nbArr(jpTypeFilter).length || nbArr(jpZoneFilter).length;
   const clearBtn = anyF ? `<button class="btn small secondary" onclick="jpClearFilters()">Clear filters</button>` : '';
   let jpRowsAll = [];
   try { jpRowsAll = (jpRsm && jpQuarter) ? jpAllRowsForRsm(jpRsm, quarterKeyOf(jpQuarter.fy, jpQuarter.q)) : []; } catch(e) {}
   const typeSet = {}, zoneSet = {};
   jpRowsAll.forEach(r => { typeSet[r.o.custType || '(No type)'] = 1; zoneSet[r.o.zone || '(No zone)'] = 1; });
   const optsOf = (set, cur) => ['<option value="">All</option>'].concat(Object.keys(set).sort().map(k => `<option value="${escapeHtml(k)}" ${k===cur?'selected':''}>${escapeHtml(k)}</option>`)).join('');
-  const searchRow = `<div class="rowflex" style="gap:8px; flex-wrap:wrap; margin-bottom:6px; align-items:center;"><input id="jp_search" type="text" placeholder="Search name, suburb, postcode…" value="${escapeHtml(jpSearchText)}" oninput="jpSetSearch(this.value)" style="min-width:220px; padding:4px 8px; border:1px solid var(--border); border-radius:6px;"><span class="muted" style="font-size:11px;">Type:</span><select onchange="jpSetTypeFilter(this.value)">${optsOf(typeSet, jpTypeFilter)}</select><span class="muted" style="font-size:11px;">Zone:</span><select onchange="jpSetZoneFilter(this.value)">${optsOf(zoneSet, jpZoneFilter)}</select></div>`;
+  const searchRow = `<div class="rowflex" style="gap:8px; flex-wrap:wrap; margin-bottom:6px; align-items:center;"><input id="jp_search" type="text" placeholder="Search name, suburb, postcode…" value="${escapeHtml(jpSearchText)}" oninput="jpSetSearch(this.value)" style="min-width:220px; padding:4px 8px; border:1px solid var(--border); border-radius:6px;"><span class="muted" style="font-size:11px;">Type:</span>${msdHtml('jp_type', Object.keys(typeSet).sort().map(k => [k, k]), jpTypeFilter, 'jpSetTypeFilter')}<span class="muted" style="font-size:11px;">Zone:</span>${msdHtml('jp_zone', Object.keys(zoneSet).sort().map(k => [k, k]), jpZoneFilter, 'jpSetZoneFilter')}</div>`;
   return searchRow + `<div class="rowflex" style="gap:6px; flex-wrap:wrap; margin-bottom:6px;"><span class="muted" style="font-size:11px; align-self:center;">Tier:</span>${tierBtns}</div>
     <div class="rowflex" style="gap:6px; flex-wrap:wrap; margin-bottom:10px;"><span class="muted" style="font-size:11px; align-self:center;">Segment:</span>${segBtns} ${clearBtn}</div>`;
 }
@@ -15975,7 +16008,7 @@ var LS_SALES_PROSPECTS = 'ymtSalesProspectsV1';
 var LS_NB_REP = 'ymtNbRepV1';
 var salesProspects = [];
 var nbView = 'pipeline';          // 'pipeline' | 'hitlist' | 'tasks'
-var nbFilter = { rep: '', quarter: '', channel: '', zone: '', search: '' };
+var nbFilter = { rep: [], quarter: [], channel: [], zone: [], search: '' };
 var nbEditingId = null;           // prospect id being edited, or 'new'
 var nbDragId = null;
 var nbLostFor = null;             // prospect id awaiting a lost reason
@@ -16013,7 +16046,7 @@ function nbPersist(p, deleteId) {
 }
 function nbLoadLocal() {
   try { salesProspects = JSON.parse(localStorage.getItem(LS_SALES_PROSPECTS)) || []; } catch (e) { salesProspects = []; }
-  try { nbFilter.rep = localStorage.getItem(LS_NB_REP) || ''; } catch (e) { /* ignore */ }
+  nbFilter.rep = nbLoadReps();
 }
 function nbLog(p, type, text, dateIso) {
   (p.activity = p.activity || []).push({ id: 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 4), date: dateIso || todayStr(), type, text, by: nbUser(), at: new Date().toISOString() });
@@ -16037,10 +16070,10 @@ function nbZones() { const s = new Set(Object.keys(typeof ZONE_DEFS_SEED !== 'un
 function nbFiltered() {
   const f = nbFilter; const q = (f.search || '').trim().toLowerCase();
   return salesProspects.filter(p => {
-    if (f.rep && p.rsm !== f.rep) return false;
-    if (f.quarter && p.targetQuarter !== f.quarter) return false;
-    if (f.channel && p.channel !== f.channel) return false;
-    if (f.zone && p.zone !== f.zone) return false;
+    if (nbArr(f.rep).length && !nbArr(f.rep).includes(p.rsm)) return false;
+    if (nbArr(f.quarter).length && !nbArr(f.quarter).includes(p.targetQuarter)) return false;
+    if (nbArr(f.channel).length && !nbArr(f.channel).includes(p.channel)) return false;
+    if (nbArr(f.zone).length && !nbArr(f.zone).includes(p.zone)) return false;
     if (q && !((p.name || '') + ' ' + (p.suburb || '') + ' ' + (p.banner || '') + ' ' + ((p.contact || {}).name || '')).toLowerCase().includes(q)) return false;
     return true;
   });
@@ -16162,12 +16195,12 @@ function nbPlanVisit(id) {
   } catch (e) { console.error(e); toast('Open the Journey Planner and pick ' + p.rsm + '.'); }
 }
 function nbRollQuarter() {
-  const from = nbFilter.quarter || nbCurrentQuarterKey(); const to = nbNextQuarterKey(from);
-  const open = salesProspects.filter(p => nbIsActive(p) && p.targetQuarter === from && (!nbFilter.rep || p.rsm === nbFilter.rep));
+  const from = nbArr(nbFilter.quarter)[0] || nbCurrentQuarterKey(); const to = nbNextQuarterKey(from);
+  const open = salesProspects.filter(p => nbIsActive(p) && p.targetQuarter === from && (!nbArr(nbFilter.rep).length || nbArr(nbFilter.rep).includes(p.rsm)));
   if (!open.length) { toast('No open opportunities in ' + from + '.'); return; }
   if (!confirm('Roll ' + open.length + ' open opportunities from ' + from + ' into ' + to + '? Their history and stage stay as they are.')) return;
   open.forEach(p => { p.carriedFrom = (p.carriedFrom || []).concat([from]); p.targetQuarter = to; nbLog(p, 'stage', 'Rolled forward ' + from + ' → ' + to); p.updatedAt = new Date().toISOString(); p.updatedBy = nbUser(); nbPersist(p); });
-  nbFilter.quarter = to; nbRenderAll(); toast(open.length + ' opportunities rolled into ' + to + '.');
+  nbFilter.quarter = [to]; nbRenderAll(); toast(open.length + ' opportunities rolled into ' + to + '.');
 }
 function nbCsvCell(v) { const s = (v === null || v === undefined) ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function nbExportCsv() {
@@ -16189,7 +16222,7 @@ function nbTasksHtml() {
     { t: 'Later', cls: 'grey', rows: withDue.filter(p => p.nextActionDue > weekEnd) }
   ];
   const row = p => `<tr><td>${fmtDate(p.nextActionDue)}</td><td><a href="#" onclick="nbOpen('${p.id}'); return false;"><strong>${escapeHtml(p.name)}</strong></a><div class="hint">${escapeHtml(p.suburb || '')}</div></td><td><span class="badge ${nbStageCls(p.stage)}">${escapeHtml(nbStageLabel(p.stage))}</span></td><td>${escapeHtml(p.nextAction || '')}</td><td>${escapeHtml(p.rsm || '')}</td><td style="white-space:nowrap;"><button class="btn small secondary" onclick="nbOpen('${p.id}')">Open</button> <button class="btn small secondary" onclick="nbDoneTask('${p.id}')">Done</button></td></tr>`;
-  let html = `<div class="hint" style="margin-bottom:8px;">${nbFilter.rep ? 'Tasks for ' + escapeHtml(nbFilter.rep) : 'Tasks for all reps (pick a rep above to see just theirs)'}. Tasks come from each prospect's “next action”, plus the automatic 7-day proposal chase and 90-day follow-up.</div>`;
+  let html = `<div class="hint" style="margin-bottom:8px;">${nbArr(nbFilter.rep).length ? 'Tasks for ' + escapeHtml(nbArr(nbFilter.rep).join(', ')) : 'Tasks for all reps (pick a rep above to see just theirs)'}. Tasks come from each prospect's “next action”, plus the automatic 7-day proposal chase and 90-day follow-up.</div>`;
   groups.forEach(g => { if (g.rows.length) html += `<h3 style="margin:10px 0 4px;"><span class="badge ${g.cls}">${g.t}</span> <span class="muted">${g.rows.length}</span></h3><div class="tablewrap"><table class="datatable"><thead><tr><th>Due</th><th>Prospect</th><th>Stage</th><th>Next action</th><th>Rep</th><th></th></tr></thead><tbody>${g.rows.map(row).join('')}</tbody></table></div>`; });
   if (none.length) html += `<h3 style="margin:14px 0 4px;"><span class="badge grey">No next action set</span> <span class="muted">${none.length}</span></h3><div class="tablewrap"><table class="datatable"><tbody>${none.map(p => `<tr><td><a href="#" onclick="nbOpen('${p.id}'); return false;">${escapeHtml(p.name)}</a></td><td><span class="badge ${nbStageCls(p.stage)}">${escapeHtml(nbStageLabel(p.stage))}</span></td><td>${escapeHtml(p.rsm || '')}</td><td><button class="btn small secondary" onclick="nbOpen('${p.id}')">Set next action</button></td></tr>`).join('')}</tbody></table></div>`;
   if (!withDue.length && !none.length) html += '<div class="empty">Nothing outstanding. 🎉</div>';
@@ -16290,7 +16323,7 @@ function nbCreateCustomer() {
 function nbOpts(list, cur) { return list.map(v => `<option value="${escapeHtml(v)}" ${v === cur ? 'selected' : ''}>${escapeHtml(v)}</option>`).join(''); }
 function nbProfileHtml() {
   if (!nbEditingId) return '';
-  const isNew = nbEditingId === 'new'; const p = isNew ? { stage: 'hitlist', channel: 'on', bannerType: 'independent', priority: 'medium', rsm: nbFilter.rep, targetQuarter: nbFilter.quarter || nbCurrentQuarterKey(), estUnitType: 'kegs', contact: {}, activity: [], links: [] } : nbById(nbEditingId);
+  const isNew = nbEditingId === 'new'; const p = isNew ? { stage: 'hitlist', channel: 'on', bannerType: 'independent', priority: 'medium', rsm: nbArr(nbFilter.rep)[0] || '', targetQuarter: nbArr(nbFilter.quarter)[0] || nbCurrentQuarterKey(), estUnitType: 'kegs', contact: {}, activity: [], links: [] } : nbById(nbEditingId);
   if (!p) return '';
   const c = p.contact || {};
   const reps = nbReps(); const qs = nbQuarterKeys();
@@ -16373,10 +16406,10 @@ function nbRenderAll() {
   const qOpts = `<option value="">All quarters</option>` + nbOpts(nbQuarterKeys(), f.quarter);
   const zOpts = `<option value="">All territories</option>` + nbOpts(nbZones(), f.zone);
   document.getElementById('nb_filters').innerHTML = `<div class="rowflex" style="gap:12px;flex-wrap:wrap;align-items:flex-end;margin:8px 0;">
-    <div class="fld" style="margin:0;"><label>Rep</label><select onchange="nbSetFilter('rep', this.value)">${repOpts}</select></div>
-    <div class="fld" style="margin:0;"><label>Quarter</label><select onchange="nbSetFilter('quarter', this.value)">${qOpts}</select></div>
-    <div class="fld" style="margin:0;"><label>Channel</label><select onchange="nbSetFilter('channel', this.value)"><option value="">All</option><option value="on" ${f.channel === 'on' ? 'selected' : ''}>On-premise</option><option value="off" ${f.channel === 'off' ? 'selected' : ''}>Off-premise</option></select></div>
-    <div class="fld" style="margin:0;"><label>Territory</label><select onchange="nbSetFilter('zone', this.value)">${zOpts}</select></div>
+    <div class="fld" style="margin:0;"><label>Rep</label>${msdHtml('nb_rep', nbReps().map(v => [v, v]), f.rep, 'nbFRep', 'All reps')}</div>
+    <div class="fld" style="margin:0;"><label>Quarter</label>${msdHtml('nb_quarter', nbQuarterKeys().map(v => [v, v]), f.quarter, 'nbFQuarter', 'All quarters')}</div>
+    <div class="fld" style="margin:0;"><label>Channel</label>${msdHtml('nb_channel', [['on', 'On-premise'], ['off', 'Off-premise']], f.channel, 'nbFChannel')}</div>
+    <div class="fld" style="margin:0;"><label>Territory</label>${msdHtml('nb_zone', nbZones().map(v => [v, v]), f.zone, 'nbFZone', 'All territories')}</div>
     <div class="fld" style="margin:0;"><label>Search</label><input value="${escapeHtml(f.search)}" placeholder="name, suburb, banner…" onchange="nbSetFilter('search', this.value)"></div></div>`;
   const all = nbFiltered(); const open = all.filter(nbIsActive).length;
   document.getElementById('nb_count').textContent = all.length ? all.length + ' prospects · ' + open + ' open' : '';
@@ -16898,7 +16931,7 @@ function bnExport(kind) {
 // from the customer record every time (nbSyncFromOutlet), so nothing is typed twice and nothing drifts.
 var qhRsm = '';
 var qhQuarter = '';
-var qhFilter = { search: '', type: '', zone: '', scope: 'rep', status: '' };
+var qhFilter = { search: '', type: [], zone: [], scope: 'rep', status: [] };
 var qhPendingAdd = null; // {rsm, quarter} while the user is adding a brand-new customer from here
 
 function nbSyncFromOutlet(p) {
@@ -16923,7 +16956,7 @@ function qhStatusOf(o) {
 }
 function qhInit() {
   const reps = nbReps();
-  if (!qhRsm) qhRsm = (nbFilter && nbFilter.rep) || (reps.find(r => r !== 'Sales MGR') || reps[0] || '');
+  if (!qhRsm) qhRsm = (nbFilter && nbArr(nbFilter.rep)[0]) || (reps.find(r => r !== 'Sales MGR') || reps[0] || '');
   if (!qhQuarter) qhQuarter = nbCurrentQuarterKey();
 }
 function qhAdd(outletId) {
@@ -16971,9 +17004,9 @@ function qhSearchRows() {
   const on = new Set(salesProspects.filter(p => p.rsm === qhRsm && p.targetQuarter === qhQuarter && p.outletId).map(p => p.outletId));
   let list = qhUniverse().filter(o => !on.has(o.id));
   if (f.scope === 'rep') list = list.filter(o => o.rsm === qhRsm);
-  if (f.type) list = list.filter(o => (o.custType || '(none)') === f.type);
-  if (f.zone) list = list.filter(o => (o.zone || '(none)') === f.zone);
-  if (f.status) list = list.filter(o => qhStatusOf(o).code === f.status);
+  if (nbArr(f.type).length) list = list.filter(o => nbArr(f.type).includes(o.custType || '(none)'));
+  if (nbArr(f.zone).length) list = list.filter(o => nbArr(f.zone).includes(o.zone || '(none)'));
+  if (nbArr(f.status).length) list = list.filter(o => nbArr(f.status).includes(qhStatusOf(o).code));
   if (q) list = list.filter(o => [o.name, o.suburb, o.postcode, o.address, o.banner, o.majorGroup, o.id].filter(Boolean).join(' ').toLowerCase().includes(q));
   return list.sort((a, b) => String(a.name).localeCompare(String(b.name)));
 }
@@ -17012,9 +17045,9 @@ function qhRender(keepFocus) {
         <div class="rowflex" style="gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:6px;">
           <div class="fld" style="margin:0;"><label>Search</label><input id="qh_search" value="${escapeHtml(f.search)}" placeholder="name, suburb, postcode, banner…" oninput="qhSetFilter('search', this.value)" style="min-width:200px;"></div>
           <div class="fld" style="margin:0;"><label>Show</label>${sel("qhFilterScope", f.scope, [['rep', qhRsm + "'s customers"], ['all', 'All customers']])}</div>
-          <div class="fld" style="margin:0;"><label>Type</label>${sel("qhFilterType", f.type, [['', 'All']].concat(types.map(t => [t, t])))}</div>
-          <div class="fld" style="margin:0;"><label>Zone</label>${sel("qhFilterZone", f.zone, [['', 'All']].concat(zones.map(t => [t, t])))}</div>
-          <div class="fld" style="margin:0;"><label>Status</label>${sel("qhFilterStatus", f.status, [['', 'All'], ['active', 'Active'], ['lapsed', 'Lapsed'], ['new', 'New / no sales']])}</div></div>
+          <div class="fld" style="margin:0;"><label>Type</label>${msdHtml('qh_type', types.map(t => [t, t]), f.type, 'qhFilterType')}</div>
+          <div class="fld" style="margin:0;"><label>Zone</label>${msdHtml('qh_zone', zones.map(t => [t, t]), f.zone, 'qhFilterZone')}</div>
+          <div class="fld" style="margin:0;"><label>Status</label>${msdHtml('qh_status', [['active', 'Active'], ['lapsed', 'Lapsed'], ['new', 'New / no sales']], f.status, 'qhFilterStatus')}</div></div>
         <div class="hint" style="margin-bottom:6px;">${res.length.toLocaleString()} customers${res.length > 150 ? ' (showing 150 — narrow the search)' : ''}. Can't find the venue? <button class="btn small" onclick="qhAddNewCustomer()">+ Add as a new customer</button></div>
         <div class="tablewrap" style="max-height:520px;overflow:auto;"><table class="datatable"><thead><tr><th>Customer</th><th>Suburb</th><th>Type</th><th>Status</th><th>In funnel</th><th></th></tr></thead><tbody>${addRows || '<tr><td colspan="6"><div class="empty">No customers match.</div></td></tr>'}</tbody></table></div></div>
     </div>`;
@@ -17022,9 +17055,9 @@ function qhRender(keepFocus) {
   if (keepFocus) { const s = document.getElementById('qh_search'); if (s && s.focus) { s.focus(); try { s.setSelectionRange(s.value.length, s.value.length); } catch (e) { /* ignore */ } } }
 }
 function qhFilterScope(v) { qhSetFilter('scope', v); }
-function qhFilterType(v) { qhSetFilter('type', v); }
-function qhFilterZone(v) { qhSetFilter('zone', v); }
-function qhFilterStatus(v) { qhSetFilter('status', v); }
+function qhFilterType(v) { qhToggleFilter('type', v); }
+function qhFilterZone(v) { qhToggleFilter('zone', v); }
+function qhFilterStatus(v) { qhToggleFilter('status', v); }
 function renderQuarterHitListPage() { qhRender(); }
 
 // funnel stage badge on any Journey Planner chip whose customer is in the funnel
@@ -17375,6 +17408,158 @@ function jpDropBench(ev) {
   const d = jpDrag; jpDrag = null; if (!d) return;
   if (d.src === 'week') jpRemoveFromWeek(d.outletId, d.weekIdx);
   else if (d.src === 'day') jpRemoveFromDay(d.outletId, jpWeekIdx);
+}
+
+// ===================== QUARTER CUSTOMER REPORT (Round 155) =====================
+// Point-in-time ownership report. Before the handover date the whole territory belonged to Kayla; from
+// the handover date, customers now allocated to Paradiso belong to Paradiso. Listings are bridged:
+// start-of-quarter + new + returned - lost = end, split into "retained by Kayla" and "transferred".
+var QR_KAYLA = 'Kayla Miller', QR_PARA = 'Paradiso Rep';
+var qrState = { fy: null, q: null, transfer: '2026-12-01' };
+try { var _qrT = localStorage.getItem('qrTransfer'); if (_qrT) qrState.transfer = _qrT; } catch (e) {}
+function qrInit() {
+  if (qrState.fy == null) { qrState.fy = PERF_CURRENT_Q.fy; qrState.q = PERF_CURRENT_Q.q; }
+}
+function qrBaselineWindow(bucket, fy, q) {
+  var baseQ = lastElapsedQuarterBefore(fy, q);
+  var b = quarterBoundsOf(baseQ.fy, baseQ.q);
+  var endIncl = new Date(b[1].getTime() - 86400000);
+  if (bucket === 'KEGS') {
+    var m = calendarMonthBoundsOf(endIncl);
+    return { start: dayIndexOf(m[0]), end: dayIndexOf(new Date(m[1].getTime() - 86400000)) };
+  }
+  return { start: dayIndexOf(b[0]), end: dayIndexOf(endIncl) };
+}
+function qrCompute(bucket) {
+  qrInit();
+  var fy = qrState.fy, q = qrState.q;
+  var qb = quarterBoundsOf(fy, q);
+  var qS = dayIndexOf(qb[0]), qE = dayIndexOf(new Date(qb[1].getTime() - 86400000));
+  var asOf = Math.min(qE, dayIndexOf(PERF_TODAY));
+  var tIdx = dayIndexOf(new Date(qrState.transfer + 'T00:00:00'));
+  var bw = qrBaselineWindow(bucket, fy, q);
+  var z = function () { return { start: 0, nw: 0, ret: 0, lost: 0 }; };
+  var R = { kept: z(), tExist: z(), tKayla: z(), tPara: z(), moves: [], litres: { kayla: 0, para: 0 } };
+  var ownerCache = {};
+  var ownerOf = function (oid) {
+    if (ownerCache[oid] !== undefined) return ownerCache[oid];
+    var o = outlets[oid]; var r = o ? rsmForOutlet(o) : null;
+    return (ownerCache[oid] = (r === QR_KAYLA || r === QR_PARA) ? r : null);
+  };
+  for (var key in dailyVolume) {
+    var sep = key.indexOf('|'); var oid = key.slice(0, sep), gid = key.slice(sep + 1);
+    var g = groups[gid];
+    if (!g || bucketOf(g) !== bucket) continue;
+    var cur = ownerOf(oid); if (!cur) continue;
+    var arr = dailyVolume[key];
+    var actBase = false, firstQ = null, lastD = null, pre = 0, post = 0;
+    for (var i = 0; i < arr.length; i += 2) {
+      var d = arr[i], l = arr[i + 1];
+      if (d >= bw.start && d <= bw.end) actBase = true;
+      if (d >= qS && d <= asOf) {
+        if (firstQ === null || d < firstQ) firstQ = d;
+        if (d < tIdx) pre += l; else post += l;
+      }
+      if (lastD === null || d > lastD) lastD = d;
+    }
+    var actQ = firstQ !== null;
+    // volume attribution: owner-at-the-time
+    R.litres.kayla += pre + (cur === QR_KAYLA ? post : 0);
+    R.litres.para += (cur === QR_PARA ? post : 0);
+    var transferred = cur === QR_PARA;
+    var type = null;
+    if (actBase && actQ) type = 'retained';
+    else if (actBase && !actQ) type = 'lost';
+    else if (!actBase && actQ) type = (firstDayByCombo[key] >= qS) ? 'new' : 'returned';
+    if (!type) continue;
+    if (type === 'retained') { if (!transferred) R.kept.start++; else R.tExist.start++; continue; }
+    if (type === 'lost') {
+      if (!transferred) { R.kept.start++; R.kept.lost++; } else { R.tExist.start++; R.tExist.lost++; }
+      R.moves.push({ type: 'Lost', oid: oid, gid: gid, day: lastD, credit: transferred ? 'Paradiso (inherited)' : 'Kayla', cur: cur });
+      continue;
+    }
+    var credit = firstQ < tIdx ? QR_KAYLA : cur;
+    var f = type === 'new' ? 'nw' : 'ret';
+    var seg = !transferred ? R.kept : (credit === QR_KAYLA ? R.tKayla : R.tPara);
+    seg[f]++;
+    R.moves.push({ type: type === 'new' ? 'New' : 'Returned', oid: oid, gid: gid, day: firstQ, credit: credit === QR_KAYLA ? 'Kayla' : 'Paradiso', cur: cur });
+  }
+  var tgt = null, volTgt = null;
+  var qKey = quarterKeyOf(fy, q);
+  [QR_KAYLA, QR_PARA].forEach(function (r) {
+    var t = rsmTargetFor(r, qKey);
+    var a = bucket === 'KEGS' ? t.kegListingsTarget : t.cartonListingsTarget;
+    var v = bucket === 'KEGS' ? t.kegVolumeTarget : t.cartonVolumeTarget;
+    if (a != null) tgt = (tgt || 0) + Number(a);
+    if (v != null) volTgt = (volTgt || 0) + Number(v);
+  });
+  return { R: R, tgt: tgt, volTgt: volTgt, qS: qS, asOf: asOf, tIdx: tIdx, bw: bw };
+}
+function qrEnd(s) { return s.start + s.nw + s.ret - s.lost; }
+function qrSum(list) { var s = { start: 0, nw: 0, ret: 0, lost: 0 }; list.forEach(function (x) { s.start += x.start; s.nw += x.nw; s.ret += x.ret; s.lost += x.lost; }); return s; }
+function qrRow(label, s, opts) {
+  opts = opts || {};
+  var st = opts.bold ? 'font-weight:700;' : '';
+  var pad = opts.indent ? 'padding-left:22px;' : '';
+  return '<tr style="' + st + '"><td style="' + pad + '">' + label + '</td>' +
+    '<td class="num-cell mono">' + fmtNum(s.start) + '</td><td class="num-cell mono">' + (s.nw ? '+' + fmtNum(s.nw) : '0') + '</td>' +
+    '<td class="num-cell mono">' + (s.ret ? '+' + fmtNum(s.ret) : '0') + '</td><td class="num-cell mono">' + (s.lost ? '−' + fmtNum(s.lost) : '0') + '</td>' +
+    '<td class="num-cell mono"><b>' + fmtNum(qrEnd(s)) + '</b></td></tr>';
+}
+function qrBucketHtml(bucket, label) {
+  var c = qrCompute(bucket), R = c.R;
+  var tAll = qrSum([R.tExist, R.tKayla, R.tPara]);
+  var terr = qrSum([R.kept, R.tExist, R.tKayla, R.tPara]);
+  var kaylaCredit = qrSum([R.kept, R.tKayla]);
+  var pct = function (a, b) { return b ? Math.round(a / b * 100) + '%' : '—'; };
+  var h = '<h3 style="margin:14px 0 6px;">' + label + ' listings</h3>';
+  h += '<div class="tablewrap no-max-height"><table class="datatable"><thead><tr><th>Book</th><th class="num-cell">Start of quarter</th><th class="num-cell">New</th><th class="num-cell">Returned</th><th class="num-cell">Lost</th><th class="num-cell">Now</th></tr></thead><tbody>';
+  h += qrRow('Whole territory', terr, { bold: true });
+  h += qrRow('Customers Kayla keeps', R.kept);
+  h += qrRow('Customers transferred to Paradiso', tAll, { bold: true });
+  h += qrRow('Existing at start of quarter (handed over)', R.tExist, { indent: true });
+  h += qrRow('Onboarded by Kayla before handover', R.tKayla, { indent: true });
+  h += qrRow('Onboarded by Paradiso after handover', R.tPara, { indent: true });
+  h += '</tbody></table></div>';
+  h += '<div class="hint" style="margin-top:6px;">Target (Kayla + Paradiso): <b>' + (c.tgt != null ? fmtNum(c.tgt) : '—') + '</b> &nbsp;|&nbsp; Territory now: <b>' + fmtNum(qrEnd(terr)) + '</b> (' + (c.tgt ? pct(qrEnd(terr), c.tgt) : '—') + ' of target) &nbsp;|&nbsp; ' +
+    'Kayla\'s onboarding credit: <b>' + fmtNum(kaylaCredit.nw + kaylaCredit.ret) + '</b> listings (' + fmtNum(R.tKayla.nw + R.tKayla.ret) + ' of them now with Paradiso)</div>';
+  h += '<div class="hint">Volume to ' + dayLabel(c.asOf) + ' (owner at the time): Territory <b>' + fmtNum(R.litres.kayla + R.litres.para) + ' L</b>' +
+    (c.volTgt != null ? ' of ' + fmtNum(c.volTgt) + ' L target (' + pct(R.litres.kayla + R.litres.para, c.volTgt) + ')' : '') +
+    ' &nbsp;|&nbsp; Kayla ' + fmtNum(R.litres.kayla) + ' L &nbsp;|&nbsp; Paradiso ' + fmtNum(R.litres.para) + ' L</div>';
+  return { html: h, moves: R.moves.map(function (m) { m.bucket = label; return m; }) };
+}
+function qrSetField(k, v) {
+  if (k === 'transfer') { qrState.transfer = v; try { localStorage.setItem('qrTransfer', v); } catch (e) {} }
+  else { var p = v.split('-'); qrState.fy = Number(p[0]); qrState.q = Number(p[1]); }
+  renderQuarterReportPage();
+}
+function renderQuarterReportPage() {
+  var root = document.getElementById('qr_root'); if (!root) return;
+  qrInit();
+  var opts = '';
+  var cur = { fy: PERF_CURRENT_Q.fy, q: PERF_CURRENT_Q.q };
+  for (var i = 0; i < 4; i++) {
+    opts += '<option value="' + cur.fy + '-' + cur.q + '"' + (cur.fy === qrState.fy && cur.q === qrState.q ? ' selected' : '') + '>' + escapeHtml(quarterLabelOf(cur.fy, cur.q)) + '</option>';
+    cur = shiftQuarter(cur.fy, cur.q, -1);
+  }
+  var k = qrBucketHtml('KEGS', 'Keg'), c = qrBucketHtml('CARTONS', 'Carton');
+  var moves = k.moves.concat(c.moves).sort(function (a, b) { return (a.type > b.type ? 1 : a.type < b.type ? -1 : 0) || (b.day - a.day); });
+  var rows = moves.map(function (m) {
+    var o = outlets[m.oid];
+    return '<tr><td>' + m.type + '</td><td>' + escapeHtml(o ? o.name : m.oid) + '</td><td>' + escapeHtml(groups[m.gid] ? groups[m.gid].label : m.gid) + ' <span class="badge ' + (m.bucket === 'Keg' ? 'kegs' : 'cartons') + '" style="font-size:9px;">' + m.bucket + '</span></td><td>' + dayLabel(m.day) + '</td><td>' + m.credit + '</td><td>' + escapeHtml(m.cur === QR_PARA ? 'Paradiso' : 'Kayla') + '</td></tr>';
+  }).join('');
+  var qb = quarterBoundsOf(qrState.fy, qrState.q);
+  root.innerHTML =
+    '<div class="no-print" style="display:flex;gap:12px;align-items:end;flex-wrap:wrap;">' +
+    '<label>Quarter<br><select onchange="qrSetField(\'q\',this.value)">' + opts + '</select></label>' +
+    '<label>Paradiso takes over<br><input type="date" value="' + escapeHtml(qrState.transfer) + '" onchange="qrSetField(\'transfer\',this.value)"></label>' +
+    '<button class="btn secondary" onclick="window.print()">Print / PDF</button></div>' +
+    '<div class="hint" style="margin-top:8px;">Before ' + escapeHtml(qrState.transfer) + ' the whole territory is Kayla\'s; from then, customers allocated to Paradiso are Paradiso\'s. ' +
+    'Start of quarter = listings active in the prior quarter (kegs: its last calendar month; cartons: the whole quarter), the same baseline Set Targets uses. ' +
+    'A listing is a customer × beer/format. Onboarding is credited by first-invoice date, so listings Kayla landed before the handover stay hers even though the customer now sits with Paradiso.</div>' +
+    k.html + c.html +
+    '<h3 style="margin:18px 0 6px;">Listing movements</h3><div class="tablewrap"><table class="datatable"><thead><tr><th>Type</th><th>Customer</th><th>SKU</th><th>Date</th><th>Credited to</th><th>Customer now with</th></tr></thead><tbody>' +
+    (rows || '<tr><td colspan="6"><div class="empty">No movements.</div></td></tr>') + '</tbody></table></div>';
 }
 
 // ===================== BANNER STORE LISTS (Round 139) =====================
@@ -18198,6 +18383,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'bannerclaims' && typeof renderBannerClaimsPage === 'function') renderBannerClaimsPage(); // Round 145
     if (btn.dataset.tab === 'newbusiness' && typeof renderNewBusinessPage === 'function') renderNewBusinessPage(); // Round 146
     if (btn.dataset.tab === 'quarterhitlist' && typeof renderQuarterHitListPage === 'function') renderQuarterHitListPage(); // Round 149
+    if (btn.dataset.tab === 'quarterreport' && typeof renderQuarterReportPage === 'function') renderQuarterReportPage(); // Round 155
     if (btn.dataset.tab === 'accounts' && typeof renderAccountsPage === 'function') renderAccountsPage(); // Round 150
     if (btn.dataset.tab === 'dataquality' && typeof renderDataQualityPage === 'function') renderDataQualityPage(); // Round 147
     if (btn.dataset.tab === 'lostlistings' && typeof renderLostListingsPage === 'function') renderLostListingsPage(); // Round 142
@@ -19078,7 +19264,7 @@ function renderEverything() {
   ['ee_search'].forEach(id => document.getElementById(id).addEventListener('input', renderEmailExportPage));
   ['ee_rsm','ee_zone','ee_state','ee_whouse','ee_pricingupdated','ee_contact','ee_activity','ee_bannergroup','ee_subbanner','ee_universe','ee_activeMonths','ee_batchSize','ee_customBatchSize'].forEach(id => document.getElementById(id).addEventListener('change', renderEmailExportPage));
   try { enhanceFilterSelects(); } catch (e) { console.error(e); }
-  renderEmailExportPage();
+  renderEmailExportPage(); eeRenderSaved();
 
   // Data Refresh page
   document.getElementById('dr_btn_rebuild').addEventListener('click', drRebuildPreview);
@@ -19121,10 +19307,11 @@ function onInitialDataLoaded(data) {
   vipContacts = data.vipContacts || [];
   familyGroupsData = data.familyGroupsData || [];
   familyGroupDeals = data.familyGroupDeals || {}; bannerActivationDeals = data.bannerActivationDeals || []; _badIdx = null; bannerClaims = data.bannerClaims || []; // Round 145
-  salesProspects = data.salesProspects || []; try { nbFilter.rep = localStorage.getItem(LS_NB_REP) || ''; } catch (e) { /* ignore */ } // Round 146
+  salesProspects = data.salesProspects || []; nbFilter.rep = nbLoadReps(); // Round 146
   if (typeof dqFromServer === 'function') dqFromServer(data.dataQuality); // Round 147
   if (typeof bnFromServer === 'function') bnFromServer(data.bannerRule); // Round 148
   if (typeof acFromServer === 'function') acFromServer(data.accounts); // Round 150
+  if (typeof eeListsFromServer === 'function') eeListsFromServer(data.emailLists); // Round 156
   lostDismissals = data.lostListingDismissals || {}; emailSettings = data.emailSettings || null; _lrCache = null; // Round 140/142
   rsmZoneOverrides = data.rsmZoneOverrides || {};
   naTargets = data.naTargets || {};
@@ -19187,10 +19374,11 @@ function refreshPricingFromServer() {
   vipContacts = data.vipContacts || [];
       familyGroupsData = data.familyGroupsData || [];
       familyGroupDeals = data.familyGroupDeals || {}; bannerActivationDeals = data.bannerActivationDeals || []; _badIdx = null; bannerClaims = data.bannerClaims || []; // Round 145
-  salesProspects = data.salesProspects || []; try { nbFilter.rep = localStorage.getItem(LS_NB_REP) || ''; } catch (e) { /* ignore */ } // Round 146
+  salesProspects = data.salesProspects || []; nbFilter.rep = nbLoadReps(); // Round 146
   if (typeof dqFromServer === 'function') dqFromServer(data.dataQuality); // Round 147
   if (typeof bnFromServer === 'function') bnFromServer(data.bannerRule); // Round 148
   if (typeof acFromServer === 'function') acFromServer(data.accounts); // Round 150
+  if (typeof eeListsFromServer === 'function') eeListsFromServer(data.emailLists); // Round 156
   lostDismissals = data.lostListingDismissals || {}; emailSettings = data.emailSettings || null; _lrCache = null; // Round 140/142
       rsmZoneOverrides = data.rsmZoneOverrides || {};
       naTargets = data.naTargets || {};
@@ -19436,6 +19624,7 @@ function eeUniverseOutlets() {
 }
 
 function getEmailExportOutlets() {
+  if (eeFixedIds) return Array.from(eeFixedIds).map(id => outlets[id]).filter(Boolean).sort((a, b) => (a.name || '').localeCompare(b.name || '')); // Round 156: fixed saved list
   const q = (document.getElementById('ee_search').value||'').trim().toLowerCase();
   const rsm = selVals('ee_rsm');
   const custTypes = eeCustTypeMsel ? eeCustTypeMsel.getValues() : [];
@@ -19490,13 +19679,13 @@ function eeCollectEmails(outletList) {
   const rows = [];
   outletList.forEach(o => {
     const c = outletContactInfo(o.id);
-    [c.email, c.email2].forEach(raw => {
+    eeEmailFieldsFor(o.id, c).forEach(raw => {
       const clean = (raw || '').trim();
       if (!clean || clean.indexOf('@') === -1) return;
       const key = clean.toLowerCase();
       if (seen.has(key)) return;
       seen.add(key);
-      rows.push({ email: clean, outletName: o.name || '', outletId: o.id });
+      rows.push({ email: clean, outletName: o.name || '', outletId: o.id, name: eeContactNameFor(o.id, clean) });
     });
   });
   return rows;
@@ -19573,6 +19762,7 @@ function emailBatchBlockHtml(batch, idx, total) {
 }
 
 function renderEmailExportPage() {
+  eeRenderYam(); // Round 156
   document.getElementById('ee_customBatchWrap').style.display = document.getElementById('ee_batchSize').value === 'custom' ? '' : 'none';
   const isActive = document.getElementById('ee_universe').value === 'active';
   document.getElementById('ee_activeMonthsWrap').style.display = isActive ? '' : 'none';
@@ -19644,6 +19834,7 @@ function exportEmailListCSV() {
 }
 
 function clearEmailExportFilters() {
+  eeFixedIds = null; eeActiveListId = null; setTimeout(function () { eeRenderSaved(); }, 0);
   document.getElementById('ee_search').value = '';
   ['ee_rsm','ee_zone','ee_state','ee_whouse','ee_pricingupdated','ee_contact','ee_activity','ee_bannergroup','ee_subbanner'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('ee_universe').value = 'everpurchased';
@@ -19653,6 +19844,190 @@ function clearEmailExportFilters() {
   if (eeVolumeStreamMsel) eeVolumeStreamMsel.clear();
   eeDeselectedIds = new Set();
   renderEmailExportPage();
+}
+
+// ===================== MULTI-SELECT FILTERS + EMAIL LISTS (Round 156) =====================
+// ---- msd: checkbox-dropdown filter for pages that re-render their filter row from a template string ----
+var msdOpen = {};
+function msdToggleArr(arr, v) {
+  if (v === '' || v == null) return [];
+  var out = (Array.isArray(arr) ? arr : (arr ? [arr] : [])).slice(); var i = out.indexOf(v);
+  if (i >= 0) out.splice(i, 1); else out.push(v);
+  return out;
+}
+function nbArr(v) { return Array.isArray(v) ? v : (v ? [v] : []); }
+function msdHtml(id, opts, selected, fn, allLabel) {
+  selected = nbArr(selected);
+  var n = selected.length;
+  var lbl = !n ? (allLabel || 'All') : n === 1 ? ((opts.find(function (o) { return o[0] === selected[0]; }) || [0, selected[0]])[1]) : n + ' selected';
+  return '<details class="msd" data-id="' + id + '"' + (msdOpen[id] ? ' open' : '') + ' ontoggle="msdOpen[\'' + id + '\']=this.open"><summary>' + escapeHtml(lbl) + '</summary><div class="msd-menu">' +
+    (n ? '<a href="#" class="msd-clear" onclick="' + fn + '(\'\');return false;">Clear (show all)</a>' : '') +
+    opts.map(function (o) { return '<label class="msd-item"><input type="checkbox" value="' + escapeHtml(o[0]) + '"' + (selected.indexOf(o[0]) >= 0 ? ' checked' : '') + ' onchange="' + fn + '(this.value)"> ' + escapeHtml(o[1]) + '</label>'; }).join('') +
+    '</div></details>';
+}
+try {
+  document.addEventListener('click', function (e) {
+    var ds = document.querySelectorAll('details.msd[open]');
+    for (var i = 0; i < ds.length; i++) if (!ds[i].contains(e.target)) ds[i].open = false;
+  });
+} catch (e) { /* ignore */ }
+
+// ---- Quarter Hit List ----
+function qhToggleFilter(k, v) { qhFilter[k] = msdToggleArr(qhFilter[k], v); qhRender(true); }
+// ---- Journey Planner ----
+function jpToggleIn(name, v) { return msdToggleArr(name, v); }
+// ---- New Business pipeline ----
+function nbLoadReps() { try { return (localStorage.getItem(LS_NB_REP) || '').split('|').filter(Boolean); } catch (e) { return []; } }
+function nbToggleFilter(k, v) {
+  nbFilter[k] = msdToggleArr(nbFilter[k], v);
+  if (k === 'rep') { try { localStorage.setItem(LS_NB_REP, nbFilter.rep.join('|')); } catch (e) { /* ignore */ } }
+  nbRenderAll();
+}
+function nbFRep(v) { nbToggleFilter('rep', v); }
+function nbFQuarter(v) { nbToggleFilter('quarter', v); }
+function nbFChannel(v) { nbToggleFilter('channel', v); }
+function nbFZone(v) { nbToggleFilter('zone', v); }
+
+// ---- Email export: contact names, saved lists, Name + Email export ----
+var eeIncludeRhino = false;
+var eeSavedLists = [], eeActiveListId = null, eeFixedIds = null, eeNewListMode = 'live';
+var LS_EE_LISTS = 'ymtEmailListsV1';
+var EE_SEL_IDS = ['ee_rsm', 'ee_zone', 'ee_state', 'ee_whouse', 'ee_contact', 'ee_activity', 'ee_bannergroup', 'ee_subbanner'];
+function eeContactNameFor(oid, email) {
+  var k = String(email || '').trim().toLowerCase();
+  var rh = (typeof rhinoContactsFor === 'function') ? rhinoContactsFor(oid) : [];
+  for (var i = 0; i < rh.length; i++) if (rh[i].n && String(rh[i].em || '').trim().toLowerCase() === k) return rh[i].n;
+  return '';
+}
+function eeEmailFieldsFor(oid, c) {
+  var out = [c.email, c.email2];
+  if (eeIncludeRhino && typeof rhinoContactsFor === 'function') rhinoContactsFor(oid).forEach(function (r) { out.push(r.em); });
+  return out;
+}
+function eeSetIncludeRhino(on) { eeIncludeRhino = !!on; renderEmailExportPage(); }
+function eeListsClean(s) {
+  var arr = (s && Array.isArray(s.lists)) ? s.lists : [];
+  return { lists: arr.filter(function (l) { return l && l.id && l.name; }).map(function (l) {
+    return { id: String(l.id), name: String(l.name), mode: l.mode === 'fixed' ? 'fixed' : 'live', filters: l.filters || {}, deselected: Array.isArray(l.deselected) ? l.deselected.map(String) : [], ids: Array.isArray(l.ids) ? l.ids.map(String) : [], count: Number(l.count) || 0, by: l.by || '', updatedAt: l.updatedAt || '' };
+  }) };
+}
+function eeListsFromServer(d) { eeSavedLists = eeListsClean(d).lists; }
+function eeListsLoadLocal() { try { var s = JSON.parse(localStorage.getItem(LS_EE_LISTS)); if (s) eeSavedLists = eeListsClean(s).lists; } catch (e) { /* ignore */ } }
+function eeListsPersist() {
+  if (typeof callServer === 'function') callServer('saveEmailLists', [{ lists: eeSavedLists }], function (d) { if (d && d.emailLists) { eeSavedLists = eeListsClean(d.emailLists).lists; eeRenderSaved(); } }, null);
+  else { try { localStorage.setItem(LS_EE_LISTS, JSON.stringify({ lists: eeSavedLists })); } catch (e) { /* ignore */ } }
+}
+function eeCaptureFilters() {
+  var g = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+  var f = { search: g('ee_search'), universe: g('ee_universe'), activeMonths: g('ee_activeMonths'), pricingupdated: g('ee_pricingupdated'), custTypes: eeCustTypeMsel ? eeCustTypeMsel.getValues() : [], streams: eeVolumeStreamMsel ? eeVolumeStreamMsel.getValues() : [], sel: {} };
+  EE_SEL_IDS.forEach(function (id) { f.sel[id] = selVals(id); });
+  return f;
+}
+function eeApplyFilters(f) {
+  f = f || {};
+  var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
+  set('ee_search', f.search || ''); set('ee_universe', f.universe || 'everpurchased'); set('ee_activeMonths', f.activeMonths || '12'); set('ee_pricingupdated', f.pricingupdated || '');
+  EE_SEL_IDS.forEach(function (id) {
+    var el = document.getElementById(id); if (!el) return; var arr = (f.sel && f.sel[id]) || [];
+    if (el.__ms) el.__ms.setValues(arr); else el.value = arr[0] || '';
+  });
+  if (eeCustTypeMsel && eeCustTypeMsel.setValues) eeCustTypeMsel.setValues(f.custTypes || []);
+  if (eeVolumeStreamMsel && eeVolumeStreamMsel.setValues) eeVolumeStreamMsel.setValues(f.streams || []);
+}
+function eeSetListMode(m) { eeNewListMode = m === 'fixed' ? 'fixed' : 'live'; }
+function eeBuildListRecord(name, mode, existing) {
+  var sel = eeSelectedOutlets();
+  var by = ''; try { by = localStorage.getItem(LS_NAME_KEY) || ''; } catch (e) { /* ignore */ }
+  var fixed = mode === 'fixed' || !!eeFixedIds;
+  return { id: existing ? existing.id : 'el' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: name, mode: fixed ? 'fixed' : 'live',
+    filters: fixed ? {} : eeCaptureFilters(), deselected: fixed ? [] : Array.from(eeDeselectedIds), ids: fixed ? sel.map(function (o) { return o.id; }) : [], count: sel.length, by: by, updatedAt: new Date().toISOString() };
+}
+function eeSaveCurrentList() {
+  var inp = document.getElementById('ee_listName'); var name = ((inp && inp.value) || '').trim();
+  if (!name) { toast('Type a name for the list first.'); return; }
+  var existing = eeSavedLists.find(function (l) { return l.name.toLowerCase() === name.toLowerCase(); });
+  var rec = eeBuildListRecord(name, eeNewListMode, existing);
+  if (existing) eeSavedLists[eeSavedLists.indexOf(existing)] = rec; else eeSavedLists.push(rec);
+  eeActiveListId = rec.id; eeListsPersist(); eeRenderSaved(); toast(existing ? 'List "' + name + '" updated.' : 'List "' + name + '" saved.');
+}
+function eeUpdateActiveList() {
+  var l = eeSavedLists.find(function (x) { return x.id === eeActiveListId; }); if (!l) return;
+  var rec = eeBuildListRecord(l.name, l.mode, l);
+  eeSavedLists[eeSavedLists.indexOf(l)] = rec; eeListsPersist(); eeRenderSaved(); toast('List "' + l.name + '" updated.');
+}
+function eeLoadList(id) {
+  var l = eeSavedLists.find(function (x) { return x.id === id; }); if (!l) return;
+  eeActiveListId = id;
+  if (l.mode === 'fixed') { eeFixedIds = new Set(l.ids); eeDeselectedIds = new Set(l.deselected || []); }
+  else { eeFixedIds = null; eeApplyFilters(l.filters); eeDeselectedIds = new Set(l.deselected || []); }
+  renderEmailExportPage(); eeRenderSaved();
+}
+function eeBackToFilters() { eeFixedIds = null; eeActiveListId = null; renderEmailExportPage(); eeRenderSaved(); }
+function eeDeleteList(id) {
+  var l = eeSavedLists.find(function (x) { return x.id === id; }); if (!l) return;
+  if (!confirm('Delete the saved list "' + l.name + '"? The customers themselves are not affected.')) return;
+  eeSavedLists = eeSavedLists.filter(function (x) { return x.id !== id; });
+  if (eeActiveListId === id) { eeActiveListId = null; eeFixedIds = null; }
+  eeListsPersist(); renderEmailExportPage(); eeRenderSaved();
+}
+function eeRenderSaved() {
+  var root = document.getElementById('ee_saved_root'); if (!root) return;
+  var active = eeSavedLists.find(function (l) { return l.id === eeActiveListId; });
+  var chips = eeSavedLists.length ? eeSavedLists.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (l) {
+    return '<span class="ee-chip' + (l.id === eeActiveListId ? ' ee-chip-on' : '') + '"><button type="button" onclick="eeLoadList(\'' + l.id + '\')" title="' + (l.mode === 'fixed' ? 'Fixed list of ' + l.count + ' customers' : 'Re-runs its filters each time you open it') + '">' + escapeHtml(l.name) + ' <span class="muted">' + (l.mode === 'fixed' ? l.count : 'live') + '</span></button><button type="button" class="ee-chip-x" onclick="eeDeleteList(\'' + l.id + '\')" title="Delete this saved list">×</button></span>';
+  }).join(' ') : '<span class="muted">No saved lists yet. Set up the filters below, tick the customers you want, then save it here.</span>';
+  var banner = (eeFixedIds && active) ? '<div class="hint" style="margin:8px 0;">Showing saved list <b>' + escapeHtml(active.name) + '</b> (a fixed set of customers — filters are switched off). <a href="#" onclick="eeBackToFilters();return false;">Go back to filters</a></div>' : (active ? '<div class="hint" style="margin:8px 0;">Showing saved list <b>' + escapeHtml(active.name) + '</b>. Changing filters or ticks does not change the saved list until you press Update.</div>' : '');
+  root.innerHTML = '<div class="ee-chips">' + chips + '</div>' + banner +
+    '<div class="rowflex" style="gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:8px;">' +
+    '<div class="fld" style="margin:0;"><label>Save what I have now as</label><input id="ee_listName" placeholder="e.g. QLD bottleshops" value="' + escapeHtml(active ? active.name : '') + '" style="min-width:220px;"></div>' +
+    (eeFixedIds ? '' : '<div class="fld" style="margin:0;"><label>Type</label><select onchange="eeSetListMode(this.value)"><option value="live"' + (eeNewListMode === 'live' ? ' selected' : '') + '>Live — re-run my filters each time (new customers appear)</option><option value="fixed"' + (eeNewListMode === 'fixed' ? ' selected' : '') + '>Fixed — exactly the customers ticked now</option></select></div>') +
+    '<button class="btn small" onclick="eeSaveCurrentList()">Save list</button>' +
+    (active ? '<button class="btn small secondary" onclick="eeUpdateActiveList()">Update “' + escapeHtml(active.name) + '”</button>' : '') + '</div>';
+}
+// One row per email address, customer cells spanning their contacts; one tick box per customer.
+function eeCustomerListHtml(outletList) {
+  if (!outletList.length) return '<div class="empty">No customers match your filters.</div>';
+  var rows = outletList.map(function (o) {
+    var cs = eeCollectEmails([o]);
+    var n = Math.max(cs.length, 1), checked = !eeDeselectedIds.has(o.id);
+    var first = '<td class="no-print" rowspan="' + n + '"><input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="eeToggleOutletSelection(\'' + o.id + '\',this.checked)"></td>' +
+      '<td rowspan="' + n + '">' + escapeHtml(o.name) + '<div class="muted" style="font-size:10.5px;">' + escapeHtml(o.suburb || '') + (o.state ? ' ' + escapeHtml(o.state) : '') + '</div></td>';
+    var tail = '<td rowspan="' + n + '">' + escapeHtml(o.custType || '—') + '</td><td rowspan="' + n + '">' + escapeHtml(o.rsm || '—') + '</td>';
+    if (!cs.length) return '<tr>' + first + '<td colspan="2"><span class="muted">No email on file</span></td>' + tail + '</tr>';
+    return cs.map(function (r, i) {
+      var nm = r.name || eeContactNameFor(o.id, r.email);
+      return '<tr' + (i ? ' class="ee-sub"' : '') + '>' + (i ? '' : first) + '<td>' + (nm ? escapeHtml(nm) : '<span class="muted">—</span>') + '</td><td>' + escapeHtml(r.email) + '</td>' + (i ? '' : tail) + '</tr>';
+    }).join('');
+  }).join('');
+  return '<div class="tablewrap"><table class="datatable"><thead><tr><th class="no-print"></th><th>Customer</th><th>Contact name</th><th>Email</th><th>Customer type</th><th>RSM</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+// Two columns only (Name, Email) — what email tools like YAM want. Name falls back to the venue name
+// when no contact name is on file.
+function eeNameEmailRows() {
+  return eeCollectEmails(eeSelectedOutlets()).map(function (r) {
+    var nm = r.name || eeContactNameFor(r.outletId, r.email) || r.outletName || '';
+    return { name: nm, email: r.email, hasContact: !!(r.name || eeContactNameFor(r.outletId, r.email)) };
+  });
+}
+function exportEmailsNameEmail() {
+  var rows = eeNameEmailRows();
+  if (!rows.length) { toast('No emails in the current selection.'); return; }
+  var q = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  var lines = ['Name,Email'].concat(rows.map(function (r) { return q(r.name) + ',' + q(r.email); }));
+  var active = eeSavedLists.find(function (l) { return l.id === eeActiveListId; });
+  var base = active ? active.name.replace(/[^A-Za-z0-9]+/g, '_') : 'customers';
+  downloadFile('YMT_' + base + '_name_email_' + rows.length + '.csv', lines.join('\r\n'), 'text/csv');
+}
+function eeCopyNameEmail() {
+  var rows = eeNameEmailRows(); if (!rows.length) { toast('No emails in the current selection.'); return; }
+  eeCopyTextToClipboard(rows.map(function (r) { return r.name + '\t' + r.email; }).join('\n'), 'Copied ' + rows.length.toLocaleString() + ' rows (name, email) — paste straight into a spreadsheet.');
+}
+function eeRenderYam() {
+  var root = document.getElementById('ee_yam_root'); if (!root) return;
+  var rows = eeNameEmailRows(); var noName = rows.filter(function (r) { return !r.hasContact; }).length;
+  root.innerHTML = '<div class="rowflex" style="gap:10px;align-items:center;flex-wrap:wrap;"><button class="btn" onclick="exportEmailsNameEmail()">Download for YAM — Name + Email (' + rows.length.toLocaleString() + ')</button><button class="btn small secondary" onclick="eeCopyNameEmail()">Copy Name + Email</button>' +
+    '<label style="font-size:12px;"><input type="checkbox" ' + (eeIncludeRhino ? 'checked' : '') + ' onchange="eeSetIncludeRhino(this.checked)"> Also include other contacts saved from Rhino</label></div>' +
+    '<div class="hint" style="margin-top:6px;">One file, two columns: Name, Email. ' + (noName ? noName.toLocaleString() + ' of these have no contact name on file, so the venue name is used instead.' : 'Every row has a contact name.') + '</div>';
 }
 
 function init() {
